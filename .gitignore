@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Test artifacts
+.pytest_cache/
+htmlcov/
+.coverage
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Case data — keep OUT of this repo (may contain sensitive evidence)
+# Set FORENSIC_CASE_DIR to a path outside this repository
+forensic_cases/
+*.dd
+*.img
+*.E01
+*.raw
+
+# Generated reports and exports (also case data)
+exports/
+reports/
+
+# Temporary / scratch
+scratch/
+tmp/
