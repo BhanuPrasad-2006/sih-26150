@@ -106,7 +106,12 @@ function renderSetupScreen() {
       if (breadcrumb) breadcrumb.style.display = '';
       navigateTo('dashboard');
     } catch (err) {
-      errMsg.textContent = err.message || 'Setup failed. Please try again.';
+      const isAlreadySet = err.message && err.message.toLowerCase().includes('already set');
+      if (isAlreadySet) {
+        errMsg.innerHTML = 'Password is already set. <a href="javascript:void(0)" onclick="navigateTo(\'login\')" style="color:var(--accent-cyan); text-decoration:underline; font-weight:600; margin-left:6px;">Click here to Login ➔</a>';
+      } else {
+        errMsg.textContent = err.message || 'Setup failed. Please try again.';
+      }
       errEl.style.display = 'flex';
       btnSetup.disabled = false;
       btnSetup.innerHTML = 'Set Password &amp; Open Tool ➔';

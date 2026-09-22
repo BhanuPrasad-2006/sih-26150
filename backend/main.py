@@ -91,6 +91,7 @@ SESSION_COOKIE_NAME = "sih_session"
 # Everything else under /api/* is protected.
 _AUTH_EXEMPT_PATHS = {
     "/api/auth/status",
+    "/api/auth/status-with-session",
     "/api/auth/login",
     "/api/auth/setup",
     "/api/docs",
