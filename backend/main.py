@@ -75,6 +75,7 @@ from backend.plugins.unknown import UnknownPlugin
 from backend.plugins.uniview import UniviewPlugin
 from backend.reconstructor import label_all
 from backend.reporting import generate_report
+from backend.timeline import TimelineData, build_timeline
 
 logging.basicConfig(
     level=logging.INFO,
@@ -742,6 +743,20 @@ async def list_segments(case_id: str):
         return []
     ev = evs[-1]
     return await asyncio.to_thread(db.list_segments_for_evidence, ev.evidence_id)
+
+
+@app.get("/api/cases/{case_id}/timeline", response_model=TimelineData)
+async def case_timeline(case_id: str):
+    """Return all recoverable case segments arranged for a shared timeline view."""
+    case = await asyncio.to_thread(db.get_case, case_id)
+    if not case:
+        raise HTTPException(404, "Case not found")
+
+    evidence = await asyncio.to_thread(db.list_evidence_for_case, case_id)
+    segments: list[Segment] = []
+    for item in evidence:
+        segments.extend(await asyncio.to_thread(db.list_segments_for_evidence, item.evidence_id))
+    return await asyncio.to_thread(build_timeline, segments)
 
 
 @app.post("/api/cases/{case_id}/export/{segment_id}")
