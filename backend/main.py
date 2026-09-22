@@ -57,7 +57,9 @@ from backend.models import (
 from backend.plugins.constants import MIN_PLUGIN_CONFIDENCE
 from backend.plugins.dahua import DahuaPlugin
 from backend.plugins.hikvision import HikvisionPlugin
+from backend.plugins.matrix import MatrixPlugin
 from backend.plugins.unknown import UnknownPlugin
+from backend.plugins.uniview import UniviewPlugin
 from backend.reconstructor import label_all
 from backend.reporting import generate_report
 
@@ -105,7 +107,7 @@ app = FastAPI(
 
 # ── Plugin registry ───────────────────────────────────────────────────────────
 
-_PLUGINS = [DahuaPlugin(), HikvisionPlugin()]
+_PLUGINS = [DahuaPlugin(), HikvisionPlugin(), UniviewPlugin(), MatrixPlugin()]
 
 
 def _detect_brand(img: EvidenceImage) -> tuple[str, str, float, Any]:
@@ -120,8 +122,9 @@ def _detect_brand(img: EvidenceImage) -> tuple[str, str, float, Any]:
         if conf > best_conf:
             best_conf   = conf
             best_plugin = plugin
+    # display_name carries UI/report labels (e.g. "detection-only / unverified").
     return (
-        best_plugin.name,
+        best_plugin.display_name,
         best_plugin.version_hint(),
         best_conf,
         best_plugin,
