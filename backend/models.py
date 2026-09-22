@@ -97,9 +97,11 @@ class Segment(BaseModel):
     disk_offsets: list[DiskOffset]   = Field(default_factory=list)
     frame_count:  int                = 0
     status:       SegmentStatus      = SegmentStatus.UNCERTAIN
-    export_path:  Optional[str]      = None
-    sha256:       Optional[str]      = None
-    notes:        Optional[str]      = None   # e.g. "experimental carving — TO VERIFY"
+    export_path:     Optional[str]      = None
+    sha256:          Optional[str]      = None
+    notes:           Optional[str]      = None   # e.g. "experimental carving — TO VERIFY"
+    motion_detected: Optional[bool]     = None
+    motion_details:  Optional[str]      = None
 
 
 class LogEvent(BaseModel):

@@ -217,6 +217,13 @@ const API = {
     return res.json();
   },
 
+  async detectMotion(caseId, segmentId) {
+    const url = `/api/cases/${caseId}/motion/${segmentId}`;
+    const res = await fetch(url, { method: 'POST' });
+    await this._checkOk(res, url);
+    return res.json();
+  },
+
   async verifyEvidenceIntegrity(caseId) {
     const url = `/api/cases/${caseId}/verify`;
     const res = await fetch(url);
