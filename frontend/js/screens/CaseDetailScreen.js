@@ -160,6 +160,7 @@ function renderEvidenceTable(evidence, caseId) {
           ${evidence.map(ev => {
             const brand = ev.brand || ev.detected_brand || 'Unknown';
             const confidence = ev.confidence != null ? ` (${(ev.confidence * 100).toFixed(0)}%)` : '';
+            const brandBadge = brand.toLowerCase().includes('unverified') ? 'badge-uncertain' : 'badge-verified';
             const scanStatus = ev.scan_status || 'PENDING';
             const badgeClass = scanStatus === 'COMPLETED' ? 'badge-complete'
                              : scanStatus === 'SCANNING'  ? 'badge-scanning'
@@ -175,7 +176,7 @@ function renderEvidenceTable(evidence, caseId) {
               <tr>
                 <td><strong>${ev.evidence_label || ev.evidence_id}</strong></td>
                 <td style="font-family:var(--font-mono); font-size:11px; color:var(--text-muted); max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${ev.path || ev.file_path || ''}</td>
-                <td><span class="badge badge-verified">${brand}${confidence}</span></td>
+                <td><span class="badge ${brandBadge}">${brand}${confidence}</span></td>
                 <td class="hash-font">${ev.sha256_before ? ev.sha256_before.substring(0, 16) + '…' : '—'}</td>
                 <td><span class="badge ${badgeClass}">${scanStatus}</span></td>
                 <td>

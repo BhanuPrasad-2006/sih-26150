@@ -97,7 +97,7 @@ async function renderEvidenceScanScreen(params) {
           <div style="font-size:26px; font-weight:700; color:var(--accent-cyan); margin-bottom:6px;">${detBrand}</div>
           <div style="font-size:13px; color:var(--text-muted);">Confidence: <strong>${brandConf}%</strong></div>
           <div style="margin-top:12px;">
-            <span class="badge badge-verified">${detBrand}</span>
+            <span class="badge ${detBrand.toLowerCase().includes('unverified') ? 'badge-uncertain' : 'badge-verified'}">${detBrand}</span>
           </div>
         </div>
       </div>

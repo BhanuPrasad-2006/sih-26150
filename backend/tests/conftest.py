@@ -39,6 +39,7 @@ import unittest.mock as mock
 from pathlib import Path
 
 from backend.test_images.gen_test_image import (
+    generate_cpplus_image,
     generate_dahua_image,
     generate_hikvision_image,
     generate_foreign_image,
@@ -103,6 +104,14 @@ def foreign_img_path(temp_dir):
     path = os.path.join(temp_dir, "synthetic_ext4.dd")
     if not os.path.exists(path):
         generate_foreign_image(path, fs_type="ext4")
+    return path
+
+
+@pytest.fixture(scope="session")
+def cpplus_img_path(temp_dir):
+    path = os.path.join(temp_dir, "synthetic_cpplus.dd")
+    if not os.path.exists(path):
+        generate_cpplus_image(path, frames_per_channel=10)
     return path
 
 

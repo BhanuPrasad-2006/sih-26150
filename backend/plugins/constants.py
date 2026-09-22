@@ -69,6 +69,19 @@ DHAV_TS_MIN_UNIX = 946684800        # 2000-01-01 00:00:00 UTC — Proposed
 # Sequence continuity: gap larger than this → start a new segment
 DHAV_SEQ_GAP_THRESHOLD = 3          # Proposed [PRD §5.6.1]
 
+# ── CP PLUS (UNVERIFIED DAHUA-COMPATIBLE) ──────────────────────────────────────
+# Identifying markers found in CP Plus firmware, banners, configuration, and logs
+CPPLUS_IDENTIFYING_MARKERS = (
+    b"CP PLUS",
+    b"CPPLUS",
+    b"CP-PLUS",
+    b"CP_PLUS",
+    b"CP-UVR",
+    b"CP-NVR",
+    b"Aditya Infotech",
+    b"ADITYA INFOTECH",
+)
+
 # ── HIKVISION ─────────────────────────────────────────────────────────────────
 
 HIKV_MASTER_SECTOR_OFFSET = 0x200   # 512 bytes from disk start — Verified [Han2015, MDPI2025]

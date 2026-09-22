@@ -258,6 +258,34 @@ def generate_foreign_image(path: str | Path, fs_type: str = "ext4"):
         data = build_foreign_ext4_image()
     path.write_bytes(data)
 
+
+def build_cpplus_image(
+    channels: list[int] | None = None,
+    frames_per_channel: int = 10,
+    frame_interval_s: int = 5,
+) -> bytes:
+    """
+    Build a synthetic CP Plus disk image with CP PLUS identifying banner
+    followed by Dahua-compatible DHAV frames.
+    SYNTHETIC DATA.
+    """
+    buf = bytearray()
+    buf += b"CP PLUS DVR SYSTEM - ADITYA INFOTECH LTD\x00\x00\x00"
+    buf += make_noise(1024)
+    buf += build_dahua_image(
+        channels=channels,
+        frames_per_channel=frames_per_channel,
+        frame_interval_s=frame_interval_s,
+    )
+    return bytes(buf)
+
+
+def generate_cpplus_image(path: str | Path, **kwargs):
+    path = Path(path)
+    data = build_cpplus_image(**kwargs)
+    path.write_bytes(data)
+    return path
+
 if __name__ == "__main__":
     out_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).parent
     print(f"\nGenerating synthetic test images in: {out_dir}")
