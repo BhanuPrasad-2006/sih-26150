@@ -210,6 +210,14 @@ const API = {
     return res.json();
   },
 
+  /** Retrieve all recovered case segments pre-grouped for the timeline view. */
+  async getTimeline(caseId) {
+    const url = `/api/cases/${caseId}/timeline`;
+    const res = await fetch(url);
+    await this._checkOk(res, url);
+    return res.json();
+  },
+
   async exportSegment(caseId, evidenceId, segmentId) {
     const url = `/api/cases/${caseId}/export/${segmentId}`;
     const res = await fetch(url, { method: 'POST' });

@@ -12,6 +12,7 @@ function renderSidebar(activeScreen = 'dashboard', currentCaseId = null, current
   let caseItems = [];
   if (currentCaseId) {
     caseItems.push({ id: 'case-detail', label: '📁 Case Overview', action: () => navigateTo('case-detail', { caseId: currentCaseId }) });
+    caseItems.push({ id: 'timeline', label: '🕒 Cross-Camera Timeline', action: () => navigateTo('timeline', { caseId: currentCaseId }) });
 
     if (currentEvidenceId) {
       caseItems.push({ id: 'evidence-scan', label: '🔍 Acquisition & Scan', action: () => navigateTo('evidence-scan', { caseId: currentCaseId, evidenceId: currentEvidenceId }) });
