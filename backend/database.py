@@ -144,6 +144,14 @@ CREATE TABLE IF NOT EXISTS audit_log (
     previous_hash TEXT,
     entry_hash    TEXT NOT NULL
 );
+
+-- Single-examiner auth state (key-value store for password_hash and similar).
+-- Only ever contains one row: key='password_hash', value=<bcrypt hash string>.
+-- Plaintext passwords are NEVER stored here.
+CREATE TABLE IF NOT EXISTS auth_state (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 """
 
 
@@ -316,3 +324,22 @@ class Database:
                 (evidence_id,),
             ).fetchall()
         return [LogEvent(**dict(r)) for r in rows]
+
+    # ── Auth state ─────────────────────────────────────────────────────────────
+
+    def get_auth_value(self, key: str) -> Optional[str]:
+        """Return the stored value for key, or None if not set."""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT value FROM auth_state WHERE key=?", (key,)
+            ).fetchone()
+        return row["value"] if row else None
+
+    def set_auth_value(self, key: str, value: str) -> None:
+        """Upsert key → value in auth_state.  Used only for the bcrypt hash."""
+        with self._connect() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO auth_state(key, value) VALUES (?,?)",
+                (key, value),
+            )
+

@@ -109,6 +109,7 @@ def main() -> int:
         ("multipart",     "python-multipart"),
         ("aiofiles",      "aiofiles"),
         ("pydantic",      "pydantic"),
+        ("bcrypt",        "bcrypt"),
     ]
     for mod, pip_name in packages:
         all_ok &= check_package(mod, pip_name)
