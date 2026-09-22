@@ -124,7 +124,9 @@ CREATE TABLE IF NOT EXISTS segments (
     status            TEXT NOT NULL,
     export_path       TEXT,
     sha256            TEXT,
-    notes             TEXT
+    notes             TEXT,
+    motion_detected   INTEGER,
+    motion_details    TEXT
 );
 
 CREATE TABLE IF NOT EXISTS log_events (
@@ -173,6 +175,14 @@ class Database:
     def _init_schema(self) -> None:
         with self._connect() as conn:
             conn.executescript(_SCHEMA)
+            try:
+                conn.execute("ALTER TABLE segments ADD COLUMN motion_detected INTEGER")
+            except Exception:
+                pass
+            try:
+                conn.execute("ALTER TABLE segments ADD COLUMN motion_details TEXT")
+            except Exception:
+                pass
 
     # ── Cases ─────────────────────────────────────────────────────────────────
 
@@ -242,12 +252,14 @@ class Database:
 
     def save_segment(self, seg: Segment) -> Segment:
         offsets_json = json.dumps([o.model_dump() for o in seg.disk_offsets])
+        motion_int = int(seg.motion_detected) if seg.motion_detected is not None else None
         with self._connect() as conn:
             conn.execute(
                 "INSERT OR REPLACE INTO segments "
                 "(segment_id, evidence_id, camera, start_time, end_time, "
-                " disk_offsets_json, frame_count, status, export_path, sha256, notes) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                " disk_offsets_json, frame_count, status, export_path, sha256, notes, "
+                " motion_detected, motion_details) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     seg.segment_id, seg.evidence_id, seg.camera,
                     seg.start_time.isoformat() if seg.start_time else None,
@@ -255,6 +267,7 @@ class Database:
                     offsets_json,
                     seg.frame_count, seg.status.value,
                     seg.export_path, seg.sha256, seg.notes,
+                    motion_int, seg.motion_details,
                 ),
             )
         return seg
@@ -273,6 +286,8 @@ class Database:
                 DiskOffset(**o) for o in json.loads(d.pop("disk_offsets_json") or "[]")
             ]
             d["status"] = SegmentStatus(d["status"])
+            if "motion_detected" in d and d["motion_detected"] is not None:
+                d["motion_detected"] = bool(d["motion_detected"])
             # Parse datetimes
             from datetime import datetime, timezone
             for key in ("start_time", "end_time"):

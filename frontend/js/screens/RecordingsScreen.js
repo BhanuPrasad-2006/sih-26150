@@ -107,6 +107,7 @@ async function renderRecordingsScreen(params) {
                    <th>Rationale / Gaps</th>
                    <th>SHA-256 (prefix)</th>
                    <th>Export</th>
+                   <th>Basic Motion Detection</th>
                    <th>Action</th>
                  </tr>
                </thead>
@@ -117,6 +118,21 @@ async function renderRecordingsScreen(params) {
                    const endStr   = s.end_time   ? new Date(s.end_time).toISOString().replace('T', ' ').substring(0, 19) : '—';
                    const isExported = !!s.export_path;
                    const hashDisplay = s.sha256 ? s.sha256.substring(0, 12) + '…' : '—';
+
+                   let motionCell = `<span style="font-size:11px; color:var(--text-dim);">Export required</span>`;
+                   if (isExported) {
+                     if (s.motion_detected === true) {
+                       motionCell = `<span class="badge badge-partial" data-tooltip="${s.motion_details || 'Basic Motion Detection: Motion detected'}">Motion Detected</span>`;
+                     } else if (s.motion_detected === false) {
+                       motionCell = `<span class="badge badge-pending" data-tooltip="${s.motion_details || 'Basic Motion Detection: No significant motion detected'}">No Motion</span>`;
+                     } else {
+                       motionCell = `<button id="motion-btn-${s.segment_id}" class="btn btn-secondary btn-sm" style="font-size:11px; padding:3px 8px;"
+                         onclick="runMotionDetection('${caseId}', '${evidenceId}', '${s.segment_id}', this)">
+                         Check Motion
+                       </button>`;
+                     }
+                   }
+
                    return `
                      <tr>
                        <td><strong>Camera ${s.camera ?? s.camera_id ?? '?'}</strong></td>
@@ -132,6 +148,7 @@ async function renderRecordingsScreen(params) {
                            ? `<span class="badge badge-complete" style="font-size:10px;">Exported MP4</span>`
                            : `<span style="font-size:12px; color:var(--text-dim);">Not exported</span>`}
                        </td>
+                       <td>${motionCell}</td>
                        <td>
                          <button id="export-btn-${s.segment_id}" class="btn btn-secondary btn-sm"
                            onclick="exportSegment('${caseId}', '${evidenceId}', '${s.segment_id}', this)">
@@ -196,6 +213,46 @@ async function exportSegment(caseId, evidenceId, segmentId, btnEl) {
     if (btnEl) {
       btnEl.disabled = false;
       btnEl.innerHTML = 'Export MP4';
+    }
+  }
+}
+
+async function runMotionDetection(caseId, evidenceId, segmentId, btnEl) {
+  if (btnEl) {
+    btnEl.disabled = true;
+    btnEl.innerHTML = '<span class="btn-spinner"></span> Analyzing…';
+  }
+  try {
+    const res = await API.detectMotion(caseId, segmentId);
+    showModal(
+      'Basic Motion Detection Results',
+      `
+        <div class="${res.motion_detected ? 'notice-card' : 'success-inline'}" style="margin-bottom:12px;">
+          <strong>${res.label || 'Basic Motion Detection'}:</strong> ${res.details}
+        </div>
+        <div style="font-size:13px; display:flex; flex-direction:column; gap:6px; color:var(--text-muted);">
+          <div><strong>Motion Detected:</strong> ${res.motion_detected ? '<span style="color:var(--status-partial); font-weight:700;">YES</span>' : '<span style="color:var(--status-complete); font-weight:700;">NO</span>'}</div>
+          <div><strong>Motion Frames:</strong> ${res.motion_frames} / ${res.total_frames} (${((res.motion_ratio || 0) * 100).toFixed(1)}%)</div>
+          <div style="font-size:11px; color:var(--text-dim); margin-top:4px;">Decoupled post-export analysis via OpenCV frame differencing. Evidence hash and video container remain unaltered.</div>
+        </div>
+      `,
+      [{ label: 'OK', class: 'btn-primary', onClick: () => renderRecordingsScreen({ caseId, evidenceId }) }]
+    );
+  } catch (err) {
+    showModal(
+      'Basic Motion Detection Error',
+      `<div class="error-banner" style="margin-top:0;">
+         <div class="error-banner-icon">⚠️</div>
+         <div class="error-banner-body">
+           <div class="error-banner-title">Motion detection failed</div>
+           <div class="error-banner-msg">${err.message}</div>
+         </div>
+       </div>`,
+      [{ label: 'OK', class: 'btn-secondary', onClick: () => {} }]
+    );
+    if (btnEl) {
+      btnEl.disabled = false;
+      btnEl.innerHTML = 'Check Motion';
     }
   }
 }

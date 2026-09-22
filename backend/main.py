@@ -54,6 +54,7 @@ from backend.database import (
     get_case_report_dir,
 )
 from backend.exporter import export_segment
+from backend.motion import detect_motion_in_video
 from backend.models import (
     AuditEntry,
     Case,
@@ -763,6 +764,48 @@ async def export_one_segment(case_id: str, segment_id: str):
     await asyncio.to_thread(db.save_segment, seg)
     _audit(case_id, "export", json.dumps(detail))
     return {"segment": seg, "detail": detail}
+
+
+@app.post("/api/cases/{case_id}/motion/{segment_id}")
+async def detect_segment_motion(case_id: str, segment_id: str):
+    """
+    Optional post-export Basic Motion Detection.
+    Decoupled from carving/recovery — operates read-only on exported video files.
+    """
+    evs = await asyncio.to_thread(db.list_evidence_for_case, case_id)
+    if not evs:
+        raise HTTPException(400, "No evidence for this case")
+    ev = evs[-1]
+    segments = await asyncio.to_thread(db.list_segments_for_evidence, ev.evidence_id)
+    seg = next((s for s in segments if s.segment_id == segment_id), None)
+    if not seg:
+        raise HTTPException(404, "Segment not found")
+
+    if not seg.export_path or not Path(seg.export_path).is_file():
+        raise HTTPException(400, "Segment has not been exported yet. Export to MP4 before running motion detection.")
+
+    res = await asyncio.to_thread(detect_motion_in_video, seg.export_path)
+    if res.error:
+        raise HTTPException(500, f"Basic Motion Detection error: {res.error}")
+
+    seg.motion_detected = res.motion_detected
+    seg.motion_details = res.summary
+    await asyncio.to_thread(db.save_segment, seg)
+
+    _audit(
+        case_id,
+        "basic_motion_detection",
+        f"segment_id={segment_id} motion_detected={res.motion_detected} frames={res.motion_frames}/{res.total_frames}",
+    )
+    return {
+        "segment_id": seg.segment_id,
+        "motion_detected": res.motion_detected,
+        "details": res.summary,
+        "motion_frames": res.motion_frames,
+        "total_frames": res.total_frames,
+        "motion_ratio": res.motion_ratio,
+        "label": "Basic Motion Detection",
+    }
 
 
 @app.get("/api/cases/{case_id}/verify")
