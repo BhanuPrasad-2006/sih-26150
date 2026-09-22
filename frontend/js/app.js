@@ -70,6 +70,14 @@ function navigateTo(screen, params = {}) {
       renderRecordingsScreen(params);
       break;
 
+    case 'timeline':
+      renderHeader([
+        { label: `Case #${params.caseId}`, screen: 'case-detail', params: { caseId: params.caseId } },
+        { label: 'Cross-Camera Timeline' }
+      ]);
+      renderTimelineScreen(params);
+      break;
+
     case 'audit-log':
       renderHeader([
         { label: `Case #${params.caseId}`, screen: 'case-detail', params: { caseId: params.caseId } },
