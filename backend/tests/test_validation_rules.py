@@ -23,9 +23,9 @@ from backend.plugins.constants import (
     DHAV_FOOTER_SIZE,
     DHAV_TYPE_VIDEO_IFRAME,
 )
-from backend.models import RawFrame, Segment, SegmentStatus, Case, Evidence
+from backend.models import RawFrame, Segment, SegmentStatus, Case, Evidence, DiskOffset
 from backend.reconstructor import label_all, reconstruct_segments
-from backend.exporter import export_segment, ffmpeg_available, ffprobe_available
+from backend.exporter import export_segment, ffmpeg_available, ffprobe_available, ffprobe_check
 from backend.audit import AuditLog, AuditEntry
 from backend.database import Database
 from backend.reporting import generate_report
@@ -197,18 +197,90 @@ def test_hikvision_carving_status_is_uncertain(hikvision_img_path):
 
 # ── 8. COMPLETE Status Rules Test ─────────────────────────────────────────────
 
-def test_complete_label_requires_valid_decode():
-    """A segment that fails decoding or has missing frames cannot be COMPLETE."""
-    # Segment without ffprobe validation remains PARTIAL or UNCERTAIN
-    seg = Segment(
-        segment_id="SEG-PART",
-        evidence_id="EV-1",
-        camera=0,
-        frame_count=10,
-        status=SegmentStatus.PARTIAL,
-        notes="Unverified segment"
-    )
-    assert seg.status != SegmentStatus.COMPLETE
+def test_complete_label_requires_valid_decode(temp_dir):
+    """
+    Authentic test for complete label requirement and ffprobe validation:
+    1. Generates a valid H.264 video stream and a corrupted/truncated stream.
+    2. Calls real export_segment() to export both as files.
+    3. Calls real ffprobe_check() to shell out to ffprobe (no mocking).
+    4. Asserts:
+       - Corrupted clip fails ffprobe decode and stays UNCERTAIN or PARTIAL (never COMPLETE).
+       - Valid clip decodes cleanly via ffprobe (has_video=True) and is eligible for COMPLETE status.
+    """
+    if not ffmpeg_available() or not ffprobe_available():
+        pytest.skip("FFmpeg/ffprobe not found on PATH — skipping authentic decode test.")
+
+    # 1. Generate valid 1-second H.264 clip
+    valid_raw_path = os.path.join(temp_dir, "valid_stream.dd")
+    cmd = [
+        "ffmpeg", "-y",
+        "-f", "lavfi", "-i", "testsrc=duration=1:size=320x240:rate=10",
+        "-c:v", "libx264",
+        "-bsf:v", "h264_mp4toannexb",
+        "-f", "h264",
+        valid_raw_path
+    ]
+    res = subprocess.run(cmd, capture_output=True, text=True)
+    if res.returncode != 0 or not os.path.exists(valid_raw_path):
+        pytest.skip("Failed to generate test H.264 stream with FFmpeg.")
+
+    size_valid = os.path.getsize(valid_raw_path)
+
+    # 2. Generate corrupted stream (garbage bytes, missing codec parameters)
+    corrupt_raw_path = os.path.join(temp_dir, "corrupt_stream.dd")
+    with open(corrupt_raw_path, "wb") as f:
+        f.write(b"CORRUPTED_GARBAGE_PAYLOAD_NOT_A_VALID_H264_STREAM_" * 20)
+
+    size_corrupt = os.path.getsize(corrupt_raw_path)
+
+    # 3. Export VALID segment via real export_segment()
+    with EvidenceImage.open(valid_raw_path) as valid_img:
+        seg_valid = Segment(
+            segment_id="SEG-VALID-REAL",
+            evidence_id="EV-VALID",
+            camera=1,
+            frame_count=10,
+            status=SegmentStatus.UNCERTAIN,
+            notes="Experimental Hikvision carving",
+            disk_offsets=[DiskOffset(start=0, end=size_valid)]
+        )
+        export_dir_valid = Path(temp_dir) / "out_valid"
+        exp_v, _ = export_segment(valid_img.mm, seg_valid, export_dir_valid)
+
+        # Execute real ffprobe_check() on exported file
+        v_export_file = Path(exp_v.export_path)
+        assert v_export_file.exists()
+        v_probe_ok, v_probe_info = ffprobe_check(v_export_file)
+
+        # Assert valid clip decodes cleanly via ffprobe
+        assert v_probe_ok is True, f"Valid clip failed ffprobe check: {v_probe_info}"
+        # Assert status was upgraded by ffprobe check to PARTIAL/COMPLETE (eligible for COMPLETE)
+        assert exp_v.status in (SegmentStatus.PARTIAL, SegmentStatus.COMPLETE)
+
+    # 4. Export CORRUPT segment via real export_segment()
+    with EvidenceImage.open(corrupt_raw_path) as corrupt_img:
+        seg_corrupt = Segment(
+            segment_id="SEG-CORRUPT-REAL",
+            evidence_id="EV-CORRUPT",
+            camera=1,
+            frame_count=10,
+            status=SegmentStatus.UNCERTAIN,
+            notes="Experimental Hikvision carving",
+            disk_offsets=[DiskOffset(start=0, end=size_corrupt)]
+        )
+        export_dir_corrupt = Path(temp_dir) / "out_corrupt"
+        exp_c, _ = export_segment(corrupt_img.mm, seg_corrupt, export_dir_corrupt)
+
+        # Execute real ffprobe_check() on exported corrupted file
+        c_export_file = Path(exp_c.export_path)
+        assert c_export_file.exists()
+        c_probe_ok, c_probe_info = ffprobe_check(c_export_file)
+
+        # Assert corrupted clip fails ffprobe decode check
+        assert c_probe_ok is False, "Corrupted clip unexpectedly passed ffprobe check"
+        # Assert corrupted clip is NOT COMPLETE and remains UNCERTAIN/PARTIAL
+        assert exp_c.status != SegmentStatus.COMPLETE
+        assert exp_c.status in (SegmentStatus.UNCERTAIN, SegmentStatus.PARTIAL)
 
 # ── 9. Exporter H.264 Clip Wrapping & Header Timestamp Test ───────────────────
 

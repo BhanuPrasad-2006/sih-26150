@@ -129,6 +129,51 @@ pytest
 
 ---
 
+## 🔒 Security
+
+### Single-Examiner Password Login
+
+This tool uses single-examiner password-based access control. On first run, before any case data is visible or any API route is reachable, the examiner is prompted to create an access password (minimum 12 characters). The password is stored **only as a bcrypt hash** in the local SQLite database — the plaintext is never stored, never logged, and never transmitted.
+
+### Local-Only Network Binding
+
+The server binds exclusively to `127.0.0.1` (localhost) and will not accept connections from other machines on the network. A prominent warning is emitted to stderr and the application log at startup if the `SIH_HOST` environment variable is set to anything other than `127.0.0.1` or `localhost`.
+
+### Session Management
+
+After login, a `HttpOnly`, `SameSite=Strict` session cookie (`sih_session`) is issued. Every API request goes through authentication middleware that:
+
+1. Reads the session cookie.
+2. Checks whether the session exists and how long ago it was last active.
+3. If inactive for more than **30 minutes** (configurable via `SESSION_TIMEOUT_MINUTES` environment variable), the session is deleted and the request returns HTTP 401. The UI redirects automatically to the login screen.
+4. On a valid request, the session's `last_activity` timestamp is refreshed, keeping the session alive during active use.
+
+The cookie is marked `HttpOnly` (cannot be read by JavaScript — blocks XSS token theft) and `SameSite=Strict` (blocks basic CSRF). If this tool were ever deployed over HTTPS, the cookie should also be marked `Secure`.
+
+### Brute-Force Protection
+
+After 5 consecutive failed login attempts, login is locked for 60 seconds. During the lockout:
+
+- Any further login attempt (including the correct password) returns HTTP 429 with a `retry_after` field.
+- The UI shows a live countdown.
+- Lockout state persists in memory across the full 60-second window (not just checked per-request).
+
+Error messages always say **"Incorrect password."** — the tool never reveals whether an account exists or any other detail about why the check failed.
+
+### Audit Trail
+
+Every login attempt (success and failure) is appended to the hash-chained forensic audit log alongside evidence-handling events. Login audit entries record only the timestamp and attempt count — **the attempted password is never logged**. The audit log covers the full chain from access control through evidence acquisition, carving, export, and report generation.
+
+The hash-chain formula ensures that any tampering with past entries breaks all subsequent hashes:
+
+$$\text{Hash}_n = \text{SHA-256}(\text{Timestamp}_n \parallel \text{Action}_n \parallel \text{Params}_n \parallel \text{Hash}_{n-1})$$
+
+### Scope Disclaimer
+
+This is **single-user access control**, not multi-role enterprise authentication. There is no role-based access control (RBAC), no per-user audit attribution beyond the session, and no multi-user account management. It is designed for a single forensic examiner operating the tool on a dedicated, air-gapped or local workstation. Multi-examiner workflows or enterprise deployment would require a substantially different architecture.
+
+---
+
 ## ⚖️ Legal & Compliance Context
 
 This tool was designed in alignment with Indian legal standards for electronic evidence admissibility:

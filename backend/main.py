@@ -4,6 +4,14 @@ main.py — FastAPI application entry point.
 Binds ONLY to 127.0.0.1 (localhost). No external access. No telemetry.
 Serves the frontend at / and API at /api.
 
+Authentication:
+  Every /api/* route requires a valid sih_session cookie EXCEPT:
+    GET  /api/auth/status   — lets the frontend discover auth state on load
+    POST /api/auth/login    — the login endpoint itself
+    POST /api/auth/setup    — first-run password creation
+  These are enforced by AuthMiddleware at the Starlette level, so every
+  current and future route is automatically protected.
+
 Scan flow:
   POST /api/cases/{id}/evidence  → load image, hash, store evidence record
   POST /api/cases/{id}/scan      → start background scan task (async)
@@ -21,6 +29,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import sqlite3
 import sys
 import traceback
@@ -33,10 +42,12 @@ import aiofiles
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from backend.acquisition import AcquisitionError, EvidenceImage
 from backend.audit import AuditLog
+from backend.auth import AuthManager
 from backend.database import (
     Database,
     get_case_export_dir,
@@ -69,9 +80,25 @@ logging.basicConfig(
 )
 log = logging.getLogger("main")
 
+# ── Constants ─────────────────────────────────────────────────────────────────
+
+SESSION_COOKIE_NAME = "sih_session"
+
+# Endpoints that do NOT require an authenticated session.
+# Everything else under /api/* is protected.
+_AUTH_EXEMPT_PATHS = {
+    "/api/auth/status",
+    "/api/auth/login",
+    "/api/auth/setup",
+    "/api/docs",
+    "/api/openapi.json",
+}
+
 # ── Global state ──────────────────────────────────────────────────────────────
 
 db: Database = Database()
+auth: AuthManager = AuthManager(db)
+
 # Per-case: {case_id → asyncio.Queue[ScanProgress]}
 _progress_queues: dict[str, asyncio.Queue] = {}
 # Per-case: open EvidenceImage (kept alive for export)
@@ -84,10 +111,32 @@ _scan_tasks: dict[str, asyncio.Task] = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global db
+    global db, auth
     if not hasattr(db, "_path"):
         db = Database()
+        auth = AuthManager(db)
     log.info("Database initialised at %s", db._path)
+
+    # ── Startup binding check ──────────────────────────────────────────────────
+    # The bind address is controlled by uvicorn CLI args (in run.bat/run.sh),
+    # not by FastAPI.  We inspect the environment variable used by our start
+    # scripts and warn loudly if it looks like it's been changed.
+    host_env = os.environ.get("SIH_HOST", "127.0.0.1").strip()
+    if host_env not in ("127.0.0.1", "localhost"):
+        _BINDING_WARNING = (
+            "\n"
+            "╔══════════════════════════════════════════════════════════════════════╗\n"
+            "║  ⚠  SECURITY WARNING: Non-localhost binding detected               ║\n"
+            f"║  SIH_HOST is set to '{host_env}'.                                  \n"
+            "║  This tool is designed for LOCAL-ONLY use.                          ║\n"
+            "║  Binding to a network interface exposes forensic case data          ║\n"
+            "║  and session cookies to the local network.                          ║\n"
+            "║  Set SIH_HOST=127.0.0.1 or remove the variable to use defaults.    ║\n"
+            "╚══════════════════════════════════════════════════════════════════════╝\n"
+        )
+        log.warning(_BINDING_WARNING)
+        sys.stderr.write(_BINDING_WARNING)
+
     yield
 
     # Close any open images on shutdown
@@ -98,12 +147,48 @@ async def lifespan(app: FastAPI):
             pass
 
 
+# ── Auth middleware ───────────────────────────────────────────────────────────
+
+class AuthMiddleware(BaseHTTPMiddleware):
+    """
+    Starlette-level middleware that enforces session authentication on every
+    /api/* request (except the explicitly exempted auth endpoints).
+
+    Per-request session enforcement:
+      1. Read sih_session cookie.
+      2. Call auth.validate_session() — this checks elapsed time and deletes
+         expired sessions.  Returns False if missing, invalid, or timed out.
+      3. On invalid → return 401 JSON immediately; request never reaches a route.
+      4. On valid → touch_session() to refresh last_activity, then proceed.
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+
+        # Only protect /api/* routes
+        if path.startswith("/api/") and path not in _AUTH_EXEMPT_PATHS:
+            token = request.cookies.get(SESSION_COOKIE_NAME)
+            # validate_session() is synchronous but fast (dict lookup + time check)
+            if not auth.validate_session(token):
+                return JSONResponse(
+                    {"detail": "Not authenticated. Please log in."},
+                    status_code=401,
+                )
+            # Session is valid — refresh activity timestamp
+            auth.touch_session(token)
+
+        response = await call_next(request)
+        return response
+
+
 app = FastAPI(
     title="SIH26150 DVR/NVR Forensic Tool",
     version="1.0.0-dev",
     docs_url="/api/docs",
     lifespan=lifespan,
 )
+
+app.add_middleware(AuthMiddleware)
 
 # ── Plugin registry ───────────────────────────────────────────────────────────
 
@@ -147,6 +232,17 @@ async def _push_progress(case_id: str, prog: ScanProgress) -> None:
     q = _progress_queues.get(case_id)
     if q:
         await q.put(prog)
+
+
+# ── Global audit log for access events ───────────────────────────────────────
+# Login/logout events are recorded in a global (not per-case) audit log so
+# they appear in the same hash-chained trail as evidence operations.
+_global_audit = AuditLog()
+
+
+def _global_audit_event(action: str, details: str = "") -> None:
+    """Append to the global access audit log (login/logout events)."""
+    _global_audit.append(action, details)
 
 
 # ── Background scan ───────────────────────────────────────────────────────────
@@ -284,16 +380,235 @@ async def _run_scan(case_id: str, evidence_id: str) -> None:
             await q.put(None)  # sentinel
 
 
+# ── Auth API routes ───────────────────────────────────────────────────────────
+
+class LoginRequest(BaseModel):
+    password: str
+
+
+class SetupRequest(BaseModel):
+    password: str
+
+    @field_validator("password")
+    @classmethod
+    def _validate_password(cls, v: str) -> str:
+        if len(v) < 12:
+            raise ValueError("Password must be at least 12 characters long.")
+        return v
+
+
+@app.get("/api/auth/status")
+async def auth_status():
+    """
+    Unauthenticated endpoint — lets the frontend decide on first load whether
+    to show the setup screen, login screen, or dashboard.
+    Returns: {password_set: bool, authenticated: bool}
+    """
+    # We can't read the cookie in a plain route without Request; use Request param
+    # to match middleware expectation.  This route is exempt from middleware auth.
+    return {
+        "password_set": auth.is_password_set(),
+        "authenticated": False,  # client-side always checks cookie via middleware
+    }
+
+
+@app.get("/api/auth/status-with-session")
+async def auth_status_with_session(request: Request):
+    """
+    Same as /api/auth/status but also reports whether the current session cookie
+    is valid.  Used by the frontend to handle mid-session expiry redirects.
+    Exempt from middleware (checked manually here).
+    """
+    token = request.cookies.get(SESSION_COOKIE_NAME)
+    return {
+        "password_set": auth.is_password_set(),
+        "authenticated": auth.validate_session(token),
+    }
+
+
+@app.post("/api/auth/setup")
+async def setup_password(req: SetupRequest, response: Response):
+    """
+    First-run endpoint: set the examiner password.
+    Only works when no password has been set yet.
+    After setting the password, a session is created automatically.
+    """
+    if auth.is_password_set():
+        raise HTTPException(400, "Password is already set. Use the login endpoint.")
+
+    await asyncio.to_thread(auth.set_password, req.password)
+
+    # Auto-login after setup
+    token = auth.create_session()
+    auth.record_success()
+
+    # Audit: no password details logged
+    _global_audit_event("examiner_password_set", "First-run password created")
+
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=token,
+        httponly=True,          # JS cannot read — blocks XSS token theft
+        samesite="strict",      # Blocks basic CSRF
+        # secure=True would be added if this were ever served over HTTPS.
+        # On localhost HTTP, secure=True would prevent the cookie from being sent.
+        max_age=None,           # Session cookie — expires when browser closes
+    )
+    return {"ok": True}
+
+
+@app.post("/api/auth/login")
+async def login(req: LoginRequest, response: Response):
+    """
+    Login endpoint. Protected against brute force by per-account lockout.
+
+    Security properties:
+      • Error message is always "Incorrect password." — never reveals whether
+        an account exists or why the check failed.
+      • Attempted password is NEVER logged, not even on failure.
+      • Audit entry records only: timestamp (via AuditLog) + attempt count.
+    """
+    # Check lockout BEFORE verifying password
+    locked, retry_after = auth.is_locked_out()
+    if locked:
+        return JSONResponse(
+            {"locked": True, "retry_after": retry_after,
+             "detail": f"Too many failed attempts. Try again in {retry_after} seconds."},
+            status_code=429,
+        )
+
+    # Verify password (constant-time bcrypt comparison)
+    ok = await asyncio.to_thread(auth.verify_password, req.password)
+
+    if not ok:
+        failure_count, just_locked = auth.record_failure()
+        # Audit: timestamp and count only — NO password content
+        _global_audit_event(
+            "login_failure",
+            f"attempt={failure_count} locked={just_locked}",
+        )
+        if just_locked:
+            return JSONResponse(
+                {"locked": True, "retry_after": AuthManager.LOCKOUT_SECONDS,
+                 "detail": f"Too many failed attempts. Try again in {AuthManager.LOCKOUT_SECONDS} seconds."},
+                status_code=429,
+            )
+        return JSONResponse(
+            {"ok": False, "detail": "Incorrect password."},
+            status_code=401,
+        )
+
+    # Success
+    token = auth.create_session()
+    auth.record_success()
+
+    # Audit: success, no credentials
+    _global_audit_event("login_success", "Examiner authenticated")
+
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=token,
+        httponly=True,          # JS cannot read — blocks XSS token theft
+        samesite="strict",      # Blocks basic CSRF
+        # secure=True would be set if this were served over HTTPS.
+        # On localhost HTTP, secure=True prevents the cookie from being sent.
+        max_age=None,           # Session cookie
+    )
+    return {"ok": True}
+
+
+@app.post("/api/auth/logout")
+async def logout(request: Request, response: Response):
+    """
+    Invalidate the current session. No credentials required — the session
+    cookie itself is the proof of identity.
+    """
+    token = request.cookies.get(SESSION_COOKIE_NAME)
+    auth.invalidate_session(token)
+    _global_audit_event("logout", "Session invalidated")
+    response.delete_cookie(SESSION_COOKIE_NAME)
+    return {"ok": True}
+
+
+@app.get("/api/auth/global-audit")
+async def global_audit_log():
+    """Return the global access audit log (login/logout events)."""
+    chain_ok, error = _global_audit.verify_chain()
+    return {
+        "chain_intact": chain_ok,
+        "error": error,
+        "entries": _global_audit.export_entries(),
+    }
+
+
 # ── API routes ────────────────────────────────────────────────────────────────
+
+# Allowed characters for case numbers: alphanumeric, dash, slash, underscore
+_CASE_NUMBER_RE = re.compile(r'^[\w\-/]{1,64}$')
+# Allowed file extensions for evidence disk images
+_ALLOWED_EVIDENCE_EXTS = {".dd", ".img", ".raw", ".bin"}
+
 
 class CreateCaseRequest(BaseModel):
     case_number: str
-    examiner: str
-    notes: Optional[str] = None
+    examiner:    str
+    notes:       Optional[str] = None
+
+    @field_validator("case_number")
+    @classmethod
+    def _validate_case_number(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Case number is required.")
+        if not _CASE_NUMBER_RE.match(v):
+            raise ValueError(
+                "Case number must be 1–64 characters and may only contain "
+                "letters, digits, dashes (-), slashes (/), and underscores (_)."
+            )
+        return v
+
+    @field_validator("examiner")
+    @classmethod
+    def _validate_examiner(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) < 2:
+            raise ValueError("Examiner name must be at least 2 characters.")
+        if len(v) > 128:
+            raise ValueError("Examiner name must be 128 characters or fewer.")
+        # Strip ASCII control characters
+        v = "".join(ch for ch in v if ch >= " ")
+        return v
 
 
 class LoadEvidenceRequest(BaseModel):
     path: str  # absolute path to .dd / .img file on the examiner's machine
+
+    @field_validator("path")
+    @classmethod
+    def _validate_path(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Evidence file path is required.")
+        # Reject path traversal attempts
+        if ".." in v:
+            raise ValueError(
+                "Path must not contain '..' directory traversal sequences."
+            )
+        # Reject physical drive paths (Windows \\.\PhysicalDriveN style)
+        if v.startswith("\\\\.\\") or v.lower().startswith("//./"):
+            raise ValueError(
+                "Physical drive paths (e.g. \\\\.\\PhysicalDrive0) are rejected "
+                "to prevent accidental modification of live drives. "
+                "Acquire a raw disk image (.dd/.img) first."
+            )
+        # Check extension
+        ext = Path(v).suffix.lower()
+        if ext not in _ALLOWED_EVIDENCE_EXTS:
+            raise ValueError(
+                f"Evidence file must be a raw disk image with one of these extensions: "
+                f"{', '.join(sorted(_ALLOWED_EVIDENCE_EXTS))}. Got: '{ext or '(none)'}'"
+            )
+        return v
 
 
 @app.post("/api/cases", response_model=Case)

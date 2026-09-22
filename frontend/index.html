@@ -5,17 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DVR/NVR Forensic Analysis Tool — SIH26150 (NTRO)</title>
   <link rel="stylesheet" href="/css/style.css">
-
 </head>
 <body class="dark-theme">
   <div id="app-container" class="app-container">
     <!-- Header component rendered here -->
     <header id="header-root" class="header-root"></header>
-    
+
+    <!-- Breadcrumb strip — rendered by renderHeader() -->
+    <nav id="breadcrumb-strip" class="breadcrumb-strip"></nav>
+
     <div class="main-layout">
       <!-- Sidebar navigation -->
       <aside id="sidebar-root" class="sidebar-root"></aside>
-      
+
       <!-- Content view area -->
       <main id="content-root" class="content-root"></main>
     </div>
@@ -36,6 +38,7 @@
   <script src="/js/screens/RecordingsScreen.js"></script>
   <script src="/js/screens/AuditLogScreen.js"></script>
   <script src="/js/screens/ExportReportScreen.js"></script>
+  <script src="/js/screens/LoginScreen.js"></script>
   <script src="/js/app.js"></script>
 </body>
 </html>

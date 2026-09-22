@@ -12,6 +12,14 @@ A session-scoped safety fixture ``assert_no_real_db`` verifies that the Database
 path used during the test run does NOT point at the real production folder
 (C:/sih_cases or ~/sih_cases).  Any test that accidentally imports the real DB will
 fail fast with a clear message rather than silently polluting production data.
+
+AUTH FIXTURES
+─────────────
+isolated_app       — unauthenticated TestClient (for auth tests that need to call
+                     login themselves, or to verify that unauthenticated access fails)
+auth_client        — TestClient pre-authenticated with a test password.
+                     Used by all non-auth tests so they keep passing after the
+                     auth middleware was added.
 """
 
 import os
@@ -36,6 +44,7 @@ from backend.test_images.gen_test_image import (
     generate_foreign_image,
 )
 from backend.database import Database
+from backend.auth import AuthManager
 import backend.main as _main_module
 
 
@@ -97,19 +106,21 @@ def foreign_img_path(temp_dir):
     return path
 
 
-# ── Isolated app fixture ───────────────────────────────────────────────────────
+# ── Isolated (unauthenticated) app fixture ────────────────────────────────────
 
 @pytest.fixture
 def isolated_app(tmp_path, monkeypatch):
     """
     Yield a FastAPI TestClient backed by a fresh, empty Database in tmp_path.
+    The client is NOT pre-authenticated — auth tests use this directly.
 
     Steps:
       1. Point FORENSIC_CASE_DIR at a new per-test subdirectory.
       2. Patch backend.main.db with a fresh Database() at that path.
-      3. Clear any in-memory state left from previous tests.
-      4. Yield the TestClient.
-      5. Restore the original db after the test.
+      3. Create a fresh AuthManager pointing at the same db.
+      4. Clear any in-memory state left from previous tests.
+      5. Yield the TestClient.
+      6. Restore the original db/auth after the test.
     """
     from fastapi.testclient import TestClient
 
@@ -124,19 +135,54 @@ def isolated_app(tmp_path, monkeypatch):
         f"isolated_app fixture created a DB at the real case dir: {fresh_db_parent}"
     )
 
-    # Patch the module-level db instance used by all routes
+    fresh_auth = AuthManager(fresh_db)
+
+    # Patch the module-level db and auth instances used by all routes
     monkeypatch.setattr(_main_module, "db", fresh_db)
+    monkeypatch.setattr(_main_module, "auth", fresh_auth)
+
     # Clear in-memory per-case state
     _main_module._progress_queues.clear()
     _main_module._open_images.clear()
     _main_module._audit_logs.clear()
     _main_module._scan_tasks.clear()
 
-    with TestClient(_main_module.app) as client:
+    with TestClient(_main_module.app, raise_server_exceptions=True) as client:
         yield client
 
     # Restore env
     monkeypatch.setenv("FORENSIC_CASE_DIR", _SESSION_TMPDIR)
+
+
+# ── Pre-authenticated app fixture ──────────────────────────────────────────────
+
+_AUTH_TEST_PASSWORD = "TestPassword1234!"   # ≥12 chars, not the real examiner password
+
+
+@pytest.fixture
+def auth_client(isolated_app):
+    """
+    Yield a TestClient that is already authenticated.
+    Used by all non-auth integration tests so they keep passing after auth was added.
+
+    Sets up the password via /api/auth/setup, then logs in, so the session
+    cookie is present in the client's cookie jar for subsequent requests.
+    """
+    # Set up password via setup endpoint (first-run flow)
+    setup_res = isolated_app.post(
+        "/api/auth/setup",
+        json={"password": _AUTH_TEST_PASSWORD},
+    )
+    assert setup_res.status_code == 200, (
+        f"auth_client fixture: setup failed: {setup_res.text}"
+    )
+
+    # The setup endpoint auto-creates a session cookie — client is now logged in
+    assert "sih_session" in isolated_app.cookies, (
+        "auth_client fixture: sih_session cookie not set after setup"
+    )
+
+    return isolated_app
 
 
 # ── Legacy db_path fixture (kept for backward compatibility) ───────────────────
