@@ -66,6 +66,7 @@ from backend.models import (
     SegmentStatus,
 )
 from backend.plugins.constants import MIN_PLUGIN_CONFIDENCE
+from backend.plugins.cpplus import CPPlusPlugin
 from backend.plugins.dahua import DahuaPlugin
 from backend.plugins.hikvision import HikvisionPlugin
 from backend.plugins.matrix import MatrixPlugin
@@ -192,7 +193,13 @@ app.add_middleware(AuthMiddleware)
 
 # ── Plugin registry ───────────────────────────────────────────────────────────
 
-_PLUGINS = [DahuaPlugin(), HikvisionPlugin(), UniviewPlugin(), MatrixPlugin()]
+_PLUGINS = [
+    CPPlusPlugin(),
+    DahuaPlugin(),
+    HikvisionPlugin(),
+    UniviewPlugin(),
+    MatrixPlugin(),
+]
 
 
 def _detect_brand(img: EvidenceImage) -> tuple[str, str, float, Any]:

@@ -33,6 +33,7 @@ from typing import Callable, Optional, TYPE_CHECKING
 from backend.models import LogEvent, RawFrame
 from backend.plugins.base import BrandPlugin
 from backend.plugins.constants import (
+    CPPLUS_IDENTIFYING_MARKERS,
     DHAV_FOOTER_MAGIC,
     DHAV_FOOTER_OFF_LENGTH,
     DHAV_FOOTER_SIZE,
@@ -97,6 +98,11 @@ class DahuaPlugin(BrandPlugin):
 
             if valid_count == 0:
                 return 0.0
+            # If CP Plus brand strings are present, Dahua yields primary brand attribution to CP Plus stub
+            for marker in CPPLUS_IDENTIFYING_MARKERS:
+                if mm.find(marker, 0, limit) != -1:
+                    return 0.90
+
             if valid_count >= self._DETECT_MIN_FRAMES:
                 return 1.0
             # Linear ramp between 1 and _DETECT_MIN_FRAMES valid frames
