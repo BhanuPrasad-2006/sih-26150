@@ -1,0 +1,20 @@
+# DVR/NVR OEM Comparative Analysis
+
+This comparison is deliberately conservative. It distinguishes a confirmed on-disk signature from a brand label and does not turn unverified research into a recovery claim. The Dahua and Hikvision entries below are derived from this repository's format sheets; the project currently registers only Dahua and Hikvision plugins.
+
+| OEM | File system / container format publicly documented in this project | Known forensic recovery challenges | Current project support |
+| --- | --- | --- | --- |
+| **Dahua Technology** | **DHFS 4.1** is documented for DVR/NVR use; some NVR media may use XFS or mixed DHFS/XFS. The recoverable stream format documented here is **DHAV**, with `DHAV` frame starts and `dhav` frame footers. | The DHFS index layout is not implemented or fully verified, so recovery relies on carving. Timestamp epoch/timezone and several header fields remain unverified. Interleaved multi-camera streams must be grouped by channel and time; proposed segmentation thresholds need validation on real media. | **Supported.** The Dahua plugin detects and carves DHAV content; it does not claim verified DHFS index parsing. |
+| **CP Plus** | No CP Plus-specific file system or container is verified. The Dahua format sheet records only an unverified compatibility hypothesis: a CP Plus disk containing **DHAV** frames can be handled as Dahua-formatted content. | A CP Plus nameplate does not establish a Dahua-compatible disk. Detect from the actual disk signature; non-DHAV media needs a separate validated parser. | **Conditional detection-only via Dahua compatibility.** There is no CP Plus-specific plugin or confirmed brand implementation; a DHAV-compatible image may be identified/handled by the Dahua path. |
+| **Hikvision** | A master-sector signature, `HIKVISION@HANGZHOU`, is documented at disk offset `0x200`; the index is named **HIKB-TREE**. Video is described as standard H.264/H.265 NAL-unit content. | The HIKB-TREE entry layout is not verified or implemented. Raw NAL start-code carving has a high false-positive rate. Any carved output is experimental: default **UNCERTAIN**, potentially **PARTIAL** only after valid `ffprobe` validation; carving alone cannot establish **COMPLETE**. | **Experimental / uncertain.** Detection is implemented; index reading and reliable recovery remain unimplemented/experimental. |
+| **Honeywell Security** | **Unverified — no public documentation found in this project.** | **Unverified — no public documentation found in this project.** | **Not yet implemented.** No OEM plugin is registered. |
+| **TP-Link** | **Unverified — no public documentation found in this project.** | **Unverified — no public documentation found in this project.** | **Not yet implemented.** No OEM plugin is registered. |
+| **Godrej** | **Unverified — no public documentation found in this project.** | **Unverified — no public documentation found in this project.** | **Not yet implemented.** No OEM plugin is registered. |
+| **Uniview** | **Unverified — no public documentation found in this project.** | **Unverified — no public documentation found in this project.** | **Not yet implemented.** No OEM plugin is registered. |
+| **Matrix** | **Unverified — no public documentation found in this project.** | **Unverified — no public documentation found in this project.** | **Not yet implemented.** No OEM plugin is registered. |
+
+## Evidence basis and limits
+
+- Dahua facts and limitations are taken from [`format_sheets/dahua.md`](format_sheets/dahua.md); items marked “TO VERIFY” there are not a basis for a forensic claim.
+- Hikvision facts and limitations are taken from [`format_sheets/hikvision.md`](format_sheets/hikvision.md). In particular, the documented master-sector detector is not proof that a recovered stream is complete or admissible.
+- The remaining entries are intentionally not populated with guessed formats, offsets, brand relationships, or recovery claims. Add an OEM only after a public source and representative real-disk validation support its implementation.
