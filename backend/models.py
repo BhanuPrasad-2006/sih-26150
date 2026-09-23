@@ -86,6 +86,10 @@ class Evidence(BaseModel):
     # set explicitly by the examiner, and is used to normalize timestamps for
     # cross-evidence correlation and reporting. None = not specified.
     device_utc_offset_minutes: Optional[int] = None
+    # Computed, not persisted: "PENDING" | "SCANNING" | "COMPLETED". Populated
+    # by main.py's get_case() from whether segments exist / a scan is running
+    # for this evidence — never written to or read from the database directly.
+    scan_status: Optional[str] = None
 
 
 class DiskOffset(BaseModel):

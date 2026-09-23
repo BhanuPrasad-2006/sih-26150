@@ -7,6 +7,8 @@ pre-authenticated so the auth middleware does not block requests.
 No test can write to C:/sih_cases or ~/sih_cases.
 """
 
+import time
+
 import pytest
 
 
@@ -138,4 +140,17 @@ def test_case_lifecycle(auth_client, dahua_img_path):
     case_detail2 = get_res2.json()
     assert len(case_detail2["evidence"]) == 1, (
         f"Expected 1 evidence item, got {len(case_detail2['evidence'])}"
+    )
+
+    # 9. scan_status must reflect real progress, not always show "PENDING"
+    # (a real bug: the field didn't exist on the backend at all, so the
+    # frontend's `ev.scan_status || 'PENDING'` fallback always won).
+    for _ in range(50):
+        case_detail2 = auth_client.get(f"/api/cases/{case_id}").json()
+        if case_detail2["evidence"][0]["scan_status"] == "COMPLETED":
+            break
+        time.sleep(0.1)
+    assert case_detail2["evidence"][0]["scan_status"] == "COMPLETED", (
+        f"Expected scan_status COMPLETED once segments exist, "
+        f"got {case_detail2['evidence'][0]['scan_status']!r}"
     )
