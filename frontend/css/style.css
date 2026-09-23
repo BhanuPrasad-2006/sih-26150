@@ -747,6 +747,7 @@ body {
   flex-shrink: 0;
   line-height: 1;
   margin-top: 1px;
+  color: var(--status-error);
 }
 
 .error-banner-body {
@@ -1288,14 +1289,127 @@ tbody tr:hover {
 ══════════════════════════════════════════════════════════════════════════ */
 
 .auth-screen-wrapper {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  min-height: 100vh;
+  position: relative;
+  /* .content-root carries padding + a "> *" max-width sized for the normal
+     in-app layout; cancel both so the auth screen renders true edge-to-edge. */
+  margin: -32px -36px -60px;
+  max-width: none;
+}
+
+@media (max-width: 860px) {
+  .auth-screen-wrapper {
+    grid-template-columns: 1fr;
+  }
+  .auth-brand-panel {
+    min-height: 240px;
+    padding: 40px 32px !important;
+  }
+  .auth-brand-panel .auth-feature-list { display: none; }
+}
+
+/* ── Left: brand / context panel ─────────────────────────────────────── */
+.auth-brand-panel {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 64px;
+  background:
+    radial-gradient(560px 420px at 20% 15%, rgba(147, 130, 255, 0.22), transparent 60%),
+    radial-gradient(480px 360px at 90% 85%, rgba(240, 180, 41, 0.10), transparent 60%),
+    linear-gradient(165deg, #120c22 0%, #0a0712 70%);
+  border-right: 1px solid var(--glass-border);
+}
+
+.auth-brand-mesh {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(147, 130, 255, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(147, 130, 255, 0.055) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: radial-gradient(circle at 30% 30%, black, transparent 75%);
+  pointer-events: none;
+}
+
+.auth-brand-content {
+  position: relative;
+  z-index: 1;
+  max-width: 460px;
+  animation: fadeIn 0.5s var(--ease-out);
+}
+
+.auth-brand-badge {
+  width: 60px;
+  height: 60px;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: calc(100vh - 64px);
+  background: linear-gradient(145deg, var(--accent-cyan), var(--accent-blue));
+  box-shadow: 0 14px 34px rgba(100, 73, 224, 0.45), 0 0 0 1px rgba(255,255,255,0.08) inset;
+  margin-bottom: 28px;
+}
+
+.auth-brand-badge svg {
+  width: 30px;
+  height: 30px;
+  stroke: #0a0712;
+}
+
+.auth-brand-name {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  line-height: 1.2;
+  color: var(--text-main);
+  margin-bottom: 10px;
+}
+
+.auth-brand-tag {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--accent-cyan);
+  text-transform: uppercase;
+  margin-bottom: 34px;
+}
+
+.auth-feature-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.auth-feature-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: 13.5px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.auth-feature-list svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  stroke: var(--accent-gold);
+}
+
+/* ── Right: form panel ────────────────────────────────────────────────── */
+.auth-form-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 40px 20px;
-  position: relative;
-  background:
-    radial-gradient(700px 420px at 50% 20%, rgba(147, 130, 255, 0.08), transparent 65%);
+  background: var(--bg-primary);
 }
 
 .auth-card {
@@ -1304,7 +1418,7 @@ tbody tr:hover {
   border-radius: var(--radius-lg);
   padding: 42px 46px;
   width: 100%;
-  max-width: 440px;
+  max-width: 400px;
   box-shadow: 0 24px 70px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04) inset;
   animation: scaleIn 0.4s var(--ease-out);
   position: relative;
@@ -1312,10 +1426,21 @@ tbody tr:hover {
 }
 
 .auth-icon {
-  font-size: 46px;
-  text-align: center;
-  margin-bottom: 18px;
-  filter: drop-shadow(0 6px 18px rgba(147, 130, 255, 0.35));
+  width: 50px;
+  height: 50px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 20px;
+  background: linear-gradient(145deg, var(--bg-elevated), var(--bg-card-solid));
+  border: 1px solid var(--border-color-strong);
+}
+
+.auth-icon svg {
+  width: 24px;
+  height: 24px;
+  stroke: var(--accent-cyan);
 }
 
 .auth-title {

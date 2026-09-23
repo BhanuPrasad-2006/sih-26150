@@ -29,19 +29,20 @@ from pathlib import Path
 from backend.plugins.constants import (
     BITLOCKER_MAGIC,
     BITLOCKER_MAGIC_OFFSET,
-    DHAV_FOOTER_MAGIC,
-    DHAV_FOOTER_OFF_LENGTH,
-    DHAV_FOOTER_SIZE,
+    DHAV_EXT_HEADER_SIZE,
     DHAV_HEADER_MAGIC,
-    DHAV_HEADER_SIZE,
+    DHAV_MIN_HEADER_SIZE,
     DHAV_OFF_CHANNEL,
+    DHAV_OFF_DATE,
+    DHAV_OFF_EXT_LENGTH,
     DHAV_OFF_FRAME_TYPE,
     DHAV_OFF_SEQUENCE,
-    DHAV_OFF_TIMESTAMP_MS,
-    DHAV_OFF_TIMESTAMP_S,
     DHAV_OFF_TOTAL_SIZE,
-    DHAV_TYPE_VIDEO_IFRAME,
-    DHAV_TYPE_VIDEO_PFRAME,
+    DHAV_TRAILER_MAGIC,
+    DHAV_TRAILER_OFF_LENGTH,
+    DHAV_TRAILER_SIZE,
+    DHAV_TYPE_VIDEO_DELTA,
+    DHAV_TYPE_VIDEO_KEYFRAME,
     EXT4_MAGIC,
     EXT4_SUPERBLOCK_OFFSET,
     HIKV_MASTER_SECTOR_MAGIC,
@@ -54,37 +55,66 @@ from backend.plugins.constants import (
 _BASE_TS = int(datetime(2024, 1, 15, 10, 0, 0, tzinfo=timezone.utc).timestamp())
 
 
+def _encode_dhav_date(ts_seconds: int) -> int:
+    """
+    Inverse of dahua._decode_dhav_date(): pack a Unix timestamp's UTC calendar
+    fields into DHAV's bit-packed date field. The real field can only
+    represent years 2000-2063 (6 bits + 2000) — timestamps outside that range
+    collapse to a raw 0, which decodes as an invalid calendar date (month=0)
+    and is correctly rejected by the validator, mirroring a DVR whose clock
+    was never set.
+    """
+    dt = datetime.fromtimestamp(ts_seconds, tz=timezone.utc)
+    if not (2000 <= dt.year <= 2063):
+        return 0
+    return (
+        (dt.second & 0x3F)
+        | ((dt.minute & 0x3F) << 6)
+        | ((dt.hour & 0x1F) << 12)
+        | ((dt.day & 0x1F) << 17)
+        | ((dt.month & 0x0F) << 22)
+        | (((dt.year - 2000) & 0x3F) << 26)
+    )
+
+
 def make_dhav_frame(
     channel: int,
     seq: int,
     ts_seconds: int,
     ts_ms: int = 0,
-    frame_type: int = DHAV_TYPE_VIDEO_IFRAME,
+    frame_type: int = DHAV_TYPE_VIDEO_KEYFRAME,
     payload_size: int = 512,
+    ext_data: bytes = b"",
 ) -> bytes:
     """
-    Build a syntactically valid DHAV frame (SYNTHETIC DATA).
-    All field positions verified from FFmpeg dhav.c.
+    Build a format-accurate DHAV frame (SYNTHETIC DATA).
+    Field positions verified 2026-09 directly against FFmpeg dhav.c source
+    (see constants.py header note) — corrects an earlier, wrong layout.
     """
-    total_size = DHAV_HEADER_SIZE + payload_size + DHAV_FOOTER_SIZE
+    header_size = DHAV_MIN_HEADER_SIZE + len(ext_data)
+    total_size = header_size + payload_size + DHAV_TRAILER_SIZE
 
-    header = bytearray(DHAV_HEADER_SIZE)
+    header = bytearray(header_size)
     header[0:4] = DHAV_HEADER_MAGIC
-    header[DHAV_OFF_FRAME_TYPE]  = frame_type
-    header[DHAV_OFF_SUBTYPE := 5] = 0x00
-    struct.pack_into("<H", header, DHAV_OFF_CHANNEL,      channel)
-    struct.pack_into("<I", header, DHAV_OFF_SEQUENCE,     seq)
-    struct.pack_into("<I", header, DHAV_OFF_TOTAL_SIZE,   total_size)
-    struct.pack_into("<I", header, DHAV_OFF_TIMESTAMP_S,  ts_seconds)
-    struct.pack_into("<H", header, DHAV_OFF_TIMESTAMP_MS, ts_ms)
+    header[DHAV_OFF_FRAME_TYPE] = frame_type
+    header[5] = 0x00  # subtype
+    header[DHAV_OFF_CHANNEL] = channel & 0xFF
+    header[7] = 0x00  # frame_subnumber
+    struct.pack_into("<I", header, DHAV_OFF_SEQUENCE, seq)
+    struct.pack_into("<I", header, DHAV_OFF_TOTAL_SIZE, total_size)
+    struct.pack_into("<I", header, DHAV_OFF_DATE, _encode_dhav_date(ts_seconds))
+    struct.pack_into("<H", header, DHAV_MIN_HEADER_SIZE - DHAV_EXT_HEADER_SIZE, ts_ms)  # timestamp_ms
+    header[DHAV_OFF_EXT_LENGTH] = len(ext_data)
+    header[DHAV_OFF_EXT_LENGTH + 1] = 0x00  # checksum (not validated)
+    header[DHAV_MIN_HEADER_SIZE:header_size] = ext_data
 
     payload = bytes([0xAB] * payload_size)   # recognisable filler
 
-    footer = bytearray(DHAV_FOOTER_SIZE)
-    footer[0:4] = DHAV_FOOTER_MAGIC
-    struct.pack_into("<I", footer, DHAV_FOOTER_OFF_LENGTH, total_size)
+    trailer = bytearray(DHAV_TRAILER_SIZE)
+    trailer[0:4] = DHAV_TRAILER_MAGIC
+    struct.pack_into("<I", trailer, DHAV_TRAILER_OFF_LENGTH, total_size)
 
-    return bytes(header) + payload + bytes(footer)
+    return bytes(header) + payload + bytes(trailer)
 
 
 def make_noise(size: int) -> bytes:
@@ -118,7 +148,7 @@ def build_dahua_image(
 
     for i in range(frames_per_channel):
         for ch in channels:
-            ftype = DHAV_TYPE_VIDEO_IFRAME if i == 0 else DHAV_TYPE_VIDEO_PFRAME
+            ftype = DHAV_TYPE_VIDEO_KEYFRAME if i == 0 else DHAV_TYPE_VIDEO_DELTA
             buf += make_dhav_frame(
                 channel=ch,
                 seq=seq[ch],
@@ -155,7 +185,7 @@ def build_dahua_with_gap_image(
 
     for i in range(frames_before):
         buf += make_dhav_frame(channel, seq, ts,
-                               frame_type=DHAV_TYPE_VIDEO_IFRAME if i == 0 else DHAV_TYPE_VIDEO_PFRAME)
+                               frame_type=DHAV_TYPE_VIDEO_KEYFRAME if i == 0 else DHAV_TYPE_VIDEO_DELTA)
         seq += 1
         ts  += frame_interval_s
 
@@ -165,7 +195,7 @@ def build_dahua_with_gap_image(
 
     for i in range(frames_after):
         buf += make_dhav_frame(channel, seq, ts,
-                               frame_type=DHAV_TYPE_VIDEO_IFRAME if i == 0 else DHAV_TYPE_VIDEO_PFRAME)
+                               frame_type=DHAV_TYPE_VIDEO_KEYFRAME if i == 0 else DHAV_TYPE_VIDEO_DELTA)
         seq += 1
         ts  += frame_interval_s
 
