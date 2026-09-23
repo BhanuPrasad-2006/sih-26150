@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Iterable, Optional
 
 from pydantic import BaseModel, Field
@@ -45,6 +45,33 @@ def _as_utc(timestamp: Optional[datetime]) -> Optional[datetime]:
     if timestamp.tzinfo is None:
         return timestamp.replace(tzinfo=timezone.utc)
     return timestamp.astimezone(timezone.utc)
+
+
+def normalize_to_utc(
+    timestamp: Optional[datetime],
+    device_utc_offset_minutes: Optional[int],
+) -> Optional[datetime]:
+    """
+    Convert a device-reported timestamp to normalized UTC using an
+    examiner-supplied device clock offset.
+
+    Carved timestamps are parsed as raw device-reported values (the DHAV
+    format sheet marks the true epoch/timezone as TO VERIFY) — this project
+    never infers a device's timezone automatically. When the examiner has
+    confirmed the offset for a given piece of evidence (Evidence.
+    device_utc_offset_minutes), subtracting it here yields a true UTC instant
+    that is comparable across evidence items from devices in different
+    timezones, e.g. for cross-camera/cross-device correlation.
+
+    Returns the timestamp UNCHANGED (still device-reported, not normalized)
+    when no offset has been supplied — this function never guesses.
+    """
+    if timestamp is None or device_utc_offset_minutes is None:
+        return timestamp
+    ts = _as_utc(timestamp)
+    if ts is None:
+        return None
+    return ts - timedelta(minutes=device_utc_offset_minutes)
 
 
 def _normalised_segment(segment: Segment) -> Optional[Segment]:

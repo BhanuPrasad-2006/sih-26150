@@ -39,7 +39,7 @@ from pathlib import Path
 from typing import Any, AsyncGenerator, Optional
 
 import aiofiles
-from fastapi import BackgroundTasks, FastAPI, HTTPException, Request, Response
+from fastapi import BackgroundTasks, FastAPI, File, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, field_validator
@@ -69,13 +69,20 @@ from backend.models import (
 from backend.plugins.constants import MIN_PLUGIN_CONFIDENCE
 from backend.plugins.cpplus import CPPlusPlugin
 from backend.plugins.dahua import DahuaPlugin
+from backend.plugins.godrej import GodrejPlugin
 from backend.plugins.hikvision import HikvisionPlugin
+from backend.plugins.honeywell import HoneywellPlugin
 from backend.plugins.matrix import MatrixPlugin
+from backend.plugins.tplink import TPLinkPlugin
 from backend.plugins.unknown import UnknownPlugin
 from backend.plugins.uniview import UniviewPlugin
+from backend.correlation import correlate_segments
+from backend import face_search
+from backend.face_detection import FACE_DETECTION_LABEL, detect_faces_in_video
+from backend.face_search import FaceEmbeddingRecord, index_faces_for_search
 from backend.reconstructor import label_all
 from backend.reporting import generate_report
-from backend.timeline import TimelineData, build_timeline
+from backend.timeline import TimelineData, build_timeline, normalize_to_utc
 
 logging.basicConfig(
     level=logging.INFO,
@@ -202,6 +209,9 @@ _PLUGINS = [
     HikvisionPlugin(),
     UniviewPlugin(),
     MatrixPlugin(),
+    HoneywellPlugin(),
+    TPLinkPlugin(),
+    GodrejPlugin(),
 ]
 
 
@@ -228,14 +238,25 @@ def _detect_brand(img: EvidenceImage) -> tuple[str, str, float, Any]:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _audit(case_id: str, action: str, details: str = "") -> None:
+def _get_case_audit_log(case_id: str) -> AuditLog:
+    """
+    Return the in-memory AuditLog for a case, rehydrating it from the database
+    on first access after a restart so history isn't silently lost.
+    """
     audit = _audit_logs.get(case_id)
-    if audit:
-        entry = audit.append(action, details)
-        try:
-            db.save_audit_entry(entry)
-        except Exception:
-            pass
+    if audit is None:
+        audit = AuditLog.from_entries(db.load_audit_entries(case_id))
+        _audit_logs[case_id] = audit
+    return audit
+
+
+def _audit(case_id: str, action: str, details: str = "") -> None:
+    audit = _get_case_audit_log(case_id)
+    entry = audit.append(action, details)
+    try:
+        db.save_audit_entry(entry, case_id=case_id)
+    except Exception:
+        pass
 
 
 async def _push_progress(case_id: str, prog: ScanProgress) -> None:
@@ -247,12 +268,18 @@ async def _push_progress(case_id: str, prog: ScanProgress) -> None:
 # ── Global audit log for access events ───────────────────────────────────────
 # Login/logout events are recorded in a global (not per-case) audit log so
 # they appear in the same hash-chained trail as evidence operations.
-_global_audit = AuditLog()
+# Rehydrated from the database so this history survives a server restart —
+# it is cited as evidence-integrity proof, so it must not silently reset.
+_global_audit = AuditLog.from_entries(db.load_audit_entries(case_id=None))
 
 
 def _global_audit_event(action: str, details: str = "") -> None:
     """Append to the global access audit log (login/logout events)."""
-    _global_audit.append(action, details)
+    entry = _global_audit.append(action, details)
+    try:
+        db.save_audit_entry(entry, case_id=None)
+    except Exception:
+        pass
 
 
 # ── Background scan ───────────────────────────────────────────────────────────
@@ -360,6 +387,11 @@ async def _run_scan(case_id: str, evidence_id: str) -> None:
         # ── Step 5: reconstruct ────────────────────────────────────────────
         await push(ScanPhase.RECONSTRUCTING, 82, "Grouping by camera and sorting by time…")
         segments = await asyncio.to_thread(label_all, all_frames, evidence_id)
+        # Clear any segments (and cached face embeddings) from a previous scan
+        # of this evidence before saving the fresh set — otherwise re-running
+        # a scan accumulates duplicate, contradictory segment rows instead of
+        # replacing them.
+        await asyncio.to_thread(db.delete_segments_for_evidence, evidence_id)
         for seg in segments:
             await asyncio.to_thread(db.save_segment, seg)
         _audit(case_id, "reconstruction_done",
@@ -443,10 +475,9 @@ async def setup_password(req: SetupRequest, response: Response):
     Only works when no password has been set yet.
     After setting the password, a session is created automatically.
     """
-    if auth.is_password_set():
+    was_set = await asyncio.to_thread(auth.set_password_if_unset, req.password)
+    if not was_set:
         raise HTTPException(400, "Password is already set. Use the login endpoint.")
-
-    await asyncio.to_thread(auth.set_password, req.password)
 
     # Auto-login after setup
     token = auth.create_session()
@@ -592,6 +623,20 @@ class CreateCaseRequest(BaseModel):
 
 class LoadEvidenceRequest(BaseModel):
     path: str  # absolute path to .dd / .img file on the examiner's machine
+    # Examiner-confirmed device clock offset from UTC, in minutes (e.g. +330
+    # for IST). Optional and never inferred automatically — see
+    # Evidence.device_utc_offset_minutes and timeline.normalize_to_utc.
+    device_utc_offset_minutes: Optional[int] = None
+
+    @field_validator("device_utc_offset_minutes")
+    @classmethod
+    def _validate_offset(cls, v: Optional[int]) -> Optional[int]:
+        if v is not None and not (-720 <= v <= 840):
+            raise ValueError(
+                "device_utc_offset_minutes must be between -720 (UTC-12:00) "
+                "and 840 (UTC+14:00)."
+            )
+        return v
 
     @field_validator("path")
     @classmethod
@@ -632,7 +677,6 @@ async def create_case(req: CreateCaseRequest):
             f"Case number '{req.case_number}' already exists. "
             "Each case must have a unique case number."
         )
-    _audit_logs[case.case_id] = AuditLog()
     _audit(case.case_id, "case_created", f"case_number={req.case_number} examiner={req.examiner}")
     return result
 
@@ -665,7 +709,7 @@ async def get_case(case_id: str):
         log_events.extend(les)
 
     # Audit entries from in-memory log (re-hydrate from DB if server was restarted)
-    audit_log = _audit_logs.get(case_id, AuditLog())
+    audit_log = _get_case_audit_log(case_id)
     audit_entries = [AuditEntry(**e) for e in audit_log.export_entries()]
 
     return CaseDetail(
@@ -687,13 +731,15 @@ async def load_evidence(case_id: str, req: LoadEvidenceRequest, bg: BackgroundTa
     if not path.is_file():
         raise HTTPException(400, f"File not found or not a regular file: {req.path}")
 
-    ev = Evidence(case_id=case_id, path=str(path))
+    ev = Evidence(
+        case_id=case_id,
+        path=str(path),
+        device_utc_offset_minutes=req.device_utc_offset_minutes,
+    )
     ev = await asyncio.to_thread(db.save_evidence, ev)
     _audit(case_id, "evidence_loaded", f"path={req.path}")
 
-    # Ensure audit log and progress queue exist
-    if case_id not in _audit_logs:
-        _audit_logs[case_id] = AuditLog()
+    # Ensure progress queue exists (the audit log is ensured by _audit() above)
     _progress_queues[case_id] = asyncio.Queue()
 
     return ev
@@ -738,11 +784,16 @@ async def scan_status_sse(case_id: str):
 
 
 @app.get("/api/cases/{case_id}/segments")
-async def list_segments(case_id: str):
+async def list_segments(case_id: str, evidence_id: Optional[str] = None):
     evs = await asyncio.to_thread(db.list_evidence_for_case, case_id)
     if not evs:
         return []
-    ev = evs[-1]
+    if evidence_id:
+        ev = next((e for e in evs if e.evidence_id == evidence_id), None)
+        if not ev:
+            raise HTTPException(404, f"Evidence '{evidence_id}' not found in case '{case_id}'")
+    else:
+        ev = evs[-1]  # most recently loaded evidence
     return await asyncio.to_thread(db.list_segments_for_evidence, ev.evidence_id)
 
 
@@ -758,6 +809,43 @@ async def case_timeline(case_id: str):
     for item in evidence:
         segments.extend(await asyncio.to_thread(db.list_segments_for_evidence, item.evidence_id))
     return await asyncio.to_thread(build_timeline, segments)
+
+
+@app.get("/api/cases/{case_id}/correlation")
+async def case_correlation(case_id: str, window_seconds: float = 5.0):
+    """
+    Cross-camera event correlation: groups recovered segments whose time
+    windows overlap (within `window_seconds`) across 2+ distinct camera
+    channels. Time-window clustering only — no face/object/content analysis.
+
+    When an evidence item has a confirmed device_utc_offset_minutes, its
+    segments' timestamps are normalized to UTC before correlating, so
+    evidence from devices in different timezones lines up correctly. Segments
+    from evidence with no confirmed offset are correlated using their raw
+    device-reported timestamps as-is.
+    """
+    case = await asyncio.to_thread(db.get_case, case_id)
+    if not case:
+        raise HTTPException(404, "Case not found")
+
+    evidence = await asyncio.to_thread(db.list_evidence_for_case, case_id)
+    segments: list[Segment] = []
+    for item in evidence:
+        evidence_segments = await asyncio.to_thread(db.list_segments_for_evidence, item.evidence_id)
+        offset = item.device_utc_offset_minutes
+        for seg in evidence_segments:
+            if offset is not None:
+                seg = seg.model_copy(update={
+                    "start_time": normalize_to_utc(seg.start_time, offset),
+                    "end_time": normalize_to_utc(seg.end_time, offset),
+                })
+            segments.append(seg)
+
+    events = await asyncio.to_thread(correlate_segments, segments, window_seconds)
+    return {
+        "events": [e.to_dict() for e in events],
+        "any_evidence_normalized": any(e.device_utc_offset_minutes is not None for e in evidence),
+    }
 
 
 @app.post("/api/cases/{case_id}/export/{segment_id}")
@@ -824,6 +912,115 @@ async def detect_segment_motion(case_id: str, segment_id: str):
     }
 
 
+@app.post("/api/cases/{case_id}/face-detect/{segment_id}")
+async def detect_segment_faces(case_id: str, segment_id: str):
+    """
+    Optional post-export AI-Based Face Detection (OpenCV YuNet CNN).
+    Decoupled from carving/recovery — operates read-only on exported video files.
+    Detection only: no face recognition/identification is performed or claimed.
+    """
+    evs = await asyncio.to_thread(db.list_evidence_for_case, case_id)
+    if not evs:
+        raise HTTPException(400, "No evidence for this case")
+    ev = evs[-1]
+    segments = await asyncio.to_thread(db.list_segments_for_evidence, ev.evidence_id)
+    seg = next((s for s in segments if s.segment_id == segment_id), None)
+    if not seg:
+        raise HTTPException(404, "Segment not found")
+
+    if not seg.export_path or not Path(seg.export_path).is_file():
+        raise HTTPException(400, "Segment has not been exported yet. Export to MP4 before running face detection.")
+
+    res = await asyncio.to_thread(detect_faces_in_video, seg.export_path)
+    if res.error:
+        raise HTTPException(500, f"Face detection error: {res.error}")
+
+    seg.face_detected = res.faces_detected
+    seg.face_detection_details = res.summary
+    await asyncio.to_thread(db.save_segment, seg)
+
+    # Side effect: index face embeddings so this segment becomes searchable
+    # via /face-search without re-decoding the video on every search.
+    indexed_count = 0
+    if res.faces_detected:
+        records = await asyncio.to_thread(index_faces_for_search, seg.export_path)
+        await asyncio.to_thread(db.save_face_embeddings, segment_id, records)
+        indexed_count = len(records)
+
+    _audit(
+        case_id,
+        "face_detection",
+        f"segment_id={segment_id} faces_detected={res.faces_detected} "
+        f"frames_with_faces={res.frames_with_faces}/{res.frames_sampled}",
+    )
+    return {
+        "segment_id": seg.segment_id,
+        "faces_detected": res.faces_detected,
+        "details": res.summary,
+        "frames_with_faces": res.frames_with_faces,
+        "frames_sampled": res.frames_sampled,
+        "total_frames": res.total_frames,
+        "max_faces_in_single_frame": res.max_faces_in_single_frame,
+        "label": FACE_DETECTION_LABEL,
+        "faces_indexed_for_search": indexed_count,
+    }
+
+
+@app.post("/api/cases/{case_id}/face-search")
+async def search_faces(case_id: str, reference_image: UploadFile = File(...)):
+    """
+    Search for faces similar to an uploaded reference photo across every
+    segment in this case that has already been indexed (see
+    detect_segment_faces, which indexes as a side effect).
+
+    IMPORTANT: results are ranked by similarity, NOT confirmed identities.
+    See backend/face_search.py's module docstring for a real false-match
+    example observed during this project's own verification testing.
+    """
+    if not face_search.models_available():
+        raise HTTPException(500, "Face search models are not installed on this server.")
+
+    image_bytes = await reference_image.read()
+    reference_embedding = await asyncio.to_thread(
+        face_search.extract_embedding_from_image_bytes, image_bytes
+    )
+    if reference_embedding is None:
+        raise HTTPException(400, "No face was detected in the uploaded reference photo.")
+
+    evidence = await asyncio.to_thread(db.list_evidence_for_case, case_id)
+    segment_ids: list[str] = []
+    for ev_item in evidence:
+        segs = await asyncio.to_thread(db.list_segments_for_evidence, ev_item.evidence_id)
+        segment_ids.extend(s.segment_id for s in segs)
+
+    raw_records = await asyncio.to_thread(db.list_face_embeddings_for_segments, segment_ids)
+    candidates = [
+        (r["segment_id"], FaceEmbeddingRecord(
+            frame_offset_seconds=r["frame_offset_seconds"],
+            bbox=r["bbox"],
+            embedding=r["embedding"],
+        ))
+        for r in raw_records
+    ]
+
+    matches = await asyncio.to_thread(face_search.rank_matches, reference_embedding, candidates)
+
+    _audit(case_id, "face_search", f"candidates_searched={len(candidates)} matches_returned={len(matches)}")
+
+    return {
+        "label": face_search.FACE_SEARCH_LABEL,
+        "reference_threshold": face_search.REFERENCE_MATCH_THRESHOLD,
+        "warning": (
+            "Similarity scores are candidates for human review, NOT confirmed identity "
+            "matches. During this project's own testing, two different synthetic faces "
+            "scored above the reference threshold shown here — always corroborate with "
+            "independent evidence before relying on a match."
+        ),
+        "segments_indexed": len(set(segment_ids) & {c[0] for c in candidates}),
+        "matches": [m.to_dict() for m in matches],
+    }
+
+
 @app.get("/api/cases/{case_id}/verify")
 async def verify_evidence(case_id: str):
     img = _open_images.get(case_id)
@@ -845,11 +1042,13 @@ async def get_report(case_id: str):
     ev = evs[-1]
     segments  = await asyncio.to_thread(db.list_segments_for_evidence, ev.evidence_id)
     log_evts  = await asyncio.to_thread(db.list_log_events, ev.evidence_id)
-    audit_log = _audit_logs.get(case_id, AuditLog())
+    audit_log = _get_case_audit_log(case_id)
     chain_ok, _ = audit_log.verify_chain()
     entries   = audit_log.export_entries()
     from backend.models import AuditEntry
     audit_entries = [AuditEntry(**e) for e in entries]
+
+    correlated_events = await asyncio.to_thread(correlate_segments, segments)
 
     report_dir = get_case_report_dir(case_id)
     report_dir.mkdir(parents=True, exist_ok=True)
@@ -857,7 +1056,8 @@ async def get_report(case_id: str):
     pdf = report_dir / f"report_{ts}.pdf"
 
     await asyncio.to_thread(
-        generate_report, pdf, case, ev, segments, log_evts, audit_entries, chain_ok
+        generate_report, pdf, case, ev, segments, log_evts, audit_entries, chain_ok,
+        correlated_events,
     )
     _audit(case_id, "report_generated", str(pdf))
     return FileResponse(str(pdf), media_type="application/pdf",
@@ -866,7 +1066,7 @@ async def get_report(case_id: str):
 
 @app.get("/api/cases/{case_id}/audit")
 async def get_audit(case_id: str):
-    audit_log = _audit_logs.get(case_id, AuditLog())
+    audit_log = _get_case_audit_log(case_id)
     chain_ok, error = audit_log.verify_chain()
     return {"chain_intact": chain_ok, "error": error, "entries": audit_log.export_entries()}
 
@@ -878,14 +1078,26 @@ _FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 if _FRONTEND_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(_FRONTEND_DIR)), name="static")
 
+    # no-cache (not no-store): browsers still keep a local copy but MUST
+    # revalidate with the server on every load via If-None-Match, rather than
+    # trusting a heuristic freshness window. Without this, a browser can serve
+    # a stale cached JS/CSS file indefinitely after this tool is updated,
+    # silently running old (possibly already-fixed-elsewhere) code — FileResponse
+    # already sets ETag/Last-Modified, so revalidation is a cheap 304 when unchanged.
+    _NO_CACHE_HEADERS = {"Cache-Control": "no-cache"}
+
     @app.get("/")
     async def serve_index():
-        return FileResponse(str(_FRONTEND_DIR / "index.html"))
+        return FileResponse(str(_FRONTEND_DIR / "index.html"), headers=_NO_CACHE_HEADERS)
 
     @app.get("/{path:path}")
     async def serve_static(path: str):
-        file_path = _FRONTEND_DIR / path
-        if file_path.is_file():
-            return FileResponse(str(file_path))
+        # Resolve against the frontend root and verify the result is still
+        # inside it before serving — prevents "..''-style path traversal from
+        # reading arbitrary files on disk via this unauthenticated route.
+        _frontend_root = _FRONTEND_DIR.resolve()
+        candidate = (_frontend_root / path).resolve()
+        if candidate.is_relative_to(_frontend_root) and candidate.is_file():
+            return FileResponse(str(candidate), headers=_NO_CACHE_HEADERS)
         # Fallback to index.html for SPA routing
-        return FileResponse(str(_FRONTEND_DIR / "index.html"))
+        return FileResponse(str(_FRONTEND_DIR / "index.html"), headers=_NO_CACHE_HEADERS)

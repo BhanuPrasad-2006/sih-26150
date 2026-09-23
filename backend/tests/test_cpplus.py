@@ -47,9 +47,11 @@ def test_cpplus_detect_and_route_to_dahua_carver(cpplus_img_path):
         assert "carved via dahua plugin" in note.lower()
         assert "unverified" in note.lower()
 
-        # Frames produced by Dahua engine
+        # Frames are carved by the Dahua engine but re-tagged "cpplus" (not
+        # "dahua") so downstream code (reconstructor, reporting) keeps
+        # treating this data as unverified rather than as native Dahua data.
         for frame in frames:
-            assert frame.brand == "dahua"
+            assert frame.brand == "cpplus"
             assert frame.frame_size > 0
             assert frame.timestamp is not None
 
