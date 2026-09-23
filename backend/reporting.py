@@ -171,6 +171,7 @@ def generate_report(
     S = _styles()
 
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    report_reference = f"RPT-{case.case_number}-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
     synthetic_warn = evidence.is_synthetic
 
     def _build_elements(cert_pages: set[int]) -> list:
@@ -191,6 +192,7 @@ def generate_report(
         elements.append(Spacer(1, 0.5 * cm))
 
         cover_data = [
+            ["Report reference", report_reference],
             ["Case number",  case.case_number],
             ["Examiner",     case.examiner],
             ["Report date",  generated_at],
@@ -198,14 +200,14 @@ def generate_report(
             ["Case notes",   case.notes or "—"],
         ]
         if synthetic_warn:
-            cover_data.append(["DATA TYPE", "⚠  SYNTHETIC TEST DATA — not from a real recorder"])
+            cover_data.append(["DATA TYPE", "SYNTHETIC TEST DATA — not from a real recorder"])
 
         elements.append(Table(cover_data, colWidths=[5 * cm, 12 * cm], style=_TBL_HDR))
         elements.append(Spacer(1, 0.4 * cm))
 
         if synthetic_warn:
             elements.append(Paragraph(
-                "⚠  This report was generated from SYNTHETIC test data, not from a real DVR/NVR disk. "
+                "NOTICE: This report was generated from SYNTHETIC test data, not from a real DVR/NVR disk. "
                 "Numbers in this report do not represent real recovery accuracy. "
                 "Do not use this report as evidence.",
                 S["warn"],
@@ -217,8 +219,8 @@ def generate_report(
         elements.append(Paragraph("Evidence Integrity", S["h1"]))
         elements.append(HRFlowable(width="100%", thickness=0.5, color=_C_ACCENT))
 
-        ok_text   = "✓  Match — strong evidence that the disk image was not modified by this tool."
-        fail_text = "✗  MISMATCH — hashes differ. The image may have been modified. Do not rely on this evidence."
+        ok_text   = "MATCH — strong evidence that the disk image was not modified by this tool."
+        fail_text = "MISMATCH — hashes differ. The image may have been modified. Do not rely on this evidence."
         hash_ok   = (
             evidence.sha256_before is not None
             and evidence.sha256_after is not None
@@ -232,7 +234,7 @@ def generate_report(
             ["MD5 (before)",      evidence.md5_before or "—"],
             ["SHA-256 (after)",   evidence.sha256_after or "—"],
             ["Hash comparison",   ok_text if hash_ok else fail_text],
-            ["Audit chain",       "✓  Intact" if chain_ok else "✗  BROKEN — see audit log"],
+            ["Audit chain",       "INTACT" if chain_ok else "BROKEN — see audit log"],
         ]
         elements.append(Table(integrity_data, colWidths=[5 * cm, 12 * cm], style=_TBL_HDR))
         elements.append(Spacer(1, 0.4 * cm))
@@ -362,6 +364,7 @@ All numbers from synthetic test data are not representative of real-disk perform
         elements.append(Paragraph("Part A — Custodian Certificate (technical fields only)", S["h2"]))
         part_a_data = [
             ["Field",                        "Pre-filled value"],
+            ["Report reference",             report_reference],
             ["Device description",           f"DVR/NVR disk image, brand: {evidence.brand or 'Unknown'}"],
             ["Hash algorithm",               "SHA-256"],
             ["Hash value of the record",     evidence.sha256_before or "—"],
@@ -380,7 +383,7 @@ All numbers from synthetic test data are not representative of real-disk perform
             ["Method",                       "Read-only mmap acquisition; SHA-256/MD5 single-pass hash; "
                                              "frame carving by marker search; adaptive gap segmentation."],
             ["Tool validation",              f"Known-answer tests (KAT-01 to KAT-08) described in project documentation."],
-            ["Hash check result",            "Match ✓" if hash_ok else "MISMATCH ✗"],
+            ["Hash check result",            "MATCH" if hash_ok else "MISMATCH"],
             ["Recovery label",               ", ".join(sorted({s.status.value for s in segments})) or "—"],
             ["Expert name",                  "____________________________ (to be signed)"],
             ["Qualifications",               "____________________________ (to be signed)"],
