@@ -43,8 +43,8 @@ async function renderCaseDetailScreen(params) {
     <div class="page-header">
       <div class="page-header-row">
         <div>
-          <div class="page-title">Case: <span style="color:var(--accent-cyan);">${caseObj.case_number}</span></div>
-          <div class="page-subtitle">Investigator: ${caseObj.examiner}</div>
+          <div class="page-title">Case: <span style="color:var(--accent-cyan);">${escapeHtml(caseObj.case_number)}</span></div>
+          <div class="page-subtitle">Investigator: ${escapeHtml(caseObj.examiner)}</div>
         </div>
         <button id="btn-add-evidence" class="btn btn-primary">➕ Load Disk Image (.dd/.img)</button>
       </div>
@@ -59,11 +59,11 @@ async function renderCaseDetailScreen(params) {
         </div>
         <div>
           <div class="meta-label">Examiner</div>
-          <div class="meta-value">${caseObj.examiner}</div>
+          <div class="meta-value">${escapeHtml(caseObj.examiner)}</div>
         </div>
         <div>
           <div class="meta-label">Notes</div>
-          <div class="meta-value" style="color:var(--text-muted);">${caseObj.notes || '—'}</div>
+          <div class="meta-value" style="color:var(--text-muted);">${caseObj.notes ? escapeHtml(caseObj.notes) : '—'}</div>
         </div>
       </div>
     </div>
@@ -96,6 +96,16 @@ async function renderCaseDetailScreen(params) {
           <label>Image File Path (.dd / .img / .raw)</label>
           <input type="text" id="modal-ev-path" class="form-control" placeholder="C:\\path\\to\\synthetic_dahua.dd">
         </div>
+        <div class="form-group">
+          <label>Device Clock Offset from UTC (optional)</label>
+          <input type="number" id="modal-ev-tz-offset" class="form-control" placeholder="e.g. 330 for IST (UTC+5:30)" step="1" min="-720" max="840">
+          <p style="font-size:12px; color:var(--text-dim); margin-top:4px; line-height:1.5;">
+            Minutes, e.g. <code>330</code> for IST. Only set this if you have independently confirmed the
+            recorder's configured timezone — carved timestamps are otherwise shown as raw device-reported
+            values and are <strong>not</strong> assumed to be UTC. Used to normalize timestamps for
+            cross-camera/cross-device correlation and reporting.
+          </p>
+        </div>
         <div id="modal-ev-error" style="display:none;" class="error-inline">
           <span>⚠️</span><span id="modal-ev-error-msg"></span>
         </div>
@@ -108,6 +118,8 @@ async function renderCaseDetailScreen(params) {
           onClick: async () => {
             const label = document.getElementById('modal-ev-label').value.trim();
             const path = document.getElementById('modal-ev-path').value.trim();
+            const tzOffsetRaw = document.getElementById('modal-ev-tz-offset').value.trim();
+            const tzOffset = tzOffsetRaw === '' ? null : parseInt(tzOffsetRaw, 10);
             const errDiv = document.getElementById('modal-ev-error');
             const errMsgEl = document.getElementById('modal-ev-error-msg');
 
@@ -116,9 +128,14 @@ async function renderCaseDetailScreen(params) {
               errDiv.style.display = 'flex';
               return;
             }
+            if (tzOffsetRaw !== '' && (Number.isNaN(tzOffset) || tzOffset < -720 || tzOffset > 840)) {
+              errMsgEl.textContent = 'Device clock offset must be a number of minutes between -720 and 840.';
+              errDiv.style.display = 'flex';
+              return;
+            }
 
             try {
-              const ev = await API.addEvidence(caseId, path, label);
+              const ev = await API.addEvidence(caseId, path, label, tzOffset);
               navigateTo('evidence-scan', { caseId, evidenceId: ev.evidence_id || ev.id });
             } catch (err) {
               // Show error inside modal, not a second modal
@@ -174,9 +191,9 @@ function renderEvidenceTable(evidence, caseId) {
 
             return `
               <tr>
-                <td><strong>${ev.evidence_label || ev.evidence_id}</strong></td>
-                <td style="font-family:var(--font-mono); font-size:11px; color:var(--text-muted); max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${ev.path || ev.file_path || ''}</td>
-                <td><span class="badge ${brandBadge}">${brand}${confidence}</span></td>
+                <td><strong>${escapeHtml(ev.evidence_label || ev.evidence_id)}</strong></td>
+                <td style="font-family:var(--font-mono); font-size:11px; color:var(--text-muted); max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(ev.path || ev.file_path || '')}</td>
+                <td><span class="badge ${brandBadge}">${escapeHtml(brand)}${confidence}</span></td>
                 <td class="hash-font">${ev.sha256_before ? ev.sha256_before.substring(0, 16) + '…' : '—'}</td>
                 <td><span class="badge ${badgeClass}">${scanStatus}</span></td>
                 <td>

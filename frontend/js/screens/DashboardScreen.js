@@ -79,8 +79,8 @@ async function renderDashboardScreen() {
     tbody.innerHTML = cases.map(c => `
       <tr>
         <td><strong style="color: var(--accent-cyan); font-family: var(--font-mono); font-size:13px;">${c.case_number}</strong></td>
-        <td>${c.examiner}</td>
-        <td style="color:var(--text-muted); font-size:12px;">${c.notes || '—'}</td>
+        <td>${escapeHtml(c.examiner)}</td>
+        <td style="color:var(--text-muted); font-size:12px;">${c.notes ? escapeHtml(c.notes) : '—'}</td>
         <td style="color:var(--text-dim); font-size:12px;">${new Date(c.created_at).toLocaleString()}</td>
         <td>
           <button class="btn btn-secondary btn-sm" onclick="navigateTo('case-detail', { caseId: '${c.case_id}' })">Open ➔</button>

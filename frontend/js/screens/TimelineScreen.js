@@ -106,6 +106,46 @@ function renderTimelineLane(lane, rangeStart, rangeMs) {
     </section>`;
 }
 
+function renderCorrelationCard(correlation) {
+  if (!correlation) return '';
+  const events = correlation.events || [];
+
+  return `
+    <div class="card">
+      <div class="card-title">
+        <span>Cross-Camera Correlated Events</span>
+      </div>
+      <p style="font-size:12px; color:var(--text-dim); margin:0 0 12px; line-height:1.6;">
+        Segments whose time windows overlap across 2 or more cameras, clustered purely by time proximity —
+        this is not content analysis and does not claim the events are related; independently confirm relevance.
+        ${correlation.any_evidence_normalized
+          ? 'Timestamps from evidence with a confirmed device clock offset were normalized to UTC before correlating.'
+          : 'No evidence in this case has a confirmed device clock offset, so raw device-reported timestamps were used as-is — correlation across different devices may be unreliable if their clocks differ.'}
+      </p>
+      ${events.length === 0
+        ? `<div class="empty-state" style="padding:24px 0;">
+             <div class="empty-state-subtitle">No overlapping activity was found across different cameras.</div>
+           </div>`
+        : `<div class="table-container">
+             <table>
+               <thead>
+                 <tr><th>Start</th><th>End</th><th>Duration</th><th>Cameras</th><th>Segments</th></tr>
+               </thead>
+               <tbody>
+                 ${events.map(ev => `
+                   <tr>
+                     <td>${timelineFormatUtc(ev.start_time)}</td>
+                     <td>${timelineFormatUtc(ev.end_time)}</td>
+                     <td>${timelineDuration(ev.duration_seconds)}</td>
+                     <td>${ev.cameras.map(c => `<span class="badge badge-verified" style="margin-right:4px;">Cam ${c}</span>`).join('')}</td>
+                     <td style="color:var(--text-dim); font-size:12px;">${ev.segment_ids.length} segment${ev.segment_ids.length === 1 ? '' : 's'}</td>
+                   </tr>`).join('')}
+               </tbody>
+             </table>
+           </div>`}
+    </div>`;
+}
+
 async function renderTimelineScreen(params) {
   const { caseId } = params;
   const root = document.getElementById('content-root');
@@ -117,8 +157,11 @@ async function renderTimelineScreen(params) {
     </div>`;
 
   let timeline;
+  let correlation = null;
   try {
     timeline = await API.getTimeline(caseId);
+    // Correlation is a supplementary panel — don't fail the whole screen if it errors.
+    correlation = await API.getCorrelation(caseId).catch(() => null);
   } catch (err) {
     root.innerHTML = `
       <div class="page-header"><div class="page-title">Cross-Camera Timeline</div></div>
@@ -190,6 +233,8 @@ async function renderTimelineScreen(params) {
         </div>
       </div>
     </div>
+
+    ${renderCorrelationCard(correlation)}
 
     ${timeline.unplaced_segments?.length ? `
       <div class="notice-card">
