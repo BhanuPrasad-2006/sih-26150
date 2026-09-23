@@ -154,3 +154,61 @@ def test_case_lifecycle(auth_client, dahua_img_path):
         f"Expected scan_status COMPLETED once segments exist, "
         f"got {case_detail2['evidence'][0]['scan_status']!r}"
     )
+
+
+def test_hikvision_real_video_through_api(auth_client, temp_dir):
+    """
+    The exact flow the UI drives, for a Hikvision-style image holding a REAL
+    ffmpeg-encoded H.264 stream: add evidence -> scan -> list segments -> export
+    -> verify. Previously the Hikvision carver produced one useless single-NAL
+    "segment" per start code and nothing was exportable.
+    """
+    import os
+    import subprocess
+
+    from backend.exporter import ffmpeg_available, ffprobe_available
+    from backend.plugins.constants import HIKV_MASTER_SECTOR_MAGIC, HIKV_MASTER_SECTOR_OFFSET
+
+    if not (ffmpeg_available() and ffprobe_available()):
+        pytest.skip("ffmpeg/ffprobe not on PATH")
+
+    h264_path = os.path.join(temp_dir, "clip.h264")
+    subprocess.run(
+        ["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi",
+         "-i", "testsrc=duration=1:size=320x240:rate=10",
+         "-c:v", "libx264", "-profile:v", "baseline", "-pix_fmt", "yuv420p",
+         "-f", "h264", h264_path],
+        check=True,
+    )
+    stream = open(h264_path, "rb").read()
+
+    img = bytearray(HIKV_MASTER_SECTOR_OFFSET)
+    img += HIKV_MASTER_SECTOR_MAGIC + b"\x00" * (512 - len(HIKV_MASTER_SECTOR_MAGIC))
+    img += b"\xCC" * 4096 + stream + b"\xCC" * 4096
+    disk_path = os.path.join(temp_dir, "hik_real.dd")
+    with open(disk_path, "wb") as f:
+        f.write(img)
+
+    case_id = auth_client.post("/api/cases", json={
+        "case_number": "HIK-REAL-VIDEO-001", "examiner": "Inspector Test", "notes": "",
+    }).json()["case_id"]
+    assert auth_client.post(f"/api/cases/{case_id}/evidence", json={"path": disk_path}).status_code == 200
+    assert auth_client.post(f"/api/cases/{case_id}/scan").json()["status"] == "started"
+
+    segments = []
+    for _ in range(100):
+        segments = auth_client.get(f"/api/cases/{case_id}/segments").json()
+        if segments:
+            break
+        time.sleep(0.1)
+    assert len(segments) == 1, f"expected one recovered stream, got {len(segments)}"
+    seg = segments[0]
+    assert seg["status"] == "UNCERTAIN"
+    assert seg["frame_count"] == 10
+
+    exp = auth_client.post(f"/api/cases/{case_id}/export/{seg['segment_id']}")
+    assert exp.status_code == 200, exp.text
+    body = exp.json()
+    assert "error" not in body["detail"], body["detail"]
+    assert body["detail"]["ffprobe_valid"] is True
+    assert body["segment"]["status"] == "PARTIAL"

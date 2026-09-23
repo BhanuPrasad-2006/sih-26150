@@ -98,7 +98,14 @@ def split_on_gaps(frames: list[RawFrame]) -> list[list[RawFrame]]:
 
         # Timestamp-based gap
         if prev.timestamp is None or curr.timestamp is None:
-            new_session = True
+            # Stream-carved Hikvision units carry no timestamps; they belong to the
+            # same recording exactly when they are byte-contiguous on disk.
+            contiguous_stream = (
+                prev.brand == "hikvision"
+                and curr.brand == "hikvision"
+                and prev.disk_offset_end == curr.disk_offset
+            )
+            new_session = not contiguous_stream
         else:
             gap_s = (curr.timestamp - prev.timestamp).total_seconds()
             if gap_s < 0:
@@ -143,8 +150,12 @@ def _label_session(session: list[RawFrame], evidence_id: str) -> Segment:
     # Collect contiguous disk offset ranges
     offsets: list[DiskOffset] = []
     for frame in session:
-        if frame.frame_size > 4:  # ignore placeholder NAL entries
-            offsets.append(DiskOffset(start=frame.disk_offset, end=frame.disk_offset_end))
+        if frame.frame_size > 4:  # ignore placeholder entries
+            # Coalesce byte-contiguous ranges: identical export bytes, far fewer rows.
+            if offsets and offsets[-1].end == frame.disk_offset:
+                offsets[-1] = DiskOffset(start=offsets[-1].start, end=frame.disk_offset_end)
+            else:
+                offsets.append(DiskOffset(start=frame.disk_offset, end=frame.disk_offset_end))
 
     # Timestamps
     timestamps = [f.timestamp for f in session if f.timestamp is not None]
@@ -162,11 +173,12 @@ def _label_session(session: list[RawFrame], evidence_id: str) -> Segment:
         status = SegmentStatus.UNCERTAIN
         if brand == "hikvision":
             notes = (
-                "Experimental Hikvision NAL carving. Frame length is not verified "
-                "for this firmware, so only NAL start-code positions were found, "
-                "not decodable frame boundaries — MP4/raw export is not available "
-                "for this segment. UNCERTAIN until a verified NAL parser confirms "
-                "these offsets. See docs/format_sheets/hikvision.md §4."
+                "Hikvision stream carving: a contiguous MPEG-PS / H.264 Annex B "
+                "stream was located and its standard structure validated. Hikvision's "
+                "own index, channel and timestamps are NOT parsed (unverified), so no "
+                "time range or true camera number is available. UNCERTAIN until "
+                "export and ffprobe confirm the bytes decode (then PARTIAL). "
+                "See docs/format_sheets/hikvision.md §4."
             )
         else:
             notes = (
