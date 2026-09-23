@@ -4,8 +4,6 @@ test_uniview.py — Tests for the Uniview detection-only stub plugin.
 
 import os
 
-import pytest
-
 from backend.acquisition import EvidenceImage
 from backend.plugins.uniview import UniviewPlugin
 
@@ -25,7 +23,13 @@ def test_uniview_detect_foreign_image_low_confidence(foreign_img_path):
     assert confidence == 0.0
 
 
-def test_uniview_carve_raises_not_implemented():
+def test_uniview_carve_returns_empty_without_raising():
+    """
+    carve() must honor the BrandPlugin contract (base.py): never raise, return
+    ([], note) instead — so a future confidence bump can't surface as an
+    opaque "Unexpected error" through the scan pipeline.
+    """
     plugin = UniviewPlugin()
-    with pytest.raises(NotImplementedError, match="detection only"):
-        plugin.carve(None)
+    frames, note = plugin.carve(None)
+    assert frames == []
+    assert "detection only" in note.lower()

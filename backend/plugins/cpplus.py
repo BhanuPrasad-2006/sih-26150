@@ -21,6 +21,7 @@ CP Plus variant.
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 from typing import Callable, Optional, TYPE_CHECKING
 
@@ -114,6 +115,7 @@ class CPPlusPlugin(BrandPlugin):
 
     def list_recordings(self, img: "EvidenceImage") -> tuple[list[RawFrame], str]:
         recs, note = self._dahua.list_recordings(img)
+        recs = [dataclasses.replace(f, brand="cpplus") for f in recs]
         cpplus_note = f"CP Plus (unverified): {note}"
         return recs, cpplus_note
 
@@ -127,5 +129,10 @@ class CPPlusPlugin(BrandPlugin):
         """
         log.info("CP Plus carve(): Routing to Dahua DHAV carving engine...")
         frames, note = self._dahua.carve(img, progress_cb)
+        # Re-tag frames as "cpplus" (the Dahua plugin hardcodes brand="dahua").
+        # Without this, CP Plus data is indistinguishable from verified native
+        # Dahua data downstream, and loses its "unverified" caveat in the
+        # reconstructor and report.
+        frames = [dataclasses.replace(f, brand="cpplus") for f in frames]
         cpplus_note = f"Carved via Dahua plugin (CP Plus Dahua-compatible — unverified): {note}"
         return frames, cpplus_note

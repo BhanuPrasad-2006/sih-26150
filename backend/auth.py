@@ -84,6 +84,25 @@ class AuthManager:
         hashed = bcrypt.hashpw(plaintext.encode("utf-8"), bcrypt.gensalt())
         self._db.set_auth_value("password_hash", hashed.decode("utf-8"))
 
+    def set_password_if_unset(self, plaintext: str) -> bool:
+        """
+        Atomically set the password only if none is set yet.
+
+        Guards against a first-run TOCTOU race: two concurrent first-run
+        setup requests both reading is_password_set() == False before either
+        writes. The check and the write happen under the same lock here, so
+        only the first caller ever succeeds.
+
+        Returns True if this call set the password, False if a password was
+        already set (no changes made).
+        """
+        with self._lock:
+            if self._db.get_auth_value("password_hash") is not None:
+                return False
+            hashed = bcrypt.hashpw(plaintext.encode("utf-8"), bcrypt.gensalt())
+            self._db.set_auth_value("password_hash", hashed.decode("utf-8"))
+            return True
+
     def verify_password(self, plaintext: str) -> bool:
         """
         Constant-time bcrypt comparison.  Returns True on match, False otherwise.

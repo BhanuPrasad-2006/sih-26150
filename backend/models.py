@@ -80,6 +80,12 @@ class Evidence(BaseModel):
     confidence:     Optional[float]  = None
     is_synthetic:   bool             = False  # True when path is a generated test image
     created_at:     str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    # Examiner-supplied device clock offset from UTC, in minutes (e.g. +330 for
+    # IST). Carved timestamps are parsed as raw device-reported values (TO
+    # VERIFY — see format sheets); this is never inferred automatically, only
+    # set explicitly by the examiner, and is used to normalize timestamps for
+    # cross-evidence correlation and reporting. None = not specified.
+    device_utc_offset_minutes: Optional[int] = None
 
 
 class DiskOffset(BaseModel):
@@ -102,6 +108,8 @@ class Segment(BaseModel):
     notes:           Optional[str]      = None   # e.g. "experimental carving — TO VERIFY"
     motion_detected: Optional[bool]     = None
     motion_details:  Optional[str]      = None
+    face_detected:          Optional[bool] = None
+    face_detection_details: Optional[str]  = None
 
 
 class LogEvent(BaseModel):

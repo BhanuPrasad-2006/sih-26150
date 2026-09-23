@@ -82,6 +82,9 @@ class UniviewPlugin(BrandPlugin):
         img: "EvidenceImage",
         progress_cb: Optional[Callable[[int, int], None]] = None,
     ) -> tuple[list[RawFrame], str]:
-        raise NotImplementedError(
-            "Uniview format parsing not yet implemented — detection only"
-        )
+        # base.BrandPlugin's contract requires carve() to never raise — return
+        # ([], note) instead, so a future confidence bump doesn't surface as
+        # an opaque "Unexpected error" through the scan pipeline.
+        note = "Uniview format parsing not yet implemented — detection only."
+        log.info(note)
+        return [], note

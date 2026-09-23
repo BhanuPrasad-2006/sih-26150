@@ -154,16 +154,27 @@ def _label_session(session: list[RawFrame], evidence_id: str) -> Segment:
     # Status heuristics
     has_gaps = len(session) < 2
     any_no_timestamp = any(f.timestamp is None for f in session)
-    from_experimental_brand = brand == "hikvision"  # carving only, TO VERIFY
+    # Carving methods whose output has not been verified against real hardware.
+    from_experimental_brand = brand in ("hikvision", "cpplus")
 
     if from_experimental_brand:
-        # Hikvision carving is always UNCERTAIN until ffprobe verifies the export
+        # Experimental carving is always UNCERTAIN until independently verified.
         status = SegmentStatus.UNCERTAIN
-        notes = (
-            "Experimental Hikvision NAL carving. "
-            "UNCERTAIN until ffprobe decodes export cleanly. "
-            "See docs/format_sheets/hikvision.md §4."
-        )
+        if brand == "hikvision":
+            notes = (
+                "Experimental Hikvision NAL carving. Frame length is not verified "
+                "for this firmware, so only NAL start-code positions were found, "
+                "not decodable frame boundaries — MP4/raw export is not available "
+                "for this segment. UNCERTAIN until a verified NAL parser confirms "
+                "these offsets. See docs/format_sheets/hikvision.md §4."
+            )
+        else:
+            notes = (
+                "CP Plus (Dahua-compatible detection — unverified). Carved via "
+                "the Dahua DHAV engine, but native CP Plus support has not been "
+                "verified against real CP Plus hardware. UNCERTAIN until "
+                "independently confirmed."
+            )
     elif any_no_timestamp or has_gaps:
         status = SegmentStatus.UNCERTAIN
         notes = "Some frames missing timestamps or too few frames to confirm integrity."

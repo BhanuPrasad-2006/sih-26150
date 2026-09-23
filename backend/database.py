@@ -147,6 +147,18 @@ CREATE TABLE IF NOT EXISTS audit_log (
     entry_hash    TEXT NOT NULL
 );
 
+-- Cached face embeddings for face similarity search (see backend/face_search.py).
+-- Populated as a side effect of running face detection on a segment, so a
+-- search doesn't have to re-decode every video every time.
+CREATE TABLE IF NOT EXISTS face_embeddings (
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    segment_id            TEXT NOT NULL,
+    frame_offset_seconds  REAL,
+    bbox_json             TEXT,
+    embedding_json        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_face_embeddings_segment ON face_embeddings(segment_id);
+
 -- Single-examiner auth state (key-value store for password_hash and similar).
 -- Only ever contains one row: key='password_hash', value=<bcrypt hash string>.
 -- Plaintext passwords are NEVER stored here.
@@ -183,6 +195,23 @@ class Database:
                 conn.execute("ALTER TABLE segments ADD COLUMN motion_details TEXT")
             except Exception:
                 pass
+            try:
+                # NULL case_id = global audit log (e.g. login/logout events).
+                conn.execute("ALTER TABLE audit_log ADD COLUMN case_id TEXT")
+            except Exception:
+                pass
+            try:
+                conn.execute("ALTER TABLE evidence ADD COLUMN device_utc_offset_minutes INTEGER")
+            except Exception:
+                pass
+            try:
+                conn.execute("ALTER TABLE segments ADD COLUMN face_detected INTEGER")
+            except Exception:
+                pass
+            try:
+                conn.execute("ALTER TABLE segments ADD COLUMN face_detection_details TEXT")
+            except Exception:
+                pass
 
     # ── Cases ─────────────────────────────────────────────────────────────────
 
@@ -214,13 +243,15 @@ class Database:
             conn.execute(
                 "INSERT OR REPLACE INTO evidence "
                 "(evidence_id, case_id, path, size_bytes, sha256_before, md5_before, "
-                " sha256_after, brand, brand_version, confidence, is_synthetic, created_at) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                " sha256_after, brand, brand_version, confidence, is_synthetic, created_at, "
+                " device_utc_offset_minutes) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     ev.evidence_id, ev.case_id, ev.path, ev.size_bytes,
                     ev.sha256_before, ev.md5_before, ev.sha256_after,
                     ev.brand, ev.brand_version, ev.confidence,
                     int(ev.is_synthetic), ev.created_at,
+                    ev.device_utc_offset_minutes,
                 ),
             )
         return ev
@@ -239,7 +270,8 @@ class Database:
     def list_evidence_for_case(self, case_id: str) -> list[Evidence]:
         with self._connect() as conn:
             rows = conn.execute(
-                "SELECT * FROM evidence WHERE case_id=?", (case_id,)
+                "SELECT * FROM evidence WHERE case_id=? ORDER BY created_at ASC, evidence_id ASC",
+                (case_id,),
             ).fetchall()
         result = []
         for r in rows:
@@ -253,13 +285,14 @@ class Database:
     def save_segment(self, seg: Segment) -> Segment:
         offsets_json = json.dumps([o.model_dump() for o in seg.disk_offsets])
         motion_int = int(seg.motion_detected) if seg.motion_detected is not None else None
+        face_int = int(seg.face_detected) if seg.face_detected is not None else None
         with self._connect() as conn:
             conn.execute(
                 "INSERT OR REPLACE INTO segments "
                 "(segment_id, evidence_id, camera, start_time, end_time, "
                 " disk_offsets_json, frame_count, status, export_path, sha256, notes, "
-                " motion_detected, motion_details) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                " motion_detected, motion_details, face_detected, face_detection_details) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     seg.segment_id, seg.evidence_id, seg.camera,
                     seg.start_time.isoformat() if seg.start_time else None,
@@ -268,9 +301,30 @@ class Database:
                     seg.frame_count, seg.status.value,
                     seg.export_path, seg.sha256, seg.notes,
                     motion_int, seg.motion_details,
+                    face_int, seg.face_detection_details,
                 ),
             )
         return seg
+
+    def delete_segments_for_evidence(self, evidence_id: str) -> None:
+        """
+        Remove all segments (and their cached face embeddings) for one
+        evidence item. Called before saving a fresh scan's segments so
+        re-running a scan replaces the previous results instead of
+        accumulating duplicate, contradictory segment rows alongside them.
+        """
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT segment_id FROM segments WHERE evidence_id=?", (evidence_id,)
+            ).fetchall()
+            segment_ids = [r["segment_id"] for r in rows]
+            if segment_ids:
+                placeholders = ",".join("?" for _ in segment_ids)
+                conn.execute(
+                    f"DELETE FROM face_embeddings WHERE segment_id IN ({placeholders})",
+                    segment_ids,
+                )
+            conn.execute("DELETE FROM segments WHERE evidence_id=?", (evidence_id,))
 
     def list_segments_for_evidence(self, evidence_id: str) -> list[Segment]:
         from backend.models import DiskOffset
@@ -288,6 +342,8 @@ class Database:
             d["status"] = SegmentStatus(d["status"])
             if "motion_detected" in d and d["motion_detected"] is not None:
                 d["motion_detected"] = bool(d["motion_detected"])
+            if "face_detected" in d and d["face_detected"] is not None:
+                d["face_detected"] = bool(d["face_detected"])
             # Parse datetimes
             from datetime import datetime, timezone
             for key in ("start_time", "end_time"):
@@ -296,25 +352,91 @@ class Database:
             result.append(Segment(**d))
         return result
 
+    # ── Face embeddings (face similarity search) ─────────────────────────────
+
+    def save_face_embeddings(self, segment_id: str, records: list) -> None:
+        """
+        Replace all cached face embeddings for one segment with *records*
+        (a list of face_search.FaceEmbeddingRecord). Called after re-running
+        face detection so stale embeddings from a previous export don't linger.
+        """
+        with self._connect() as conn:
+            conn.execute("DELETE FROM face_embeddings WHERE segment_id=?", (segment_id,))
+            conn.executemany(
+                "INSERT INTO face_embeddings "
+                "(segment_id, frame_offset_seconds, bbox_json, embedding_json) "
+                "VALUES (?,?,?,?)",
+                [
+                    (
+                        segment_id,
+                        r.frame_offset_seconds,
+                        json.dumps(r.bbox),
+                        json.dumps(r.embedding),
+                    )
+                    for r in records
+                ],
+            )
+
+    def list_face_embeddings_for_segments(self, segment_ids: list[str]) -> list[dict]:
+        """
+        Return cached face embeddings for the given segment ids, as dicts:
+        {segment_id, frame_offset_seconds, bbox, embedding}.
+        """
+        if not segment_ids:
+            return []
+        placeholders = ",".join("?" for _ in segment_ids)
+        with self._connect() as conn:
+            rows = conn.execute(
+                f"SELECT segment_id, frame_offset_seconds, bbox_json, embedding_json "
+                f"FROM face_embeddings WHERE segment_id IN ({placeholders})",
+                segment_ids,
+            ).fetchall()
+        return [
+            {
+                "segment_id": r["segment_id"],
+                "frame_offset_seconds": r["frame_offset_seconds"],
+                "bbox": json.loads(r["bbox_json"] or "[]"),
+                "embedding": json.loads(r["embedding_json"]),
+            }
+            for r in rows
+        ]
+
     # ── Audit log ─────────────────────────────────────────────────────────────
 
-    def save_audit_entry(self, entry: AuditEntry) -> None:
+    def save_audit_entry(self, entry: AuditEntry, case_id: Optional[str] = None) -> None:
+        """
+        Persist one audit entry. *case_id* is None for global (non-case) events
+        such as login/logout; otherwise scopes the entry to one case.
+        """
         with self._connect() as conn:
             conn.execute(
                 "INSERT OR REPLACE INTO audit_log "
-                "(entry_id, created_at, action, details, previous_hash, entry_hash) "
-                "VALUES (?,?,?,?,?,?)",
+                "(entry_id, case_id, created_at, action, details, previous_hash, entry_hash) "
+                "VALUES (?,?,?,?,?,?,?)",
                 (
-                    entry.entry_id, entry.created_at, entry.action,
+                    entry.entry_id, case_id, entry.created_at, entry.action,
                     entry.details, entry.previous_hash, entry.entry_hash,
                 ),
             )
 
-    def load_audit_entries(self) -> list[AuditEntry]:
+    def load_audit_entries(self, case_id: Optional[str] = None) -> list[AuditEntry]:
+        """
+        Return persisted audit entries in chain order.
+        *case_id* is None to load the global (login/logout) audit log, or a
+        case id to load that case's entries only.
+        """
         with self._connect() as conn:
-            rows = conn.execute(
-                "SELECT * FROM audit_log ORDER BY created_at"
-            ).fetchall()
+            if case_id is None:
+                rows = conn.execute(
+                    "SELECT entry_id, created_at, action, details, previous_hash, entry_hash "
+                    "FROM audit_log WHERE case_id IS NULL ORDER BY created_at"
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT entry_id, created_at, action, details, previous_hash, entry_hash "
+                    "FROM audit_log WHERE case_id=? ORDER BY created_at",
+                    (case_id,),
+                ).fetchall()
         return [AuditEntry(**dict(r)) for r in rows]
 
     # ── Log events ────────────────────────────────────────────────────────────

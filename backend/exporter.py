@@ -187,6 +187,20 @@ def export_segment(
     detail: dict = {"segment_id": segment.segment_id, "camera": segment.camera}
     brand = segment.notes and "hikvision" in segment.notes.lower()
 
+    if not segment.disk_offsets:
+        # No verified frame boundaries were recorded for this segment (this is
+        # expected — and permanent, not transient — for experimental Hikvision
+        # NAL carving, where frame length is unverified for the firmware).
+        # Report this upfront instead of attempting extraction and failing with
+        # a generic "empty raw stream" message that looks like a one-off miss.
+        detail["error"] = (
+            "No exportable frame data recorded for this segment — frame "
+            "boundaries were not verified during carving, so nothing can be "
+            "safely written as video. See docs/format_sheets/hikvision.md §4."
+        )
+        segment.notes = (segment.notes or "") + " | Export unavailable: no verified frame boundaries."
+        return segment, detail
+
     # Step 1: extract raw bytes
     raw_path = output_dir / f"{segment.segment_id}_raw.bin"
     ok = extract_raw_stream(mm, segment, raw_path)
@@ -212,6 +226,7 @@ def export_segment(
     # Step 3: ffprobe check
     probe_ok, probe_info = ffprobe_check(mp4_path)
     detail["ffprobe"] = probe_info
+    detail["ffprobe_valid"] = probe_ok
     if probe_ok and segment.status == SegmentStatus.UNCERTAIN:
         segment.status = SegmentStatus.PARTIAL
         segment.notes = (segment.notes or "") + " | ffprobe decoded stream — upgraded to PARTIAL."

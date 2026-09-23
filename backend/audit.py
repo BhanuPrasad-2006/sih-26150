@@ -31,6 +31,18 @@ class AuditLog:
         self._last_hash: str = ""
         self._lock = threading.Lock()
 
+    @classmethod
+    def from_entries(cls, entries: list[AuditEntry]) -> "AuditLog":
+        """
+        Rebuild an AuditLog from entries already persisted to the database
+        (chain order), so history survives a server restart instead of
+        starting empty.
+        """
+        log = cls()
+        log._entries = list(entries)
+        log._last_hash = entries[-1].entry_hash if entries else ""
+        return log
+
     # ── Public API ────────────────────────────────────────────────────────────
 
     def append(self, action: str, details: str = "") -> AuditEntry:
