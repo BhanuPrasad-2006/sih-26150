@@ -129,11 +129,35 @@ HIKV_INDEX_NAME = b"HIKB-TREE"      # Name verified [Han2015]; page layout — T
 HIKV_DATA_BLOCK_SIZE = 1 * 1024 * 1024 * 1024   # TO VERIFY: 1 GB data blocks
 HIKV_OFNI_MARKER     = b"OFNI"                   # TO VERIFY: keyframe table marker
 HIKV_OFNI_ENTRY_SIZE = 56                         # TO VERIFY: bytes per OFNI entry
-HIKV_NAL_PREFIX_0xBA = 0xBA                       # TO VERIFY: firmware variant A prefix
-HIKV_NAL_PREFIX_0xBC = 0xBC                       # TO VERIFY: firmware variant B prefix
+# NOTE (2026-09): the "0xBA / 0xBC firmware prefix" claims above/below are almost
+# certainly not Hikvision-specific: 0xBA and 0xBC are the standard MPEG program
+# stream pack-header and program-stream-map start-code IDs (ISO/IEC 13818-1),
+# and FFmpeg's mpeg.c demuxer confirms Hikvision "IMKH" video files are MPEG-PS.
+# They are now handled as ordinary MPEG-PS structure by the stream carver.
+HIKV_NAL_PREFIX_0xBA = 0xBA                       # = MPEG-PS pack_start_code id
+HIKV_NAL_PREFIX_0xBC = 0xBC                       # = MPEG-PS program_stream_map id
 
-# Standard H.264/H.265 NAL start code (used in carving — many false positives expected)
+# Standard H.264/H.265 NAL start code
 HIKV_NAL_START_CODE = b"\x00\x00\x00\x01"        # Verified: H.264/H.265 standard
+
+# ── Standards-based stream carving (Hikvision, and any brand with standard video) ──
+# These come from PUBLIC STANDARDS, not from any reverse-engineered Hikvision layout:
+#   MPEG-PS:  ISO/IEC 13818-1 §2.5.3 (pack header, PES packet framing)
+#   H.264:    ITU-T H.264 Annex B (byte stream format) and §7.3.1 (NAL unit header)
+MPEG_PS_PES_STREAM_IDS = frozenset(range(0xBB, 0xC0)) | frozenset(range(0xC0, 0xF0))
+MPEG_PS_VIDEO_STREAM_ID_MIN = 0xE0
+MPEG_PS_VIDEO_STREAM_ID_MAX = 0xEF
+MPEG_PS_MIN_ELEMENTS = 3            # Proposed — pack header + >=2 PES packets before we believe a run
+H264_NAL_SPS = 7
+H264_NAL_PPS = 8
+H264_NAL_IDR = 5
+H264_NAL_SLICE = 1
+H264_VALID_NAL_TYPES = frozenset(range(1, 14)) | frozenset({19, 20})
+# profile_idc values registered in ITU-T H.264 Annex A / §7.4.2.1.1
+H264_VALID_PROFILE_IDC = frozenset({44, 66, 77, 83, 86, 88, 100, 110, 118, 122, 128, 134, 135, 138, 139, 244})
+H264_MAX_PARAM_SET_BYTES = 1024             # Proposed — SPS/PPS are tiny; larger means swallowed junk
+H264_MAX_TAIL_NAL_BYTES = 4 * 1024 * 1024   # Proposed — cap for the final NAL when no next start code follows
+H264_TAIL_IDENTICAL_RUN = 16                # Proposed — a >=16-byte identical-byte run ends the final NAL
 
 # Minimum confidence score to proceed with scanning
 MIN_PLUGIN_CONFIDENCE = 0.6          # Proposed [PRD §2.4, §5.6 pseudo-code]

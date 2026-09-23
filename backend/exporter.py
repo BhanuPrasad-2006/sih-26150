@@ -139,18 +139,21 @@ def remux_dhav_to_mp4(raw_path: Path, mp4_path: Path) -> tuple[bool, str]:
 
 def remux_h264_to_mp4(raw_path: Path, mp4_path: Path) -> tuple[bool, str]:
     """
-    Use FFmpeg's H.264 parser to remux a raw NAL stream to MP4.
-    Used for Hikvision experimental carving results.
-    -c copy: no re-encoding.
+    Remux a carved Hikvision stream to MP4 with FFmpeg (-c copy, no re-encoding).
+    The carver emits either an MPEG program stream (starts with 00 00 01 BA —
+    let FFmpeg autodetect it) or a raw H.264 Annex B stream (-f h264).
     Returns (success, stderr_summary).
     """
     if not ffmpeg_available():
         return False, "ffmpeg not on PATH"
     try:
+        with open(raw_path, "rb") as fh:
+            is_program_stream = fh.read(4) == b"\x00\x00\x01\xBA"
+        input_fmt = [] if is_program_stream else ["-f", "h264"]
         result = subprocess.run(
             [
                 "ffmpeg", "-y",
-                "-f", "h264",
+                *input_fmt,
                 "-i", str(raw_path),
                 "-c", "copy",
                 str(mp4_path),
@@ -188,15 +191,14 @@ def export_segment(
     brand = segment.notes and "hikvision" in segment.notes.lower()
 
     if not segment.disk_offsets:
-        # No verified frame boundaries were recorded for this segment (this is
-        # expected — and permanent, not transient — for experimental Hikvision
-        # NAL carving, where frame length is unverified for the firmware).
-        # Report this upfront instead of attempting extraction and failing with
-        # a generic "empty raw stream" message that looks like a one-off miss.
+        # No byte ranges were recorded for this segment (e.g. legacy segments
+        # saved by the pre-2026-09 Hikvision carver, which recorded only NAL
+        # start-code positions). Report this upfront instead of attempting
+        # extraction and failing with a generic "empty raw stream" message.
         detail["error"] = (
-            "No exportable frame data recorded for this segment — frame "
-            "boundaries were not verified during carving, so nothing can be "
-            "safely written as video. See docs/format_sheets/hikvision.md §4."
+            "No exportable frame data recorded for this segment — no verified "
+            "byte ranges were saved during carving, so nothing can be safely "
+            "written as video. Re-run the scan to re-carve this evidence."
         )
         segment.notes = (segment.notes or "") + " | Export unavailable: no verified frame boundaries."
         return segment, detail
