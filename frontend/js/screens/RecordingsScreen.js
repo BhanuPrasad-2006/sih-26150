@@ -76,21 +76,6 @@ async function renderRecordingsScreen(params) {
     </div>
 
     <div class="card">
-      <div class="card-title"><span>Search for a Person Across Recordings</span></div>
-      <p style="font-size:12px; color:var(--text-dim); margin:0 0 12px; line-height:1.6;">
-        Upload a reference photo to search for similar faces across every segment in this case that has already
-        been checked with "Check Faces" below. <strong>Results are similarity candidates for human review, not
-        confirmed identity matches</strong> — this project's own testing found two different synthetic faces
-        scoring above the reference threshold shown in results. Always corroborate independently.
-      </p>
-      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-        <input type="file" id="face-search-input" accept="image/*" class="form-control" style="max-width:320px;">
-        <button id="face-search-btn" class="btn btn-primary btn-sm">🔎 Search</button>
-      </div>
-      <div id="face-search-results" style="margin-top:14px;"></div>
-    </div>
-
-    <div class="card">
       <div class="card-title">
         <span>Reconstructed Timelines &amp; Segments</span>
         <!-- Status legend with tooltips -->
@@ -193,9 +178,27 @@ async function renderRecordingsScreen(params) {
            </div>`
       }
     </div>
+
+    ${segments.length > 0 ? `
+    <div class="card">
+      <div class="card-title"><span>Search for a Person Across Recordings</span></div>
+      <p style="font-size:12px; color:var(--text-dim); margin:0 0 12px; line-height:1.6;">
+        Optional: upload a reference photo to search for similar faces across every segment above that has
+        already been checked with "Check Faces". <strong>Results are similarity candidates for human review,
+        not confirmed identity matches</strong> — this project's own testing found two different synthetic
+        faces scoring above the reference threshold shown in results. Always corroborate independently.
+      </p>
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <input type="file" id="face-search-input" accept="image/*" class="form-control" style="max-width:320px;">
+        <button id="face-search-btn" class="btn btn-primary btn-sm">🔎 Search</button>
+      </div>
+      <div id="face-search-results" style="margin-top:14px;"></div>
+    </div>` : ''}
   `;
 
-  document.getElementById('face-search-btn').onclick = () => runFaceSearch(caseId);
+  if (segments.length > 0) {
+    document.getElementById('face-search-btn').onclick = () => runFaceSearch(caseId);
+  }
 }
 
 async function runFaceSearch(caseId) {
