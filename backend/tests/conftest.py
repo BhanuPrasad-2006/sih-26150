@@ -8,6 +8,18 @@ The FORENSIC_CASE_DIR environment variable is set to a fresh temporary directory
 a fixture) so that the module-level ``db = Database()`` in main.py is never reached
 before the env override is applied.
 
+DATABASE_URL is explicitly cleared here for the same reason, before any backend
+import: main.py's _create_database() switches to PostgresDatabase (Supabase)
+whenever DATABASE_URL is set, and it calls load_dotenv() first — so a developer's
+own .env file (with real Supabase credentials, for running the app locally)
+would otherwise cause the ENTIRE test suite to silently run against the live
+cloud database instead of an isolated local SQLite file. This happened once
+during development: a full test run wrote fixture rows (case numbers like
+"DB-TEST-...", "MOTION-TEST-001") into a real Supabase project. Postgres-specific
+tests that intentionally need a live DATABASE_URL must read it from a distinct,
+test-only env var instead (see test_database_postgres.py) — never rely on the
+app's own DATABASE_URL/.env within this suite.
+
 A session-scoped safety fixture ``assert_no_real_db`` verifies that the Database
 path used during the test run does NOT point at the real production folder
 (C:/sih_cases or ~/sih_cases).  Any test that accidentally imports the real DB will
@@ -31,6 +43,15 @@ import tempfile
 # our temp directory even if main.py is imported at collection time.
 _SESSION_TMPDIR = tempfile.mkdtemp(prefix="sih_test_")
 os.environ["FORENSIC_CASE_DIR"] = _SESSION_TMPDIR
+
+# Force the SQLite fallback for this entire suite regardless of a developer's
+# local .env — see the ISOLATION GUARANTEE note above for why this matters.
+# Set to "" rather than popped: main.py's load_dotenv() only fills in keys
+# that are NOT already present in os.environ, so an empty (but present)
+# value here survives load_dotenv() and still reads as falsy in
+# _create_database()'s `if database_url:` check. Popping it instead would
+# leave the key absent, and load_dotenv() would then repopulate it from .env.
+os.environ["DATABASE_URL"] = ""
 
 # ── Now it is safe to import backend modules ──────────────────────────────────
 import pytest

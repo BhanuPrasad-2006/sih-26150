@@ -30,7 +30,6 @@ import json
 import logging
 import os
 import re
-import sqlite3
 import sys
 import traceback
 from contextlib import asynccontextmanager
@@ -39,17 +38,23 @@ from pathlib import Path
 from typing import Any, AsyncGenerator, Optional
 
 import aiofiles
+from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, File, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, field_validator
 from starlette.middleware.base import BaseHTTPMiddleware
 
+# Load .env (if present) before anything reads DATABASE_URL/PG* env vars.
+# A no-op when no .env file exists, so this is safe on any deployment target.
+load_dotenv()
+
 from backend.acquisition import AcquisitionError, EvidenceImage
 from backend.audit import AuditLog
 from backend.auth import AuthManager
 from backend.database import (
     Database,
+    DuplicateCaseNumberError,
     get_case_export_dir,
     get_case_report_dir,
 )
@@ -107,7 +112,19 @@ _AUTH_EXEMPT_PATHS = {
 
 # ── Global state ──────────────────────────────────────────────────────────────
 
-db: Database = Database()
+def _create_database():
+    """
+    Postgres (Supabase) when DATABASE_URL is set, SQLite otherwise.
+    SQLite remains the zero-config local/offline fallback.
+    """
+    database_url = os.environ.get("DATABASE_URL", "").strip()
+    if database_url:
+        from backend.db_postgres import PostgresDatabase
+        return PostgresDatabase(database_url)
+    return Database()
+
+
+db = _create_database()
 auth: AuthManager = AuthManager(db)
 
 # Per-case: {case_id → asyncio.Queue[ScanProgress]}
@@ -124,7 +141,7 @@ _scan_tasks: dict[str, asyncio.Task] = {}
 async def lifespan(app: FastAPI):
     global db, auth
     if not hasattr(db, "_path"):
-        db = Database()
+        db = _create_database()
         auth = AuthManager(db)
     log.info("Database initialised at %s", db._path)
 
@@ -671,7 +688,7 @@ async def create_case(req: CreateCaseRequest):
     case = Case(case_number=req.case_number, examiner=req.examiner, notes=req.notes)
     try:
         result = await asyncio.to_thread(db.create_case, case)
-    except sqlite3.IntegrityError:
+    except DuplicateCaseNumberError:
         raise HTTPException(
             409,
             f"Case number '{req.case_number}' already exists. "
