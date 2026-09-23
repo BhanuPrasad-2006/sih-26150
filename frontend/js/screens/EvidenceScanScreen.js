@@ -190,17 +190,23 @@ async function renderEvidenceScanScreen(params) {
         API.listenScanProgress(
           caseId,
           evidenceId,
-          // onProgress
+          // onProgress — field names must match backend/models.py's ScanProgress
+          // (percent, bytes_done), not the progress_pct/bytes_processed names
+          // this previously (and always) referenced, which silently threw on
+          // every single message and meant this callback never ran at all.
           (prog) => {
-            progressBar.style.width = `${prog.progress_pct}%`;
-            progressPct.innerText   = `${prog.progress_pct.toFixed(0)}%`;
-            statusText.innerText    = `Processed ${prog.bytes_processed} / ${prog.total_bytes} bytes — Frames carved: ${prog.frames_found}`;
+            const pct = prog.percent || 0;
+            progressBar.style.width = `${pct}%`;
+            progressPct.innerText   = `${pct.toFixed(0)}%`;
+            statusText.innerText    = prog.message
+              || `Processed ${prog.bytes_done} / ${prog.total_bytes} bytes — Frames carved: ${prog.frames_found}`;
           },
-          // onComplete
+          // onComplete — ScanProgress has no frames_found/segments_reconstructed
+          // counts at the DONE phase; the human-readable summary lives in .message.
           (comp) => {
             progressPct.innerText = '100%';
             progressBar.style.width = '100%';
-            statusText.innerHTML = `<span style="color:var(--status-complete);">✅ Scan complete — ${comp.frames_found} frames carved into ${comp.segments_reconstructed} segments.</span>`;
+            statusText.innerHTML = `<span style="color:var(--status-complete);">✅ ${escapeHtml(comp.message || 'Scan complete.')}</span>`;
             btnScan.disabled = false;
             btnScan.innerHTML = '🔁 Re-Run Forensic Scan';
             setTimeout(() => {
@@ -212,7 +218,7 @@ async function renderEvidenceScanScreen(params) {
             statusText.innerHTML = `
               <div class="error-inline" style="margin-top:8px;">
                 <span>⚠️</span>
-                <span>Scan failed: ${errMsg}</span>
+                <span>Scan failed: ${escapeHtml(errMsg)}</span>
               </div>`;
             btnScan.disabled = false;
             btnScan.innerHTML = '🚀 Retry Carving Scan';
@@ -223,7 +229,7 @@ async function renderEvidenceScanScreen(params) {
         statusText.innerHTML = `
           <div class="error-inline" style="margin-top:8px;">
             <span>⚠️</span>
-            <span>Failed to initiate scan: ${err.message}</span>
+            <span>Failed to initiate scan: ${escapeHtml(err.message)}</span>
           </div>`;
         btnScan.disabled = false;
         btnScan.innerHTML = '🚀 Start Carving Scan';

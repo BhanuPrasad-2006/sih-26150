@@ -42,8 +42,8 @@ async function renderExportReportScreen(params) {
     </div>
 
     <div class="notice-card">
-      <h3>⚠️ Draft Watermark Notice</h3>
-      <p>All reports generated from synthetic disk images contain a prominent <strong>"DRAFT — SYNTHETIC DATA"</strong> watermark across every page, as required by protocol.</p>
+      <h3>⚠️ Draft Certificate &amp; Synthetic Data Notice</h3>
+      <p>The Section 63(4) legal certificate pages carry a <strong>"DRAFT — NOT LEGAL ADVICE"</strong> watermark until reviewed and signed by a qualified expert. Reports generated from synthetic disk images are separately and clearly labelled as synthetic test data on the cover page — never cite their numbers as real-world accuracy.</p>
     </div>
 
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">

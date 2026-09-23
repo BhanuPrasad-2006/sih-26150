@@ -12,6 +12,22 @@
  * `getEvidence()` derives evidence from the parent case's evidence list.
  */
 
+/**
+ * Escape a string for safe interpolation into innerHTML template strings.
+ * Every value that originates as free-text user input (examiner name, case
+ * notes, evidence file paths, etc.) must be passed through this before being
+ * placed inside a template literal that gets assigned to .innerHTML.
+ */
+function escapeHtml(value) {
+  if (value === null || value === undefined) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 const API = {
   /** Throw a descriptive error when the server returns a non-2xx status. */
   async _checkOk(res, url) {
@@ -160,12 +176,16 @@ const API = {
     return res.json();
   },
 
-  async addEvidence(caseId, filePath, label) {
+  async addEvidence(caseId, filePath, label, deviceUtcOffsetMinutes) {
     const url = `/api/cases/${caseId}/evidence`;
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: filePath, label })
+      body: JSON.stringify({
+        path: filePath,
+        label,
+        device_utc_offset_minutes: deviceUtcOffsetMinutes ?? null,
+      })
     });
     await this._checkOk(res, url);
     return res.json();
@@ -178,7 +198,7 @@ const API = {
     return res.json();
   },
 
-  listenScanProgress(caseId, onProgress, onComplete, onError) {
+  listenScanProgress(caseId, evidenceId, onProgress, onComplete, onError) {
     const source = new EventSource(`/api/cases/${caseId}/status`);
     source.onmessage = (event) => {
       const data = JSON.parse(event.data);
@@ -203,8 +223,10 @@ const API = {
     };
   },
 
-  async getSegments(caseId) {
-    const url = `/api/cases/${caseId}/segments`;
+  async getSegments(caseId, evidenceId) {
+    const url = evidenceId
+      ? `/api/cases/${caseId}/segments?evidence_id=${encodeURIComponent(evidenceId)}`
+      : `/api/cases/${caseId}/segments`;
     const res = await fetch(url);
     await this._checkOk(res, url);
     return res.json();
@@ -213,6 +235,18 @@ const API = {
   /** Retrieve all recovered case segments pre-grouped for the timeline view. */
   async getTimeline(caseId) {
     const url = `/api/cases/${caseId}/timeline`;
+    const res = await fetch(url);
+    await this._checkOk(res, url);
+    return res.json();
+  },
+
+  /**
+   * Cross-camera event correlation: segments whose time windows overlap
+   * across 2+ distinct cameras. Time-window clustering only, not content
+   * analysis — see backend/correlation.py.
+   */
+  async getCorrelation(caseId) {
+    const url = `/api/cases/${caseId}/correlation`;
     const res = await fetch(url);
     await this._checkOk(res, url);
     return res.json();
@@ -228,6 +262,28 @@ const API = {
   async detectMotion(caseId, segmentId) {
     const url = `/api/cases/${caseId}/motion/${segmentId}`;
     const res = await fetch(url, { method: 'POST' });
+    await this._checkOk(res, url);
+    return res.json();
+  },
+
+  /** AI-Based Face Detection (OpenCV YuNet) — detection only, no recognition/identification. */
+  async detectFaces(caseId, segmentId) {
+    const url = `/api/cases/${caseId}/face-detect/${segmentId}`;
+    const res = await fetch(url, { method: 'POST' });
+    await this._checkOk(res, url);
+    return res.json();
+  },
+
+  /**
+   * Face similarity search: upload a reference photo, search across every
+   * segment already indexed (via detectFaces) for this case. Results are
+   * similarity candidates for human review, NOT confirmed identity matches.
+   */
+  async searchFaces(caseId, imageFile) {
+    const url = `/api/cases/${caseId}/face-search`;
+    const formData = new FormData();
+    formData.append('reference_image', imageFile);
+    const res = await fetch(url, { method: 'POST', body: formData });
     await this._checkOk(res, url);
     return res.json();
   },
