@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DVR/NVR Forensic Analysis Tool — SIH26150 (NTRO)</title>
-  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/style.css?v=3">
 </head>
 <body class="dark-theme">
   <div id="app-container" class="app-container">
@@ -26,20 +26,23 @@
   <!-- Modal root -->
   <div id="modal-root"></div>
 
-  <!-- Scripts -->
-  <script src="/js/api.js"></script>
-  <script src="/js/components/Header.js"></script>
-  <script src="/js/components/Sidebar.js"></script>
-  <script src="/js/components/Modal.js"></script>
-  <script src="/js/screens/DashboardScreen.js"></script>
-  <script src="/js/screens/NewCaseScreen.js"></script>
-  <script src="/js/screens/CaseDetailScreen.js"></script>
-  <script src="/js/screens/EvidenceScanScreen.js"></script>
-  <script src="/js/screens/RecordingsScreen.js"></script>
-  <script src="/js/screens/TimelineScreen.js"></script>
-  <script src="/js/screens/AuditLogScreen.js"></script>
-  <script src="/js/screens/ExportReportScreen.js"></script>
-  <script src="/js/screens/LoginScreen.js"></script>
-  <script src="/js/app.js"></script>
+  <!-- Scripts. The ?v= query string is a manual cache-buster: bump it on any
+       frontend change so browsers can't serve a stale cached copy of these
+       files (this app previously had no Cache-Control header at all, which
+       let some browsers cache these indefinitely without ever re-checking). -->
+  <script src="/js/api.js?v=3"></script>
+  <script src="/js/components/Header.js?v=3"></script>
+  <script src="/js/components/Sidebar.js?v=3"></script>
+  <script src="/js/components/Modal.js?v=3"></script>
+  <script src="/js/screens/DashboardScreen.js?v=3"></script>
+  <script src="/js/screens/NewCaseScreen.js?v=3"></script>
+  <script src="/js/screens/CaseDetailScreen.js?v=3"></script>
+  <script src="/js/screens/EvidenceScanScreen.js?v=3"></script>
+  <script src="/js/screens/RecordingsScreen.js?v=3"></script>
+  <script src="/js/screens/TimelineScreen.js?v=3"></script>
+  <script src="/js/screens/AuditLogScreen.js?v=3"></script>
+  <script src="/js/screens/ExportReportScreen.js?v=3"></script>
+  <script src="/js/screens/LoginScreen.js?v=3"></script>
+  <script src="/js/app.js?v=3"></script>
 </body>
 </html>
