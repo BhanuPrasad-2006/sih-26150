@@ -135,6 +135,9 @@ _open_images: dict[str, EvidenceImage] = {}
 _audit_logs: dict[str, AuditLog] = {}
 # Per-case scan tasks (for pause/resume via simple event)
 _scan_tasks: dict[str, asyncio.Task] = {}
+# Per-case: evidence_id currently being scanned (drives the evidence table's
+# "SCANNING" badge in get_case() — cleared when _run_scan() finishes/errors).
+_active_scan_evidence: dict[str, str] = {}
 
 
 @asynccontextmanager
@@ -434,6 +437,7 @@ async def _run_scan(case_id: str, evidence_id: str) -> None:
         _audit(case_id, "scan_error", str(exc))
         await push(ScanPhase.ERROR, message=f"Unexpected error: {exc}")
     finally:
+        _active_scan_evidence.pop(case_id, None)
         q = _progress_queues.get(case_id)
         if q:
             await q.put(None)  # sentinel
@@ -716,14 +720,28 @@ async def get_case(case_id: str):
 
     evidence = await asyncio.to_thread(db.list_evidence_for_case, case_id)
 
-    # Collect segments for all evidence items belonging to this case
+    # Collect segments for all evidence items belonging to this case, and
+    # derive each evidence item's scan_status while we're already looking up
+    # its segments (COMPLETED once segments exist, SCANNING while the active
+    # scan task targets it, PENDING otherwise — see _active_scan_evidence).
     segments: list = []
     log_events: list = []
+    active_evidence_id = _active_scan_evidence.get(case_id)
+    enriched_evidence: list = []
     for ev in evidence:
         segs = await asyncio.to_thread(db.list_segments_for_evidence, ev.evidence_id)
         segments.extend(segs)
         les = await asyncio.to_thread(db.list_log_events, ev.evidence_id)
         log_events.extend(les)
+
+        if segs:
+            status = "COMPLETED"
+        elif ev.evidence_id == active_evidence_id:
+            status = "SCANNING"
+        else:
+            status = "PENDING"
+        enriched_evidence.append(ev.model_copy(update={"scan_status": status}))
+    evidence = enriched_evidence
 
     # Audit entries from in-memory log (re-hydrate from DB if server was restarted)
     audit_log = _get_case_audit_log(case_id)
@@ -774,6 +792,7 @@ async def start_scan(case_id: str, bg: BackgroundTasks):
 
     task = asyncio.create_task(_run_scan(case_id, ev.evidence_id))
     _scan_tasks[case_id] = task
+    _active_scan_evidence[case_id] = ev.evidence_id
     _audit(case_id, "scan_started", f"evidence_id={ev.evidence_id}")
     return {"status": "started", "evidence_id": ev.evidence_id}
 
