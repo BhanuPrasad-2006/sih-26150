@@ -39,7 +39,7 @@ from typing import Any, AsyncGenerator, Optional
 
 import aiofiles
 from dotenv import load_dotenv
-from fastapi import BackgroundTasks, FastAPI, File, HTTPException, Request, Response, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, field_validator
@@ -49,12 +49,13 @@ from starlette.middleware.base import BaseHTTPMiddleware
 # A no-op when no .env file exists, so this is safe on any deployment target.
 load_dotenv()
 
-from backend.acquisition import AcquisitionError, EvidenceImage
+from backend.acquisition import AcquisitionError, EvidenceImage, verify_disk_image_integrity
 from backend.audit import AuditLog
 from backend.auth import AuthManager
 from backend.database import (
     Database,
     DuplicateCaseNumberError,
+    get_case_evidence_dir,
     get_case_export_dir,
     get_case_report_dir,
 )
@@ -74,6 +75,7 @@ from backend.models import (
 from backend.plugins.constants import MIN_PLUGIN_CONFIDENCE
 from backend.plugins.cpplus import CPPlusPlugin
 from backend.plugins.dahua import DahuaPlugin
+from backend.plugins.generic import GenericStreamPlugin
 from backend.plugins.godrej import GodrejPlugin
 from backend.plugins.hikvision import HikvisionPlugin
 from backend.plugins.honeywell import HoneywellPlugin
@@ -345,7 +347,6 @@ async def _run_scan(case_id: str, evidence_id: str) -> None:
         ev.sha256_before = img.sha256_before
         ev.md5_before    = img.md5_before
         ev.size_bytes    = img.size
-        ev.is_synthetic  = "synthetic" in ev.path.lower()
         await asyncio.to_thread(db.save_evidence, ev)
         _audit(case_id, "hashed", f"sha256={img.sha256_before} md5={img.md5_before}")
 
@@ -358,17 +359,32 @@ async def _run_scan(case_id: str, evidence_id: str) -> None:
         await asyncio.to_thread(db.save_evidence, ev)
         _audit(case_id, "brand_detected", f"brand={brand} confidence={confidence:.2f} version={version}")
 
+        generic_fallback = False
+        unidentified_msg = (
+            f"Brand confidence {confidence:.0%} is below threshold "
+            f"({MIN_PLUGIN_CONFIDENCE:.0%}) and generic stream carving found no "
+            f"recoverable MPEG-PS / H.264 video. Disk may be unsupported, encrypted, "
+            f"or not a DVR/NVR disk. Details: {plugin.version_hint()}"
+        )
         if confidence < MIN_PLUGIN_CONFIDENCE:
-            await push(ScanPhase.ERROR,
-                message=f"Brand confidence {confidence:.0%} is below threshold "
-                        f"({MIN_PLUGIN_CONFIDENCE:.0%}). "
-                        f"Disk may be unsupported, encrypted, or not a DVR/NVR disk. "
-                        f"Details: {plugin.version_hint()}"
-            )
-            return
-
-        await push(ScanPhase.DETECTING, 35,
-                   f"Detected: {plugin.display_name} (confidence {confidence:.0%})")
+            # No brand plugin recognised the disk. Rather than give up, try generic
+            # standards-based stream carving (recorders with undocumented formats may
+            # still store standard MPEG-PS / H.264 streams). No brand is claimed.
+            generic_fallback = True
+            hinted = plugin if (confidence > 0 and not isinstance(plugin, UnknownPlugin)) else None
+            plugin = GenericStreamPlugin()
+            ev.brand         = (f"{hinted.display_name} — generic stream carving" if hinted
+                                else plugin.display_name)
+            ev.brand_version = plugin.version_hint()
+            await asyncio.to_thread(db.save_evidence, ev)
+            _audit(case_id, "brand_unidentified",
+                   f"best_confidence={confidence:.2f}; falling back to generic stream carving")
+            await push(ScanPhase.DETECTING, 35,
+                       f"Brand not recognised (best confidence {confidence:.0%}) — "
+                       f"trying generic standards-based stream carving…")
+        else:
+            await push(ScanPhase.DETECTING, 35,
+                       f"Detected: {plugin.display_name} (confidence {confidence:.0%})")
 
         # ── Step 3: index read ─────────────────────────────────────────────
         await push(ScanPhase.INDEX_READ, 36, "Reading index (if available)…")
@@ -399,6 +415,10 @@ async def _run_scan(case_id: str, evidence_id: str) -> None:
 
         carved_frames, carve_note = await asyncio.to_thread(plugin.carve, img, _carve_progress)
         _audit(case_id, "carving_done", carve_note)
+
+        if generic_fallback and not carved_frames:
+            await push(ScanPhase.ERROR, message=unidentified_msg)
+            return
 
         all_frames = index_frames + carved_frames
         await push(ScanPhase.CARVING, 80,
@@ -780,6 +800,52 @@ async def load_evidence(case_id: str, req: LoadEvidenceRequest, bg: BackgroundTa
     return ev
 
 
+@app.post("/api/cases/{case_id}/evidence/upload")
+async def upload_evidence(
+    case_id: str,
+    file: UploadFile = File(...),
+    device_utc_offset_minutes: Optional[int] = Form(None),
+):
+    case = await asyncio.to_thread(db.get_case, case_id)
+    if not case:
+        raise HTTPException(404, "Case not found")
+
+    if device_utc_offset_minutes is not None and not (-720 <= device_utc_offset_minutes <= 840):
+        raise HTTPException(400, "device_utc_offset_minutes must be between -720 and 840.")
+
+    # Sanitize file name to avoid directory traversal
+    filename = Path(file.filename or "evidence.raw").name
+    safe_filename = re.sub(r"[^a-zA-Z0-9_.\- ]", "_", filename).strip()
+    if not safe_filename:
+        safe_filename = "evidence.raw"
+
+    evidence_dir = get_case_evidence_dir(case_id)
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+
+    target_path = evidence_dir / safe_filename
+    if target_path.exists():
+        stem = target_path.stem
+        suffix = target_path.suffix
+        timestamp_str = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        target_path = evidence_dir / f"{stem}_{timestamp_str}{suffix}"
+
+    async with aiofiles.open(target_path, "wb") as out_file:
+        while chunk := await file.read(1024 * 1024):
+            await out_file.write(chunk)
+
+    ev = Evidence(
+        case_id=case_id,
+        path=str(target_path),
+        device_utc_offset_minutes=device_utc_offset_minutes,
+    )
+    ev = await asyncio.to_thread(db.save_evidence, ev)
+    _audit(case_id, "evidence_uploaded", f"filename={safe_filename} path={target_path}")
+
+    _progress_queues[case_id] = asyncio.Queue()
+
+    return ev
+
+
 @app.post("/api/cases/{case_id}/scan")
 async def start_scan(case_id: str, bg: BackgroundTasks):
     evs = await asyncio.to_thread(db.list_evidence_for_case, case_id)
@@ -1048,9 +1114,8 @@ async def search_faces(case_id: str, reference_image: UploadFile = File(...)):
         "reference_threshold": face_search.REFERENCE_MATCH_THRESHOLD,
         "warning": (
             "Similarity scores are candidates for human review, NOT confirmed identity "
-            "matches. During this project's own testing, two different synthetic faces "
-            "scored above the reference threshold shown here — always corroborate with "
-            "independent evidence before relying on a match."
+            "matches. Different people can score above the reference threshold shown "
+            "here — always corroborate with independent evidence before relying on a match."
         ),
         "segments_indexed": len(set(segment_ids) & {c[0] for c in candidates}),
         "matches": [m.to_dict() for m in matches],
@@ -1059,12 +1124,22 @@ async def search_faces(case_id: str, reference_image: UploadFile = File(...)):
 
 @app.get("/api/cases/{case_id}/verify")
 async def verify_evidence(case_id: str):
-    img = _open_images.get(case_id)
-    if not img:
-        raise HTTPException(400, "Evidence image is not loaded")
-    unchanged = await asyncio.to_thread(img.verify_unchanged)
-    _audit(case_id, "verify_requested", f"unchanged={unchanged}")
-    return {"unchanged": unchanged, "sha256": img.sha256_before}
+    # Re-open the evidence file by its stored path rather than relying on an
+    # in-memory handle from a previous scan (which is lost on server restart).
+    evs = await asyncio.to_thread(db.list_evidence_for_case, case_id)
+    if not evs:
+        raise HTTPException(400, "No evidence for this case")
+    ev = evs[-1]
+    if not ev.sha256_before:
+        raise HTTPException(400, "Evidence has not been hashed yet — run a scan first")
+    if not Path(ev.path).is_file():
+        raise HTTPException(404, f"Evidence file not found at {ev.path}")
+    try:
+        unchanged, current = await asyncio.to_thread(verify_disk_image_integrity, ev.path, ev.sha256_before)
+    except AcquisitionError as exc:
+        raise HTTPException(400, f"Could not open evidence for verification: {exc}")
+    _audit(case_id, "verify_requested", f"unchanged={unchanged} sha256_now={current}")
+    return {"unchanged": unchanged, "sha256": ev.sha256_before, "current_sha256": current}
 
 
 @app.get("/api/cases/{case_id}/report")

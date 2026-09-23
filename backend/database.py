@@ -90,6 +90,10 @@ def get_case_report_dir(case_id: str) -> Path:
     return _get_case_dir() / case_id / "reports"
 
 
+def get_case_evidence_dir(case_id: str) -> Path:
+    return _get_case_dir() / case_id / "evidence"
+
+
 
 # ── Schema ────────────────────────────────────────────────────────────────────
 

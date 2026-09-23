@@ -188,7 +188,9 @@ def export_segment(
     """
     output_dir.mkdir(parents=True, exist_ok=True)
     detail: dict = {"segment_id": segment.segment_id, "camera": segment.camera}
-    brand = segment.notes and "hikvision" in segment.notes.lower()
+    _n = (segment.notes or "").lower()
+    # Standard-stream carved brands export raw Annex B / MPEG-PS, not DHAV.
+    brand = "hikvision" in _n or "generic stream carving" in _n or "honeywell record carving" in _n
 
     if not segment.disk_offsets:
         # No byte ranges were recorded for this segment (e.g. legacy segments

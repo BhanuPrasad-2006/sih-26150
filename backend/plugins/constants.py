@@ -194,3 +194,24 @@ GAP_K     = 3.0     # Proposed (covers ~99.7% of normal variation)
 GAP_T_MIN = 1.0     # seconds — Proposed lower bound
 GAP_T_MAX = 10.0    # seconds — Proposed upper bound
 GAP_WINDOW_W = 100  # frames — rolling window size for mu/sigma — Proposed
+
+# ── HONEYWELL NVR (from a published paper, ONE device model) ──────────────────
+# Source: Yoon & Hwang, "Forensic analysis of video data deletion and recovery in
+# Honeywell surveillance file system", arXiv:2605.07430 (May 2026) — analysis of a
+# single Honeywell HN35080200 NVR via binary diffing. Not validated on other models
+# or on real casework by this project.
+HW_REC_HEADER_SIZE = 20                  # §5.4.6: 20-byte "Custom Header" before each NAL record
+HW_REC_TYPE_IDR = 0x82                   # §5.4.6: 0x82 = IDR frame record
+HW_REC_TYPE_NONIDR = 0x02                # §5.4.6: 0x02 = non-IDR frame record
+HW_REC_FIXED = b"\x80\x01\x00"           # §5.4.6: fixed 3 bytes after the type byte
+# header: [0]=type [1:4]=80 01 00 [4:6]=width u16 [6:8]=height u16 [8:12]=length u32 [12:20]=Unix time µs u64 (LE)
+HW_REC_MIN_DIM = 64
+HW_REC_MAX_DIM = 16384
+HW_REC_MAX_PAYLOAD = 32 * 1024 * 1024    # Proposed sanity cap
+HW_END_OF_CHANNEL_DELIMITER = b"\x00" * 20   # §5.4.6: 20 zero bytes end each channel's data
+HW_VIDEO_DATA_OFFSET = 0x80000000        # §5.4.1/§5.4.6: video region offset within partition 1 (this model)
+HW_GPT_SECTOR = 512
+HW_MAX_TS_BACKSTEP_US = 1_000_000        # Proposed: timestamps in a stream may not go back by >1 s
+HW_DETECT_REGION_BYTES = 64 * 1024 * 1024
+HW_DETECT_WHOLE_IMAGE_MAX = 256 * 1024 * 1024
+HW_DETECT_MIN_RECORDS = 3                # Proposed: consecutive valid records to believe a Honeywell stream

@@ -43,8 +43,19 @@ from backend.plugins.constants import (
 
 log = logging.getLogger(__name__)
 
+# Brands recovered by standards-based stream carving (no timestamps available)
+_STREAM_CARVED_BRANDS = ("hikvision", "generic")
+
 # Minimum frames for a segment to be PARTIAL instead of UNCERTAIN
 _MIN_FRAMES_FOR_PARTIAL = 2
+
+
+def _group_by_camera_and_stream(frames: list[RawFrame]) -> dict[tuple[int, int], list[RawFrame]]:
+    """Partition by (camera, stream_id) so distinct on-disk streams never interleave."""
+    groups: dict[tuple[int, int], list[RawFrame]] = defaultdict(list)
+    for f in frames:
+        groups[(f.camera, f.stream_id)].append(f)
+    return dict(groups)
 
 
 def group_by_camera(frames: list[RawFrame]) -> dict[int, list[RawFrame]]:
@@ -101,8 +112,8 @@ def split_on_gaps(frames: list[RawFrame]) -> list[list[RawFrame]]:
             # Stream-carved Hikvision units carry no timestamps; they belong to the
             # same recording exactly when they are byte-contiguous on disk.
             contiguous_stream = (
-                prev.brand == "hikvision"
-                and curr.brand == "hikvision"
+                prev.brand in _STREAM_CARVED_BRANDS
+                and curr.brand == prev.brand
                 and prev.disk_offset_end == curr.disk_offset
             )
             new_session = not contiguous_stream
@@ -166,7 +177,7 @@ def _label_session(session: list[RawFrame], evidence_id: str) -> Segment:
     has_gaps = len(session) < 2
     any_no_timestamp = any(f.timestamp is None for f in session)
     # Carving methods whose output has not been verified against real hardware.
-    from_experimental_brand = brand in ("hikvision", "cpplus")
+    from_experimental_brand = brand in ("hikvision", "generic", "cpplus", "honeywell")
 
     if from_experimental_brand:
         # Experimental carving is always UNCERTAIN until independently verified.
@@ -179,6 +190,24 @@ def _label_session(session: list[RawFrame], evidence_id: str) -> Segment:
                 "time range or true camera number is available. UNCERTAIN until "
                 "export and ffprobe confirm the bytes decode (then PARTIAL). "
                 "See docs/format_sheets/hikvision.md §4."
+            )
+        elif brand == "generic":
+            notes = (
+                "Generic stream carving (brand not identified): a contiguous MPEG-PS / "
+                "H.264 Annex B stream was located and its standard structure validated. "
+                "No recorder-specific layout was used, so no timestamps or camera number "
+                "are available. UNCERTAIN until export and ffprobe confirm the bytes "
+                "decode (then PARTIAL)."
+            )
+        elif brand == "honeywell":
+            notes = (
+                "Honeywell record carving (layout from Yoon & Hwang, arXiv:2605.07430, one "
+                "device model): 20-byte record headers and H.264 payloads were located; "
+                "timestamps come from the record headers. The camera channel is not "
+                "recoverable without the Video Channel List, so each on-disk stream is "
+                "reported separately as camera 0. Not validated on real Honeywell "
+                "hardware: UNCERTAIN until export and ffprobe confirm the bytes decode "
+                "(then PARTIAL)."
             )
         else:
             notes = (
@@ -222,10 +251,10 @@ def label_all(
     if not frames:
         return []
 
-    by_camera = group_by_camera(frames)
+    by_camera = _group_by_camera_and_stream(frames)
     segments: list[Segment] = []
 
-    for camera_id, cam_frames in sorted(by_camera.items()):
+    for (camera_id, _stream_id), cam_frames in sorted(by_camera.items()):
         sorted_frames = sort_by_time(cam_frames)
         sessions = split_on_gaps(sorted_frames)
         for session in sessions:

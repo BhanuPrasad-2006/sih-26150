@@ -185,8 +185,8 @@ async function renderRecordingsScreen(params) {
       <p style="font-size:12px; color:var(--text-dim); margin:0 0 12px; line-height:1.6;">
         Optional: upload a reference photo to search for similar faces across every segment above that has
         already been checked with "Check Faces". <strong>Results are similarity candidates for human review,
-        not confirmed identity matches</strong> — this project's own testing found two different synthetic
-        faces scoring above the reference threshold shown in results. Always corroborate independently.
+        not confirmed identity matches</strong> — different people can score above the reference threshold
+        shown in results. Always corroborate independently.
       </p>
       <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
         <input type="file" id="face-search-input" accept="image/*" class="form-control" style="max-width:320px;">

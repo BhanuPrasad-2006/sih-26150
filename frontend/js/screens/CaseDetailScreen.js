@@ -81,21 +81,61 @@ async function renderCaseDetailScreen(params) {
 
   // ── Load evidence modal ────────────────────────────────────────────────────
   document.getElementById('btn-add-evidence').onclick = () => {
+    let selectedFile = null;
+
     showModal(
       'Load Raw Disk Image (.dd / .img)',
       `
         <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px; line-height:1.6;">
-          Enter the absolute path to a raw disk image on localhost.<br>
-          <em style="color:var(--text-dim);">Physical drives (\\.\PhysicalDriveN) are rejected to protect live data.</em>
+          Attach evidence by choosing a file from your computer or by specifying an existing file path.<br>
+          <em style="color:var(--text-dim);">Physical drives (\\\\.\\PhysicalDriveN) are rejected to protect live data.</em>
         </p>
+
         <div class="form-group">
           <label>Evidence Label</label>
           <input type="text" id="modal-ev-label" class="form-control" value="EVID-00${evidence.length + 1}">
         </div>
-        <div class="form-group">
-          <label>Image File Path (.dd / .img / .raw)</label>
-          <input type="text" id="modal-ev-path" class="form-control" placeholder="C:\\path\\to\\synthetic_dahua.dd">
+
+        <div style="background:var(--bg-surface-2, rgba(255,255,255,0.03)); border:1px solid var(--border-color, rgba(255,255,255,0.08)); border-radius:8px; padding:16px; margin-bottom:16px;">
+          <!-- Option 1: Choose File -->
+          <div class="form-group" style="margin-bottom:14px;">
+            <label style="font-weight:600; display:flex; align-items:center; gap:6px; margin-bottom:8px;">
+              <span>📁</span> Option 1: Choose File from Computer
+            </label>
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+              <input type="file" id="modal-ev-file-input" accept=".dd,.img,.raw,.bin,.001,.iso,*" style="display:none;">
+              <button type="button" id="modal-ev-browse-btn" class="btn btn-secondary" style="display:inline-flex; align-items:center; gap:6px;">
+                📂 Choose File...
+              </button>
+              <span id="modal-ev-file-name" style="font-size:13px; color:var(--text-muted); max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                No file chosen
+              </span>
+              <button type="button" id="modal-ev-file-clear" class="btn btn-sm btn-secondary" style="display:none; padding:2px 8px; font-size:12px;" title="Clear selected file">✕</button>
+            </div>
+            <p style="font-size:12px; color:var(--text-dim); margin-top:6px; margin-bottom:0;">
+              Select a raw image (.dd, .img, .raw, etc.) to upload directly to case storage.
+            </p>
+          </div>
+
+          <!-- Divider -->
+          <div style="display:flex; align-items:center; gap:12px; margin:14px 0;">
+            <div style="flex:1; height:1px; background:var(--border-color, rgba(255,255,255,0.1));"></div>
+            <span style="font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--text-dim); font-weight:700;">OR</span>
+            <div style="flex:1; height:1px; background:var(--border-color, rgba(255,255,255,0.1));"></div>
+          </div>
+
+          <!-- Option 2: File Path -->
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-weight:600; display:flex; align-items:center; gap:6px; margin-bottom:8px;">
+              <span>💻</span> Option 2: Local Server File Path
+            </label>
+            <input type="text" id="modal-ev-path" class="form-control" placeholder="C:\\path\\to\\evidence_image.dd">
+            <p style="font-size:12px; color:var(--text-dim); margin-top:6px; margin-bottom:0;">
+              Enter absolute path on this machine (recommended for large multi-GB / TB images).
+            </p>
+          </div>
         </div>
+
         <div class="form-group">
           <label>Device Clock Offset from UTC (optional)</label>
           <input type="number" id="modal-ev-tz-offset" class="form-control" placeholder="e.g. 330 for IST (UTC+5:30)" step="1" min="-720" max="840">
@@ -106,7 +146,18 @@ async function renderCaseDetailScreen(params) {
             cross-camera/cross-device correlation and reporting.
           </p>
         </div>
-        <div id="modal-ev-error" style="display:none;" class="error-inline">
+
+        <div id="modal-ev-progress-box" style="display:none; margin-top:14px; padding:10px; background:var(--bg-surface-3, rgba(255,255,255,0.04)); border-radius:6px; border:1px solid var(--border-color, rgba(255,255,255,0.08));">
+          <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:6px; color:var(--text-muted);">
+            <span id="modal-ev-progress-status">Uploading evidence file...</span>
+            <span id="modal-ev-progress-pct" style="font-weight:600;">0%</span>
+          </div>
+          <div style="background:rgba(255,255,255,0.1); height:8px; border-radius:4px; overflow:hidden;">
+            <div id="modal-ev-progress-bar" style="background:var(--color-primary, #2563eb); height:100%; width:0%; transition:width 0.2s;"></div>
+          </div>
+        </div>
+
+        <div id="modal-ev-error" style="display:none; margin-top:12px;" class="error-inline">
           <span>⚠️</span><span id="modal-ev-error-msg"></span>
         </div>
       `,
@@ -115,6 +166,7 @@ async function renderCaseDetailScreen(params) {
         {
           label: 'Load & Calculate Hashes',
           class: 'btn-primary',
+          autoClose: false,
           onClick: async () => {
             const label = document.getElementById('modal-ev-label').value.trim();
             const path = document.getElementById('modal-ev-path').value.trim();
@@ -122,9 +174,12 @@ async function renderCaseDetailScreen(params) {
             const tzOffset = tzOffsetRaw === '' ? null : parseInt(tzOffsetRaw, 10);
             const errDiv = document.getElementById('modal-ev-error');
             const errMsgEl = document.getElementById('modal-ev-error-msg');
+            const submitBtn = document.getElementById('modal-btn-1');
 
-            if (!path) {
-              errMsgEl.textContent = 'A file path is required.';
+            errDiv.style.display = 'none';
+
+            if (!selectedFile && !path) {
+              errMsgEl.textContent = 'Please choose a file or enter an image file path.';
               errDiv.style.display = 'flex';
               return;
             }
@@ -135,17 +190,103 @@ async function renderCaseDetailScreen(params) {
             }
 
             try {
-              const ev = await API.addEvidence(caseId, path, label, tzOffset);
+              let ev;
+              if (selectedFile) {
+                const progressBox = document.getElementById('modal-ev-progress-box');
+                const progressStatus = document.getElementById('modal-ev-progress-status');
+                const progressPct = document.getElementById('modal-ev-progress-pct');
+                const progressBar = document.getElementById('modal-ev-progress-bar');
+
+                progressBox.style.display = 'block';
+                if (submitBtn) {
+                  submitBtn.disabled = true;
+                  submitBtn.textContent = 'Uploading...';
+                }
+
+                ev = await API.uploadEvidence(caseId, selectedFile, tzOffset, (pct, loaded, total) => {
+                  progressBar.style.width = pct + '%';
+                  progressPct.textContent = pct + '%';
+                  const mbLoaded = (loaded / (1024 * 1024)).toFixed(1);
+                  const mbTotal = (total / (1024 * 1024)).toFixed(1);
+                  progressStatus.textContent = `Uploading: ${mbLoaded} MB / ${mbTotal} MB...`;
+                  if (pct >= 100) {
+                    progressStatus.textContent = 'Upload complete. Calculating hashes...';
+                  }
+                });
+              } else {
+                if (submitBtn) {
+                  submitBtn.disabled = true;
+                  submitBtn.textContent = 'Loading...';
+                }
+                ev = await API.addEvidence(caseId, path, label, tzOffset);
+              }
+
+              closeModal();
               navigateTo('evidence-scan', { caseId, evidenceId: ev.evidence_id || ev.id });
             } catch (err) {
-              // Show error inside modal, not a second modal
-              errMsgEl.textContent = err.message;
+              errMsgEl.textContent = err.message || 'Failed to load evidence image';
               errDiv.style.display = 'flex';
+              const progressBox = document.getElementById('modal-ev-progress-box');
+              if (progressBox) progressBox.style.display = 'none';
+              if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Load & Calculate Hashes';
+              }
             }
           }
         }
       ]
     );
+
+    // Wire up file picker controls
+    const fileInput = document.getElementById('modal-ev-file-input');
+    const browseBtn = document.getElementById('modal-ev-browse-btn');
+    const fileNameSpan = document.getElementById('modal-ev-file-name');
+    const fileClearBtn = document.getElementById('modal-ev-file-clear');
+    const pathInput = document.getElementById('modal-ev-path');
+
+    if (browseBtn && fileInput) {
+      browseBtn.onclick = () => fileInput.click();
+    }
+
+    if (fileInput) {
+      fileInput.onchange = (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (file) {
+          selectedFile = file;
+          const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+          fileNameSpan.textContent = `${file.name} (${sizeMb} MB)`;
+          fileNameSpan.style.color = 'var(--text-bright, #fff)';
+          fileNameSpan.style.fontWeight = '500';
+          fileClearBtn.style.display = 'inline-block';
+          if (pathInput) pathInput.value = '';
+        }
+      };
+    }
+
+    if (fileClearBtn) {
+      fileClearBtn.onclick = () => {
+        selectedFile = null;
+        if (fileInput) fileInput.value = '';
+        fileNameSpan.textContent = 'No file chosen';
+        fileNameSpan.style.color = 'var(--text-muted)';
+        fileNameSpan.style.fontWeight = 'normal';
+        fileClearBtn.style.display = 'none';
+      };
+    }
+
+    if (pathInput) {
+      pathInput.oninput = () => {
+        if (pathInput.value.trim() && selectedFile) {
+          selectedFile = null;
+          if (fileInput) fileInput.value = '';
+          fileNameSpan.textContent = 'No file chosen';
+          fileNameSpan.style.color = 'var(--text-muted)';
+          fileNameSpan.style.fontWeight = 'normal';
+          fileClearBtn.style.display = 'none';
+        }
+      };
+    }
   };
 }
 

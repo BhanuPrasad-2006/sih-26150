@@ -323,3 +323,39 @@ if __name__ == "__main__":
     generate_all(out_dir)
     print("\nDone.")
 
+
+
+# ── Honeywell record builders (layout: arXiv:2605.07430 §5.4.6) ───────────────
+
+def make_honeywell_record(payload: bytes, idr: bool, ts_us: int, width: int = 1920, height: int = 1080) -> bytes:
+    """One 20-byte Honeywell 'Custom Header' + Annex B payload."""
+    header = bytes([0x82 if idr else 0x02]) + b"\x80\x01\x00" + struct.pack("<HHIQ", width, height, len(payload), ts_us)
+    return header + payload
+
+
+def build_honeywell_stream(payloads: list[tuple[bytes, bool]], start_ts_us: int, interval_us: int = 100_000,
+                           width: int = 1920, height: int = 1080) -> bytes:
+    """Consecutive records followed by the 20-zero-byte End-of-Channel delimiter."""
+    out = bytearray()
+    for i, (payload, idr) in enumerate(payloads):
+        out += make_honeywell_record(payload, idr, start_ts_us + i * interval_us, width, height)
+    out += b"\x00" * 20
+    return bytes(out)
+
+
+def build_gpt_header_image(first_lba: int = 40, total_sectors: int = 4096) -> bytearray:
+    """Minimal protective MBR + GPT header + one partition entry (partition 1 at *first_lba*)."""
+    img = bytearray(total_sectors * 512)
+    img[510:512] = b"\x55\xAA"
+    hdr = bytearray(92)
+    hdr[0:8] = b"EFI PART"
+    struct.pack_into("<Q", hdr, 72, 2)     # partition entries start at LBA 2
+    struct.pack_into("<I", hdr, 80, 128)   # number of entries
+    struct.pack_into("<I", hdr, 84, 128)   # entry size
+    img[512:512 + 92] = hdr
+    entry = bytearray(128)
+    entry[0:16] = bytes(range(1, 17))      # non-zero type GUID
+    struct.pack_into("<Q", entry, 32, first_lba)
+    struct.pack_into("<Q", entry, 40, total_sectors - 1)
+    img[1024:1024 + 128] = entry
+    return img

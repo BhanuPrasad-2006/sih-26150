@@ -212,3 +212,187 @@ def test_hikvision_real_video_through_api(auth_client, temp_dir):
     assert "error" not in body["detail"], body["detail"]
     assert body["detail"]["ffprobe_valid"] is True
     assert body["segment"]["status"] == "PARTIAL"
+
+
+def test_upload_evidence_endpoint(auth_client, temp_dir):
+    """
+    Test POST /api/cases/{case_id}/evidence/upload saves the uploaded file
+    and returns a valid Evidence object.
+    """
+    import os
+    case_res = auth_client.post("/api/cases", json={
+        "case_number": "UPLOAD-TEST-001", "examiner": "Examiner Bhanu", "notes": ""
+    })
+    assert case_res.status_code == 200
+    case_id = case_res.json()["case_id"]
+
+    dummy_content = b"DUMMY_RAW_EVIDENCE_BYTES_12345"
+    files = {"file": ("test_sample.raw", dummy_content, "application/octet-stream")}
+    data = {"device_utc_offset_minutes": "330"}
+
+    up_res = auth_client.post(f"/api/cases/{case_id}/evidence/upload", files=files, data=data)
+    assert up_res.status_code == 200, up_res.text
+    ev_data = up_res.json()
+
+    assert "evidence_id" in ev_data
+    assert ev_data["case_id"] == case_id
+    assert ev_data["device_utc_offset_minutes"] == 330
+    assert os.path.exists(ev_data["path"])
+    with open(ev_data["path"], "rb") as f:
+        assert f.read() == dummy_content
+
+    # Confirm case evidence list now includes the uploaded evidence
+    case_detail = auth_client.get(f"/api/cases/{case_id}").json()
+    assert len(case_detail["evidence"]) == 1
+    assert case_detail["evidence"][0]["evidence_id"] == ev_data["evidence_id"]
+
+
+# ── Verify integrity survives a server restart, and detects tampering ────────
+
+def _wait_for_segments(client, case_id, timeout_s=10.0):
+    end = time.time() + timeout_s
+    while time.time() < end:
+        segs = client.get(f"/api/cases/{case_id}/segments").json()
+        if segs:
+            return segs
+        time.sleep(0.1)
+    return []
+
+
+def _wait_scan_finished(client, case_id, timeout_s=10.0):
+    end = time.time() + timeout_s
+    while time.time() < end:
+        ev = client.get(f"/api/cases/{case_id}").json()["evidence"][0]
+        if ev.get("sha256_after"):
+            return ev
+        time.sleep(0.1)
+    return client.get(f"/api/cases/{case_id}").json()["evidence"][0]
+
+
+def test_verify_works_without_in_memory_image_and_detects_tampering(auth_client, dahua_img_path):
+    import backend.main as main_mod
+
+    case_id = auth_client.post("/api/cases", json={
+        "case_number": "VERIFY-RESTART-001", "examiner": "Inspector Test", "notes": "",
+    }).json()["case_id"]
+    auth_client.post(f"/api/cases/{case_id}/evidence", json={"path": dahua_img_path})
+    auth_client.post(f"/api/cases/{case_id}/scan")
+    _wait_scan_finished(auth_client, case_id)
+
+    # Simulate a server restart: the in-memory image handles are gone.
+    main_mod._open_images.clear()
+    ok = auth_client.get(f"/api/cases/{case_id}/verify")
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["unchanged"] is True
+
+    # Tamper with the evidence file: verify must now report a change.
+    with open(dahua_img_path, "r+b") as f:
+        f.seek(4)
+        f.write(b"\xFF\xFE")
+    bad = auth_client.get(f"/api/cases/{case_id}/verify")
+    assert bad.status_code == 200, bad.text
+    assert bad.json()["unchanged"] is False
+
+
+def test_verify_before_any_evidence_is_a_clean_400(auth_client):
+    case_id = auth_client.post("/api/cases", json={
+        "case_number": "VERIFY-NOEV-001", "examiner": "Inspector Test", "notes": "",
+    }).json()["case_id"]
+    res = auth_client.get(f"/api/cases/{case_id}/verify")
+    assert res.status_code == 400
+
+
+# ── Generic fallback for unidentified recorders ──────────────────────────────
+
+def _make_real_h264(temp_dir):
+    import os
+    import subprocess
+
+    from backend.exporter import ffmpeg_available, ffprobe_available
+
+    if not (ffmpeg_available() and ffprobe_available()):
+        pytest.skip("ffmpeg/ffprobe not on PATH")
+    p = os.path.join(temp_dir, "gen.h264")
+    subprocess.run(
+        ["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=duration=1:size=320x240:rate=10",
+         "-c:v", "libx264", "-profile:v", "baseline", "-pix_fmt", "yuv420p", "-f", "h264", p],
+        check=True,
+    )
+    return open(p, "rb").read()
+
+
+def test_unidentified_recorder_uses_generic_stream_carving(auth_client, temp_dir):
+    import os
+
+    stream = _make_real_h264(temp_dir)
+    disk_path = os.path.join(temp_dir, "unknown_recorder.dd")
+    with open(disk_path, "wb") as f:
+        f.write(b"\xCC" * 8192 + stream + b"\xCC" * 8192)   # no brand marker anywhere
+
+    case_id = auth_client.post("/api/cases", json={
+        "case_number": "GENERIC-001", "examiner": "Inspector Test", "notes": "",
+    }).json()["case_id"]
+    auth_client.post(f"/api/cases/{case_id}/evidence", json={"path": disk_path})
+    auth_client.post(f"/api/cases/{case_id}/scan")
+
+    segments = _wait_for_segments(auth_client, case_id)
+    assert len(segments) == 1
+    ev = auth_client.get(f"/api/cases/{case_id}").json()["evidence"][0]
+    assert "generic stream carving" in ev["brand"].lower()
+
+    exp = auth_client.post(f"/api/cases/{case_id}/export/{segments[0]['segment_id']}")
+    assert exp.status_code == 200, exp.text
+    assert exp.json()["detail"]["ffprobe_valid"] is True
+    assert exp.json()["segment"]["status"] == "PARTIAL"
+
+
+def test_unidentified_recorder_without_video_recovers_nothing(auth_client, temp_dir):
+    import os
+
+    disk_path = os.path.join(temp_dir, "noise.dd")
+    with open(disk_path, "wb") as f:
+        f.write(os.urandom(256 * 1024))
+    case_id = auth_client.post("/api/cases", json={
+        "case_number": "GENERIC-NONE-001", "examiner": "Inspector Test", "notes": "",
+    }).json()["case_id"]
+    auth_client.post(f"/api/cases/{case_id}/evidence", json={"path": disk_path})
+    auth_client.post(f"/api/cases/{case_id}/scan")
+    time.sleep(1.5)
+    assert auth_client.get(f"/api/cases/{case_id}/segments").json() == []
+
+
+# ── Evidence upload ──────────────────────────────────────────────────────────
+
+def test_upload_evidence_stores_file_and_sanitises_name(auth_client):
+    case_id = auth_client.post("/api/cases", json={
+        "case_number": "UPLOAD-001", "examiner": "Inspector Test", "notes": "",
+    }).json()["case_id"]
+    payload = b"\xCC" * 4096
+    res = auth_client.post(
+        f"/api/cases/{case_id}/evidence/upload",
+        files={"file": ("..\\..\\evil name?.dd", payload, "application/octet-stream")},
+        data={"device_utc_offset_minutes": "330"},
+    )
+    assert res.status_code == 200, res.text
+    body = res.json()
+    import os
+    stored = body["path"]
+    assert os.path.isfile(stored)
+    assert open(stored, "rb").read() == payload
+    name = os.path.basename(stored)
+    assert "?" not in name and "/" not in name and "\\" not in name   # odd characters neutralised
+    assert os.path.dirname(os.path.abspath(stored)).endswith(os.path.join(case_id, "evidence"))  # no traversal out of the case dir
+    assert body["device_utc_offset_minutes"] == 330
+
+
+def test_upload_evidence_rejects_bad_offset_and_unknown_case(auth_client):
+    case_id = auth_client.post("/api/cases", json={
+        "case_number": "UPLOAD-002", "examiner": "Inspector Test", "notes": "",
+    }).json()["case_id"]
+    bad = auth_client.post(f"/api/cases/{case_id}/evidence/upload",
+                           files={"file": ("a.dd", b"x", "application/octet-stream")},
+                           data={"device_utc_offset_minutes": "9999"})
+    assert bad.status_code == 400
+    missing = auth_client.post("/api/cases/does-not-exist/evidence/upload",
+                               files={"file": ("a.dd", b"x", "application/octet-stream")})
+    assert missing.status_code == 404

@@ -7,6 +7,10 @@
  */
 function renderHeader(breadcrumbs = []) {
   const root = document.getElementById('header-root');
+  const host = window.location.hostname || '127.0.0.1';
+  const isLocal = host === '127.0.0.1' || host === 'localhost';
+  const hostLabel = isLocal ? '127.0.0.1' : `${host}`;
+
   root.innerHTML = `
     <div class="logo-area">
       <div class="logo-icon">SIH</div>
@@ -16,10 +20,9 @@ function renderHeader(breadcrumbs = []) {
       </div>
     </div>
     <div class="header-meta">
-      <div class="synthetic-banner-header">⚠️ SYNTHETIC DATA MODE</div>
       <div style="font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
         <span style="width: 7px; height: 7px; border-radius: 50%; background: var(--status-complete); display: inline-block; box-shadow: 0 0 6px var(--status-complete);"></span>
-        127.0.0.1
+        ${hostLabel}
       </div>
     </div>
   `;
