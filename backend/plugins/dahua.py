@@ -11,10 +11,17 @@ What is implemented in v1:
 
 Carving algorithm:
   1. Use mm.find(b'DHAV', search_from) — C-speed search, no Python byte loops.
-  2. For each hit, read and validate the 40-byte header.
-  3. Confirm the footer (b'dhav' + repeated length) at the expected position.
+  2. For each hit, read and validate the (variable-length) header.
+  3. Confirm the trailer (b'dhav' + repeated length) at the expected position
+     (a carving-precision heuristic — see constants.py DHAV_TRAILER_MAGIC).
   4. If all checks pass, emit a RawFrame.
   5. Advance search_from past this frame; on failure advance by 4 (past the marker).
+
+2026-09 correction: the header/type constants used here were re-derived from
+FFmpeg's actual libavformat/dhav.c source after an end-to-end test with a real
+H.264 recording proved the previous constants wrong (frame-type mapping was
+backwards, channel field was the wrong width, header size was wrongly assumed
+fixed). See constants.py and docs/format_sheets/dahua.md §2 for details.
 
 Sources:
   [FFmpeg-dhav]  FFmpeg libavformat/dhav.c
@@ -26,30 +33,32 @@ from __future__ import annotations
 
 import logging
 import struct
-import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Callable, Optional, TYPE_CHECKING
 
 from backend.models import LogEvent, RawFrame
 from backend.plugins.base import BrandPlugin
 from backend.plugins.constants import (
     CPPLUS_IDENTIFYING_MARKERS,
-    DHAV_FOOTER_MAGIC,
-    DHAV_FOOTER_OFF_LENGTH,
-    DHAV_FOOTER_SIZE,
+    DHAV_DATE_YEAR_MIN,
+    DHAV_EXT_HEADER_SIZE,
+    DHAV_FIXED_HEADER_SIZE,
     DHAV_HEADER_MAGIC,
-    DHAV_HEADER_SIZE,
     DHAV_MAX_CHANNEL,
     DHAV_MAX_FRAME_BYTES,
     DHAV_MIN_FRAME_BYTES,
+    DHAV_MIN_HEADER_SIZE,
     DHAV_OFF_CHANNEL,
+    DHAV_OFF_DATE,
+    DHAV_OFF_EXT_LENGTH,
     DHAV_OFF_FRAME_TYPE,
     DHAV_OFF_SEQUENCE,
-    DHAV_OFF_TIMESTAMP_MS,
-    DHAV_OFF_TIMESTAMP_S,
     DHAV_OFF_TOTAL_SIZE,
-    DHAV_TS_MIN_UNIX,
-    DHAV_TYPE_VIDEO_IFRAME,
+    DHAV_TRAILER_MAGIC,
+    DHAV_TRAILER_OFF_LENGTH,
+    DHAV_TRAILER_SIZE,
+    DHAV_TYPE_PARTIAL,
+    DHAV_TYPE_VIDEO_KEYFRAME,
     DHAV_VALID_FRAME_TYPES,
 )
 
@@ -181,82 +190,107 @@ class DahuaPlugin(BrandPlugin):
 
 # ── Frame validation ──────────────────────────────────────────────────────────
 
+def _decode_dhav_date(raw: int) -> Optional[datetime]:
+    """
+    Decode DHAV's packed-bitfield date (offset 0x10). This is NOT a Unix
+    epoch — it is a bit-packed calendar reading of the device's own clock:
+    sec[0:6] min[6:12] hour[12:17] day[17:22] month[22:26] year[26:32]+2000.
+    Verified against FFmpeg libavformat/dhav.c get_timeinfo().
+
+    Returns None if the bits don't form a valid calendar date/time (a cheap
+    extra rejection of coincidental "DHAV" matches in non-Dahua data, and of
+    a clock that was never set).
+    """
+    sec = raw & 0x3F
+    minute = (raw >> 6) & 0x3F
+    hour = (raw >> 12) & 0x1F
+    day = (raw >> 17) & 0x1F
+    month = (raw >> 22) & 0x0F
+    year = ((raw >> 26) & 0x3F) + 2000
+    try:
+        return datetime(year, month, day, hour, minute, sec, tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
 def _validate_dhav_frame(mm: object, pos: int, image_size: int) -> Optional[RawFrame]:
     """
     Validate a DHAV candidate at byte offset *pos*.
 
     Checks (per docs/format_sheets/dahua.md §2, PRD §5.6.1):
-      1. Enough bytes remain for a minimum header.
-      2. Frame type byte ∈ DHAV_VALID_FRAME_TYPES.
-      3. Total frame length is plausible (DHAV_MIN_FRAME_BYTES – DHAV_MAX_FRAME_BYTES).
-      4. Frame does not extend past the end of the image.
-      5. Footer b'dhav' is at the expected position.
-      6. Footer length field equals the header length field.
-      7. Channel number ≤ DHAV_MAX_CHANNEL.
-      8. Timestamp is sane (not before 2000, not in the future).
+      1. Enough bytes remain for the minimum (non-partial) header.
+      2. Frame type byte ∈ DHAV_VALID_FRAME_TYPES, and not the "partial"
+         continuation type (0xF1), which carries no independent payload.
+      3. Channel number ≤ DHAV_MAX_CHANNEL.
+      4. Total frame length is plausible (DHAV_MIN_FRAME_BYTES – DHAV_MAX_FRAME_BYTES).
+      5. Frame does not extend past the end of the image.
+      6. Packed date bitfield decodes to a sane calendar timestamp
+         (not before DHAV_DATE_YEAR_MIN, not more than 1 day in the future).
+      7. Trailer b'dhav' + repeated length is at the expected position
+         (carving-precision heuristic — see constants.py DHAV_TRAILER_MAGIC).
 
     Returns a RawFrame on success, None on any failure.
     """
     try:
-        # Bounds: we need at least DHAV_HEADER_SIZE bytes
-        if pos + DHAV_HEADER_SIZE > image_size:
+        # Bounds: we need at least the minimum (non-partial) header
+        if pos + DHAV_MIN_HEADER_SIZE > image_size:
             return None
 
-        header = mm[pos : pos + DHAV_HEADER_SIZE]
+        header = mm[pos : pos + DHAV_MIN_HEADER_SIZE]
 
         # 1. Magic already matched by mmap.find — double-check for safety
         if header[:4] != DHAV_HEADER_MAGIC:
             return None
 
-        # 2. Frame type
+        # 2. Frame type — reject the partial/continuation marker (no payload)
         frame_type = header[DHAV_OFF_FRAME_TYPE]
-        if frame_type not in DHAV_VALID_FRAME_TYPES:
+        if frame_type not in DHAV_VALID_FRAME_TYPES or frame_type == DHAV_TYPE_PARTIAL:
             return None
 
-        # 3. Total frame size
-        total_size = struct.unpack_from("<I", header, DHAV_OFF_TOTAL_SIZE)[0]
-        if not (DHAV_MIN_FRAME_BYTES <= total_size <= DHAV_MAX_FRAME_BYTES):
-            return None
-
-        # 4. Frame fits in image
-        if pos + total_size > image_size:
-            return None
-
-        # 5 & 6. Footer validation
-        footer_pos = pos + total_size - DHAV_FOOTER_SIZE
-        footer = mm[footer_pos : footer_pos + DHAV_FOOTER_SIZE]
-        if len(footer) < DHAV_FOOTER_SIZE:
-            return None
-        if footer[:4] != DHAV_FOOTER_MAGIC:
-            return None
-        footer_length = struct.unpack_from("<I", footer, DHAV_FOOTER_OFF_LENGTH)[0]
-        if footer_length != total_size:
-            return None
-
-        # 7. Channel
-        channel = struct.unpack_from("<H", header, DHAV_OFF_CHANNEL)[0]
+        # 3. Channel (1 byte — NOT 2, corrected 2026-09)
+        channel = header[DHAV_OFF_CHANNEL]
         if channel > DHAV_MAX_CHANNEL:
             return None
 
-        # 8. Timestamp sanity
-        ts_seconds = struct.unpack_from("<I", header, DHAV_OFF_TIMESTAMP_S)[0]
-        ts_ms       = struct.unpack_from("<H", header, DHAV_OFF_TIMESTAMP_MS)[0]
-        now_unix    = int(time.time())
-        if ts_seconds < DHAV_TS_MIN_UNIX:
+        # 4. Total frame size
+        total_size = struct.unpack_from("<I", header, DHAV_OFF_TOTAL_SIZE)[0]
+        if not (DHAV_MIN_FRAME_BYTES <= total_size <= DHAV_MAX_FRAME_BYTES):
             return None
-        if ts_seconds > now_unix + 86400:  # more than 1 day in the future
+        ext_length = header[DHAV_OFF_EXT_LENGTH]
+        if DHAV_MIN_HEADER_SIZE + ext_length + DHAV_TRAILER_SIZE > total_size:
             return None
 
-        # Build timestamp (assumed UTC; epoch and timezone are Proposed)
-        try:
-            timestamp = datetime.fromtimestamp(ts_seconds, tz=timezone.utc).replace(
-                microsecond=ts_ms * 1000
-            )
-        except (OSError, OverflowError, ValueError):
+        # 5. Frame fits in image
+        if pos + total_size > image_size:
+            return None
+
+        # 6. Packed date/time sanity
+        date_raw = struct.unpack_from("<I", header, DHAV_OFF_DATE)[0]
+        timestamp = _decode_dhav_date(date_raw)
+        if timestamp is None:
+            return None
+        if timestamp.year < DHAV_DATE_YEAR_MIN:
+            return None
+        if timestamp > datetime.now(tz=timezone.utc) + timedelta(days=1):
+            return None
+        # Sub-second field (offset 0x14): meaning is approximate (not
+        # strictly milliseconds) — clamp so datetime.replace() never raises.
+        subsecond = struct.unpack_from("<H", header, DHAV_FIXED_HEADER_SIZE)[0]
+        timestamp = timestamp.replace(microsecond=min(subsecond, 999) * 1000)
+
+        # 7. Trailer validation (carving-precision heuristic)
+        trailer_pos = pos + total_size - DHAV_TRAILER_SIZE
+        trailer = mm[trailer_pos : trailer_pos + DHAV_TRAILER_SIZE]
+        if len(trailer) < DHAV_TRAILER_SIZE:
+            return None
+        if trailer[:4] != DHAV_TRAILER_MAGIC:
+            return None
+        trailer_length = struct.unpack_from("<I", trailer, DHAV_TRAILER_OFF_LENGTH)[0]
+        if trailer_length != total_size:
             return None
 
         sequence = struct.unpack_from("<I", header, DHAV_OFF_SEQUENCE)[0]
-        is_keyframe = frame_type == DHAV_TYPE_VIDEO_IFRAME
+        is_keyframe = frame_type == DHAV_TYPE_VIDEO_KEYFRAME
 
         return RawFrame(
             brand="dahua",

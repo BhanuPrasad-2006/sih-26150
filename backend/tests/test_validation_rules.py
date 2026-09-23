@@ -16,13 +16,7 @@ from backend.acquisition import EvidenceImage, load_disk_image, verify_disk_imag
 from backend.plugins.dahua import DahuaPlugin, _validate_dhav_frame
 from backend.plugins.hikvision import HikvisionPlugin
 from backend.plugins.unknown import UnknownPlugin
-from backend.plugins.constants import (
-    DHAV_HEADER_MAGIC,
-    DHAV_FOOTER_MAGIC,
-    DHAV_HEADER_SIZE,
-    DHAV_FOOTER_SIZE,
-    DHAV_TYPE_VIDEO_IFRAME,
-)
+from backend.plugins.constants import DHAV_TRAILER_SIZE
 from backend.models import RawFrame, Segment, SegmentStatus, Case, Evidence, DiskOffset
 from backend.reconstructor import label_all, reconstruct_segments
 from backend.exporter import export_segment, ffmpeg_available, ffprobe_available, ffprobe_check
@@ -317,8 +311,9 @@ def test_exporter_frame_header_timestamps_and_h264_remux(temp_dir):
         ts_seconds=ts_seconds,
         payload_size=len(h264_bytes)
     )
-    # Inject actual H.264 stream into payload area
-    payload_offset = DHAV_HEADER_SIZE
+    # Inject actual H.264 stream into payload area (header is variable-length;
+    # payload sits between the header and the fixed-size trailer)
+    payload_offset = len(dhav_frame) - len(h264_bytes) - DHAV_TRAILER_SIZE
     dhav_frame_bytes = bytearray(dhav_frame)
     dhav_frame_bytes[payload_offset : payload_offset + len(h264_bytes)] = h264_bytes
 

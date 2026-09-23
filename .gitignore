@@ -50,3 +50,4 @@ reports/
 # Temporary / scratch
 scratch/
 tmp/
+backend/tests/manual/_scratch/

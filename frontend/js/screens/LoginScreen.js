@@ -12,25 +12,58 @@
  *   • The UI intentionally provides no "username" field — single examiner tool.
  */
 
-function renderSetupScreen() {
-  const root = document.getElementById('content-root');
-  // Hide sidebar and header nav (not needed before auth)
+function _hideChromeForAuth() {
   const sidebar = document.getElementById('sidebar-root');
   const breadcrumb = document.getElementById('breadcrumb-strip');
+  const header = document.getElementById('header-root');
   if (sidebar) sidebar.style.display = 'none';
   if (breadcrumb) breadcrumb.style.display = 'none';
+  if (header) header.style.display = 'none';
+}
 
-  document.getElementById('header-root').innerHTML = `
-    <div class="logo-area" style="padding:0 24px;">
-      <span style="font-size:22px;">🔬</span>
-      <span style="font-weight:700; font-size:16px; margin-left:10px; color:var(--accent-cyan);">DVR/NVR Forensic Analysis Tool</span>
-      <span style="font-size:11px; color:var(--text-dim); margin-left:10px;">SIH26150 — NTRO</span>
+function _restoreChromeAfterAuth() {
+  const sidebar = document.getElementById('sidebar-root');
+  const breadcrumb = document.getElementById('breadcrumb-strip');
+  const header = document.getElementById('header-root');
+  if (sidebar) sidebar.style.display = '';
+  if (breadcrumb) breadcrumb.style.display = '';
+  if (header) header.style.display = '';
+}
+
+const _ICON_SHIELD = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.4 9 8 11 4.6-2 8-6 8-11V5l-8-3z"/><path d="m9 12 2 2 4-4"/></svg>`;
+const _ICON_LOCK = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>`;
+const _ICON_LOCK_PLUS = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><path d="M12 14v4M10 16h4"/></svg>`;
+const _ICON_WARN = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;flex:none;"><path d="M10.3 3.9 1.8 18a1 1 0 0 0 .9 1.5h18.6a1 1 0 0 0 .9-1.5L13.7 3.9a1 1 0 0 0-1.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg>`;
+const _ICON_BLOCK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;flex:none;"><circle cx="12" cy="12" r="9"/><path d="m5.5 5.5 13 13"/></svg>`;
+const _ICON_CHECK = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m20 6-11 11-5-5"/></svg>`;
+
+function _brandPanelHtml() {
+  return `
+    <div class="auth-brand-panel">
+      <div class="auth-brand-mesh"></div>
+      <div class="auth-brand-content">
+        <div class="auth-brand-badge">${_ICON_SHIELD}</div>
+        <div class="auth-brand-name">DVR/NVR Forensic<br>Analysis Tool</div>
+        <div class="auth-brand-tag">SIH26150 &middot; NTRO</div>
+        <ul class="auth-feature-list">
+          <li>${_ICON_CHECK}<span>Read-only evidence acquisition — the source disk image is never modified</span></li>
+          <li>${_ICON_CHECK}<span>Hash-chained, tamper-evident audit log of every action</span></li>
+          <li>${_ICON_CHECK}<span>Single-examiner access, bcrypt-hashed credentials, session lockout on repeated failures</span></li>
+        </ul>
+      </div>
     </div>`;
+}
+
+function renderSetupScreen() {
+  const root = document.getElementById('content-root');
+  _hideChromeForAuth();
 
   root.innerHTML = `
     <div class="auth-screen-wrapper">
+      ${_brandPanelHtml()}
+      <div class="auth-form-panel">
       <div class="auth-card">
-        <div class="auth-icon">🔐</div>
+        <div class="auth-icon">${_ICON_LOCK_PLUS}</div>
         <div class="auth-title">First-Run Setup</div>
         <div class="auth-subtitle">
           Create a password to protect access to this forensic tool.<br>
@@ -62,7 +95,7 @@ function renderSetupScreen() {
           </div>
 
           <div id="setup-error" style="display:none;" class="error-inline">
-            <span>⚠️</span>
+            ${_ICON_WARN}
             <span id="setup-error-msg"></span>
           </div>
 
@@ -70,6 +103,7 @@ function renderSetupScreen() {
             Set Password &amp; Open Tool ➔
           </button>
         </form>
+      </div>
       </div>
     </div>`;
 
@@ -101,9 +135,7 @@ function renderSetupScreen() {
 
     try {
       await API.setupPassword(pw);
-      // Restore layout
-      if (sidebar) sidebar.style.display = '';
-      if (breadcrumb) breadcrumb.style.display = '';
+      _restoreChromeAfterAuth();
       navigateTo('dashboard');
     } catch (err) {
       const isAlreadySet = err.message && err.message.toLowerCase().includes('already set');
@@ -122,28 +154,19 @@ function renderSetupScreen() {
 
 function renderLoginScreen() {
   const root = document.getElementById('content-root');
-  // Hide sidebar and header nav
-  const sidebar = document.getElementById('sidebar-root');
-  const breadcrumb = document.getElementById('breadcrumb-strip');
-  if (sidebar) sidebar.style.display = 'none';
-  if (breadcrumb) breadcrumb.style.display = 'none';
-
-  document.getElementById('header-root').innerHTML = `
-    <div class="logo-area" style="padding:0 24px;">
-      <span style="font-size:22px;">🔬</span>
-      <span style="font-weight:700; font-size:16px; margin-left:10px; color:var(--accent-cyan);">DVR/NVR Forensic Analysis Tool</span>
-      <span style="font-size:11px; color:var(--text-dim); margin-left:10px;">SIH26150 — NTRO</span>
-    </div>`;
+  _hideChromeForAuth();
 
   root.innerHTML = `
     <div class="auth-screen-wrapper">
+      ${_brandPanelHtml()}
+      <div class="auth-form-panel">
       <div class="auth-card">
-        <div class="auth-icon">🔒</div>
+        <div class="auth-icon">${_ICON_LOCK}</div>
         <div class="auth-title">Forensic Tool — Login</div>
         <div class="auth-subtitle">Enter your access password to continue.</div>
 
         <div id="lockout-banner" style="display:none;" class="error-banner" style="margin-bottom:16px;">
-          <div class="error-banner-icon">🚫</div>
+          <div class="error-banner-icon">${_ICON_BLOCK}</div>
           <div class="error-banner-body">
             <div class="error-banner-title">Login temporarily locked</div>
             <div class="error-banner-msg">
@@ -166,7 +189,7 @@ function renderLoginScreen() {
           </div>
 
           <div id="login-error" style="display:none;" class="error-inline">
-            <span>⚠️</span>
+            ${_ICON_WARN}
             <span id="login-error-msg"></span>
           </div>
 
@@ -174,6 +197,7 @@ function renderLoginScreen() {
             Login ➔
           </button>
         </form>
+      </div>
       </div>
     </div>`;
 
@@ -227,9 +251,7 @@ function renderLoginScreen() {
         return;
       }
 
-      // Restore layout
-      if (sidebar) sidebar.style.display = '';
-      if (breadcrumb) breadcrumb.style.display = '';
+      _restoreChromeAfterAuth();
       navigateTo('dashboard');
 
     } catch (err) {
