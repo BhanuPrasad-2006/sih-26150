@@ -14,7 +14,6 @@ Report sections (PRD §5.7):
   9. Audit log (paginated)
 
 All wording uses "verified" and "strong evidence", never "absolute proof".
-Synthetic-data results are clearly labelled [SYNTHETIC DATA].
 """
 
 from __future__ import annotations
@@ -172,7 +171,6 @@ def generate_report(
 
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     report_reference = f"RPT-{case.case_number}-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
-    synthetic_warn = evidence.is_synthetic
 
     def _build_elements(cert_pages: set[int]) -> list:
         """
@@ -199,19 +197,9 @@ def generate_report(
             ["Tool version", f"{TOOL_NAME} {TOOL_VERSION}"],
             ["Case notes",   case.notes or "—"],
         ]
-        if synthetic_warn:
-            cover_data.append(["DATA TYPE", "SYNTHETIC TEST DATA — not from a real recorder"])
-
         elements.append(Table(cover_data, colWidths=[5 * cm, 12 * cm], style=_TBL_HDR))
         elements.append(Spacer(1, 0.4 * cm))
 
-        if synthetic_warn:
-            elements.append(Paragraph(
-                "NOTICE: This report was generated from SYNTHETIC test data, not from a real DVR/NVR disk. "
-                "Numbers in this report do not represent real recovery accuracy. "
-                "Do not use this report as evidence.",
-                S["warn"],
-            ))
 
         elements.append(PageBreak())
 
@@ -322,7 +310,7 @@ been overwritten since deletion. Results labelled UNCERTAIN should not be relied
 without independent verification.
 
 This tool is a prototype and has not been validated by an accredited forensic laboratory.
-All numbers from synthetic test data are not representative of real-disk performance.
+Recovery accuracy must be established on real recorders before figures are relied upon.
         """.strip()
         for para in method_text.split("\n\n"):
             elements.append(Paragraph(para.replace("\n", " "), S["body"]))

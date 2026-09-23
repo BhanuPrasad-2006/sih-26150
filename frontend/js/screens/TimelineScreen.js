@@ -180,6 +180,17 @@ async function renderTimelineScreen(params) {
   const gapCount = lanes.reduce((count, lane) => count + lane.gaps.length, 0);
 
   if (!timeline.start_time || !timeline.end_time || segmentCount === 0) {
+    // Distinguish "nothing recovered yet" from "recovered, but no timestamps":
+    // some recorders (e.g. Hikvision, generic stream carving) yield footage whose
+    // timestamps cannot be read, so it cannot be placed on a time axis.
+    const allSegments = await API.getSegments(caseId).catch(() => []);
+    const hasUntimed = allSegments.length > 0;
+    const title = hasUntimed
+      ? 'Recovered segments have no readable timestamps'
+      : 'No segments recovered yet';
+    const subtitle = hasUntimed
+      ? `${allSegments.length} segment(s) were recovered, but this recorder's timestamps could not be read, so they cannot be placed on a shared time axis. Open the recordings list to review and export them.`
+      : 'Run a scan to recover segments, then return here to compare cameras on one timeline.';
     root.innerHTML = `
       <div class="page-header">
         <div class="page-title">Cross-Camera Timeline</div>
@@ -187,8 +198,8 @@ async function renderTimelineScreen(params) {
       </div>
       <div class="card empty-state">
         <div class="empty-state-icon">🕒</div>
-        <div class="empty-state-title">No timestamped segments are available</div>
-        <div class="empty-state-subtitle">Run a scan to recover timestamped segments, then return here to compare cameras on one timeline.</div>
+        <div class="empty-state-title">${title}</div>
+        <div class="empty-state-subtitle">${subtitle}</div>
         <button class="btn btn-primary" onclick="navigateTo('case-detail', { caseId: '${caseId}' })">Return to Case Overview</button>
       </div>`;
     return;

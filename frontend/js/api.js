@@ -191,6 +191,52 @@ const API = {
     return res.json();
   },
 
+  async uploadEvidence(caseId, file, deviceUtcOffsetMinutes, onProgress) {
+    const url = `/api/cases/${caseId}/evidence/upload`;
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', url);
+
+      if (onProgress && xhr.upload) {
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            const percent = Math.round((e.loaded / e.total) * 100);
+            onProgress(percent, e.loaded, e.total);
+          }
+        };
+      }
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            resolve(JSON.parse(xhr.responseText));
+          } catch (_) {
+            reject(new Error('Invalid response from server'));
+          }
+        } else {
+          try {
+            const data = JSON.parse(xhr.responseText);
+            reject(new Error(data.detail || data.message || `Upload failed (${xhr.status})`));
+          } catch (_) {
+            reject(new Error(`Upload failed (${xhr.status})`));
+          }
+        }
+      };
+
+      xhr.onerror = () => {
+        reject(new Error('Network error during evidence upload'));
+      };
+
+      const formData = new FormData();
+      formData.append('file', file);
+      if (deviceUtcOffsetMinutes !== null && deviceUtcOffsetMinutes !== undefined && deviceUtcOffsetMinutes !== '') {
+        formData.append('device_utc_offset_minutes', deviceUtcOffsetMinutes);
+      }
+
+      xhr.send(formData);
+    });
+  },
+
   async startScan(caseId) {
     const url = `/api/cases/${caseId}/scan`;
     const res = await fetch(url, { method: 'POST' });

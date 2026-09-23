@@ -162,6 +162,10 @@ class RawFrame:
     frame_size:   int      # total bytes (header + payload + footer)
     frame_type:   int      # raw type byte (e.g. 0xF0)
     is_keyframe:  bool
+    # Which contiguous on-disk stream a frame came from, for brands whose channel is
+    # unknown at carve time (e.g. Honeywell): frames from different streams must never
+    # be merged or interleaved by timestamp.
+    stream_id:    int = 0
 
     @property
     def disk_offset_end(self) -> int:

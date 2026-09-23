@@ -15,11 +15,6 @@ async function renderDashboardScreen() {
       </div>
     </div>
 
-    <div class="notice-card">
-      <h3>⚠️ Forensic Integrity Notice</h3>
-      <p>All test datasets used in this environment are <strong>SYNTHETIC DATA</strong>. Never cite metrics from synthetic datasets as real-world accuracy claims.</p>
-    </div>
-
     <div class="card">
       <div class="card-title">Active Cases</div>
       <div class="table-container">
