@@ -24,12 +24,13 @@ def test_dahua_carve(dahua_img_path):
             assert frame.timestamp is not None
             assert frame.frame_size > 0
 
-def test_dahua_list_recordings_unimplemented(dahua_img_path):
+def test_dahua_list_recordings_without_dhfs_index_returns_nothing(dahua_img_path):
+    """A DHAV-only image (no DHFS 4.1 partition table) has no disk index: carving only."""
     with EvidenceImage.open(dahua_img_path) as img:
         plugin = DahuaPlugin()
         recs, note = plugin.list_recordings(img)
         assert recs == []
-        assert "not implemented" in note.lower()
+        assert "no dhfs 4.1 index" in note.lower()
 
 def test_unknown_plugin_ext4(foreign_img_path):
     with EvidenceImage.open(foreign_img_path) as img:

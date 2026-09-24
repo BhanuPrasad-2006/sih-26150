@@ -107,6 +107,12 @@ def split_on_gaps(frames: list[RawFrame]) -> list[list[RawFrame]]:
     for prev, curr in zip(frames, frames[1:]):
         new_session = False
 
+        # Fragments of ONE recording named by an on-disk index (same brand, same non-zero
+        # stream_id) belong together regardless of time gaps between fragments.
+        if curr.stream_id != 0 and curr.stream_id == prev.stream_id and curr.brand == prev.brand == "dahua":
+            current.append(curr)
+            continue
+
         # Timestamp-based gap
         if prev.timestamp is None or curr.timestamp is None:
             # Stream-carved Hikvision units carry no timestamps; they belong to the
@@ -172,6 +178,13 @@ def _label_session(session: list[RawFrame], evidence_id: str) -> Segment:
     timestamps = [f.timestamp for f in session if f.timestamp is not None]
     start_time = min(timestamps) if timestamps else None
     end_time   = max(timestamps) if timestamps else None
+    # No per-frame timestamps: fall back to the on-disk index's block-level window, if any.
+    windowed = False
+    if not timestamps:
+        ws = [f.window_start for f in session if f.window_start is not None]
+        we = [f.window_end for f in session if f.window_end is not None]
+        if ws and we:
+            start_time, end_time, windowed = min(ws), max(we), True
 
     # Status heuristics
     has_gaps = len(session) < 2
@@ -226,6 +239,18 @@ def _label_session(session: list[RawFrame], evidence_id: str) -> Segment:
         # Default for Dahua carving: PARTIAL (upgraded to COMPLETE by exporter after ffprobe)
         status = SegmentStatus.PARTIAL
         notes = "Carved frames — awaiting ffprobe validation before COMPLETE label."
+        if brand == "dahua" and any(f.stream_id for f in session):
+            notes = (
+                "Recording reassembled from the DHFS 4.1 descriptor chain (Wullen 2025), so the camera "
+                "number and fragment order come from the disk index. Awaiting ffprobe validation "
+                "(then PARTIAL is kept; COMPLETE needs ground truth)."
+            )
+
+    if windowed:
+        notes += (
+            " | Camera number and time range come from the disk's HIKBTREE data-block entry "
+            "(Han 2015): a block-level window, not per-frame timestamps."
+        )
 
     return Segment(
         segment_id=str(uuid.uuid4()),

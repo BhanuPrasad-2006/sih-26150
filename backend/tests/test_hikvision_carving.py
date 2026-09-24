@@ -132,6 +132,52 @@ def test_no_real_stream_yields_nothing(temp_dir):
         assert frames == []
 
 
+_PACK_HEADER = bytes.fromhex("000001BA" "44000400" "0401" "000003F8")          # valid MPEG-2 pack header, 14 bytes
+_PSM = bytes.fromhex("000001BC" "000E") + bytes.fromhex("E1FF0000" "00041BE0" "00000000" "0000")   # program stream map
+
+
+def _han_fig4_block(h264: bytes) -> tuple[bytes, bytes]:
+    """
+    Lay real H.264 out as Han 2015 Fig. 4 shows a Hikvision data block: `00 00 01 BA` before every
+    picture and `00 00 01 BC` before keyframes, ahead of the picture's NAL units. Returns
+    (block_bytes, expected_recovery) — the carver starts at the first SPS, so anything before it
+    (the first BA/BC) is not part of the recovered stream.
+    """
+    import mmap
+    import tempfile
+
+    from backend.plugins.stream_carver import _carve_annexb_run
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".h264") as tf:
+        tf.write(h264)
+    with open(tf.name, "rb") as fh, mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_READ) as mm:
+        spans, _ = _carve_annexb_run(mm, h264.find(b"\x00\x00\x01\x67"), len(h264))
+    os.unlink(tf.name)
+
+    block = bytearray()
+    first_payload_at = None
+    for start, stop, _t, key in spans:
+        block += _PACK_HEADER + (_PSM if key else b"")
+        if first_payload_at is None:
+            first_payload_at = len(block)
+        block += h264[start:stop]
+    return bytes(block), bytes(block[first_payload_at:])
+
+
+def test_han_fig4_ba_bc_headers_between_pictures_do_not_break_carving(temp_dir, raw_h264):
+    block, expected = _han_fig4_block(raw_h264)
+    path = os.path.join(temp_dir, "han_fig4.dd")
+    Path(path).write_bytes(_image(block))
+    with EvidenceImage.open(path) as img:
+        frames, _ = HikvisionPlugin().carve(img)
+        segs = label_all(frames, "ev")
+        assert len(segs) == 1
+        assert _recovered(img, segs[0]) == expected          # byte-exact, headers preserved
+        assert len(frames) == 10                             # one unit per picture, as without the headers
+        seg, detail = export_segment(img.mm, segs[0], Path(temp_dir) / "out_fig4")
+        assert "error" not in detail and detail["ffprobe_valid"] is True
+
+
 def test_random_data_yields_nothing(temp_dir):
     path = os.path.join(temp_dir, "random.dd")
     Path(path).write_bytes(os.urandom(256 * 1024))

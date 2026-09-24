@@ -4,22 +4,21 @@ hikvision.py — Hikvision DVR/NVR brand plugin.
 What is implemented in v1:
   - detect():          Check master sector at 0x200 for b'HIKVISION@HANGZHOU'.
                        Returns 1.0 on match, 0.0 otherwise.
-  - list_recordings(): NOT IMPLEMENTED — HIKB-TREE entry layout is not yet verified.
-                       Returns ([], "not implemented") immediately.
-  - carve():           Standards-based stream carving (2026-09 rewrite): finds
-                       contiguous MPEG program streams (ISO/IEC 13818-1) and
-                       H.264 Annex B streams (ITU-T H.264) by their PUBLIC
-                       structure, with exact run extents. Verified end-to-end
-                       with real ffmpeg-encoded video (see backend/tests/manual/).
-                       No Hikvision-specific layout is parsed (channel, timestamps
-                       and HIKB-TREE are unverified), and every result is UNCERTAIN
-                       until ffprobe decodes the export (then PARTIAL, never COMPLETE).
+  - list_recordings(): returns [] — index data is used inside carve() (see below).
+  - carve():           Uses the master sector and HIKBTREE data-block entries from
+                       Han 2015 (hikvision_index.py) to find the video blocks and, where
+                       the entries survive, each block's camera and time window; inside
+                       blocks it uses standards-based stream carving (MPEG-PS / H.264
+                       Annex B, stream_carver.py). Falls back to whole-image carving if
+                       the master sector is missing or fails its self-consistency checks.
+                       Per-frame timestamps are unavailable (the OFNI IDR-table layout is
+                       unpublished). Every result is UNCERTAIN until ffprobe decodes the
+                       export (then PARTIAL, never COMPLETE). Not validated on a real disk.
 
-See docs/format_sheets/hikvision.md for full status table.
+See docs/format_verification.md and docs/format_sheets/hikvision.md.
 
 Sources:
-  [Han2015]   Han, Jeong, Lee (2015). ICDF2C, Springer.
-  [MDPI2025]  MDPI Information 16(11):983, 2025.
+  [Han2015]   Han, Jeong, Lee (2015). ICDF2C, Springer (read in full).
 """
 
 from __future__ import annotations
@@ -33,7 +32,12 @@ from backend.plugins.constants import (
     HIKV_MASTER_SECTOR_MAGIC,
     HIKV_MASTER_SECTOR_OFFSET,
 )
-from backend.plugins.stream_carver import carve_standard_streams
+from backend.plugins.hikvision_index import (
+    master_sector_problems,
+    read_master_sector,
+    scan_entries,
+)
+from backend.plugins.stream_carver import CarveRegion, carve_standard_streams
 
 if TYPE_CHECKING:
     from backend.acquisition import EvidenceImage
@@ -82,14 +86,12 @@ class HikvisionPlugin(BrandPlugin):
 
     def list_recordings(self, img: "EvidenceImage") -> tuple[list[RawFrame], str]:
         """
-        HIKB-TREE index parsing is NOT implemented in v1.
-        The exact byte layout of index entries is not yet verified.
-        See docs/format_sheets/hikvision.md §2 for details.
+        Index entries carry no frames themselves; they are applied inside carve() so every
+        recovered stream is tied to its block. Nothing is returned here.
         """
         note = (
-            "Hikvision HIKB-TREE index parsing is not implemented in v1. "
-            "Index entry layout is unverified (TO VERIFY — see "
-            "docs/format_sheets/hikvision.md §2). Using carving only."
+            "Hikvision HIKBTREE entries (Han 2015) are read during carving and assigned to "
+            "the streams found in each data block; no frames are listed from the index alone."
         )
         log.info(note)
         return [], note
@@ -102,9 +104,59 @@ class HikvisionPlugin(BrandPlugin):
         progress_cb: Optional[Callable[[int, int], None]] = None,
     ) -> tuple[list[RawFrame], str]:
         """
-        Standards-based stream carving (see backend/plugins/stream_carver.py).
-        Nothing Hikvision-specific is parsed — the HIKB-TREE index is unverified —
-        so channel and timestamps are unavailable (camera=0, timestamp=None), and
-        every result is UNCERTAIN until ffprobe decodes the exported bytes.
+        Carve video from a Hikvision disk.
+
+        If the master sector parses and passes the paper's arithmetic self-consistency checks
+        (Han 2015), only the data blocks it lists are scanned, and each block inherits the
+        channel and start/end window from its HIKBTREE entry when the entry survived (a
+        formatted or overwritten disk loses them; the video usually remains — Han 2015 §3.2).
+        Blocks without a usable entry are still carved, as unindexed footage with no camera or
+        window. If the master sector is missing or inconsistent, the whole image is carved.
+
+        Inside blocks the standards-based stream carver is used (MPEG-PS / H.264 Annex B), so
+        per-frame timestamps stay unavailable; the window is block-level only. All results are
+        UNCERTAIN until ffprobe decodes the export (then PARTIAL, never COMPLETE).
         """
-        return carve_standard_streams(img, "hikvision", progress_cb)
+        mm, total = img.mm, img.size
+        ms = read_master_sector(mm, total)
+        problems = master_sector_problems(ms) if ms is not None else ["no master sector"]
+        if ms is None or problems:
+            frames, note = carve_standard_streams(img, "hikvision", progress_cb)
+            return frames, note + (
+                " Master sector not usable for indexed carving (" + "; ".join(problems) + ")."
+            )
+
+        entries = scan_entries(mm, ms, total)
+        by_block: dict[int, list] = {}
+        for e in entries:
+            by_block.setdefault(e.block_index, []).append(e)
+
+        regions: list[CarveRegion] = []
+        indexed = ambiguous = unindexed = 0
+        for idx in range(ms.block_count):
+            start = ms.block_offset(idx)
+            if start >= total:
+                break
+            stop = min(total, start + ms.block_size)
+            live = [e for e in by_block.get(idx, []) if e.has_video]
+            if len(live) == 1:
+                e = live[0]
+                regions.append(CarveRegion(start, stop, camera=e.channel or 0,
+                                           window_start=e.start, window_end=e.end))
+                indexed += 1
+            else:
+                # No entry, an overwritten entry, or several entries for one block (recording
+                # paused / channel changed): the channel and window cannot be assigned safely.
+                regions.append(CarveRegion(start, stop))
+                if live:
+                    ambiguous += 1
+                else:
+                    unindexed += 1
+
+        frames, note = carve_standard_streams(img, "hikvision", progress_cb, regions=regions)
+        note += (
+            f" Index: {len(entries)} HIKBTREE data-block entries read; {indexed} block(s) got a "
+            f"camera/time window, {ambiguous} block(s) had several entries (not assigned), "
+            f"{unindexed} block(s) had no usable entry (unindexed/deleted footage)."
+        )
+        return frames, note

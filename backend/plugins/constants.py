@@ -123,12 +123,13 @@ CPPLUS_IDENTIFYING_MARKERS = (
 HIKV_MASTER_SECTOR_OFFSET = 0x200   # 512 bytes from disk start — Verified [Han2015, MDPI2025]
 HIKV_MASTER_SECTOR_MAGIC  = b"HIKVISION@HANGZHOU"  # Verified [Han2015, MDPI2025]
 
-HIKV_INDEX_NAME = b"HIKB-TREE"      # Name verified [Han2015]; page layout — TO VERIFY
+HIKV_INDEX_NAME = b"HIKBTREE"       # Han 2015 sec. 2.4 (the signature has no hyphen); entries: see HIKV_ENTRY_* below
 
-# Items below are FROM AN UNVERIFIED SOURCE. Do not use in production code until confirmed.
-HIKV_DATA_BLOCK_SIZE = 1 * 1024 * 1024 * 1024   # TO VERIFY: 1 GB data blocks
-HIKV_OFNI_MARKER     = b"OFNI"                   # TO VERIFY: keyframe table marker
-HIKV_OFNI_ENTRY_SIZE = 56                         # TO VERIFY: bytes per OFNI entry
+# Han 2015 (read in full 2026-09-24) states these; only the OFNI record LAYOUT is unpublished.
+# An earlier version of this file wrongly called them an unverified AI report.
+HIKV_DATA_BLOCK_SIZE = 1 * 1024 * 1024 * 1024   # Han 2015 sec. 2.3 + Fig. 2: generally 1 GB
+HIKV_OFNI_MARKER     = b"OFNI"                   # Han 2015 sec. 2.3: IDR-table record signature (layout unpublished)
+HIKV_OFNI_ENTRY_SIZE = 56                         # Han 2015 sec. 2.3: fixed 56 bytes per record
 # NOTE (2026-09): the "0xBA / 0xBC firmware prefix" claims above/below are almost
 # certainly not Hikvision-specific: 0xBA and 0xBC are the standard MPEG program
 # stream pack-header and program-stream-map start-code IDs (ISO/IEC 13818-1),
@@ -215,3 +216,74 @@ HW_MAX_TS_BACKSTEP_US = 1_000_000        # Proposed: timestamps in a stream may 
 HW_DETECT_REGION_BYTES = 64 * 1024 * 1024
 HW_DETECT_WHOLE_IMAGE_MAX = 256 * 1024 * 1024
 HW_DETECT_MIN_RECORDS = 3                # Proposed: consecutive valid records to believe a Honeywell stream
+
+
+# ── HIKVISION INDEX (Han, Jeong, Lee 2015, ICDF2C - read in full, figures 2/5/6) ──
+# Field offsets are read from the paper's hex-dump figures; the paper's sample values are
+# arithmetically self-consistent (see docs/format_verification.md).
+# Offsets below are relative to the master sector start (disk offset 0x200). Little-endian.
+HIKV_MS_SIZE = 256                      # section 2.1
+HIKV_MS_OFF_CAPACITY      = 0x38        # u64  Fig. 2
+HIKV_MS_OFF_LOG_OFFSET    = 0x50        # u64
+HIKV_MS_OFF_LOG_SIZE      = 0x58        # u64
+HIKV_MS_OFF_VIDEO_AREA    = 0x68        # u64  offset to video data area
+HIKV_MS_OFF_BLOCK_SIZE    = 0x78        # u64  size of a data block (1 GB in the sample)
+HIKV_MS_OFF_BLOCK_COUNT   = 0x80        # u32  total number of data blocks
+HIKV_MS_OFF_BTREE1_OFFSET = 0x88        # u64
+HIKV_MS_OFF_BTREE1_SIZE   = 0x90        # u32
+HIKV_MS_OFF_BTREE2_OFFSET = 0x98        # u64  backup HIKBTREE
+HIKV_MS_OFF_BTREE2_SIZE   = 0xA0        # u32
+HIKV_MS_OFF_INIT_TIME     = 0xE0        # u32  UNIX UTC time of the last system initialisation
+HIKV_BTREE_SIGNATURE = b"HIKBTREE"      # section 2.4
+# Data block entry (Fig. 6B): 48 bytes
+HIKV_ENTRY_SIZE = 48
+HIKV_ENTRY_OFF_EXISTENCE = 0x08         # 8 bytes: 00.. = block holds video, FF.. = none
+HIKV_ENTRY_OFF_CHANNEL   = 0x11         # u8 (1-based camera number)
+HIKV_ENTRY_OFF_START     = 0x18         # u32 UNIX UTC
+HIKV_ENTRY_OFF_END       = 0x1C         # u32 UNIX UTC
+HIKV_ENTRY_OFF_BLOCK     = 0x20         # u64 offset of the data block
+HIKV_TIME_SENTINEL_START = 0x7FFFFFFF   # "FF FF FF 7F 00 00 00 00" = no valid time
+HIKV_TIME_SENTINEL_END   = 0
+HIKV_BLOCK_SIZE_MIN = 1 * 1024 * 1024
+HIKV_BLOCK_SIZE_MAX = 16 * 1024 * 1024 * 1024
+HIKV_BTREE_MAX_BYTES = 16 * 1024 * 1024
+
+
+# ── DAHUA DHFS 4.1 DISK INDEX ─────────────────────────────────────────────────
+# Sources (see docs/format_verification.md): Wullen 2025, "Forensic analysis of the filesystem
+# Dahua DHFS 4.1" (spec + BSD-3 X-Tension, github.com/dw2102/X-Ways-DHFS4_1-X-Tension) and,
+# independently, G. Batista's dhfs_extractor (Python, github.com/gbatmobile/dhfs_extractor,
+# read only, no code copied). Both agree on everything below except where noted.
+# Multi-byte numbers little-endian; sector = 512 bytes unless the boot sector says otherwise.
+DHFS_SIGNATURE = b"DHFS4.1"              # first sector of the disk
+DHFS_PART_TABLE_OFFSET = 0x3C00          # sector 30
+DHFS_PART_ENTRIES_START = 0x34           # entries begin this far into the partition-table sector
+DHFS_PART_ENTRY_SIZE = 64
+DHFS_PART_OFF_BOOT = 20                  # u32: boot sector offset (sectors, from partition start; 34 in the samples)
+DHFS_PART_OFF_START = 48                 # u64: partition start (sectors)
+DHFS_PART_OFF_LENGTH = 56                # u32: partition length (sectors)
+DHFS_PART_END_MAGIC = b"\xAA\x55\xAA\x55"
+DHFS_MAX_PARTITIONS = 16
+# Boot sector (Wullen Table II, Fig. 3 sample: descriptor table sector 187, video area sector 6656,
+# 29807 descriptors, 512 B/sector, 4096 sectors/cluster, log at sector 43520)
+DHFS_BOOT_OFF_BEGIN = 0x10               # u32 packed time: start of recording
+DHFS_BOOT_OFF_END = 0x14                 # u32 packed time: end of recording
+DHFS_BOOT_OFF_SECTOR_SIZE = 0x2C         # u32
+DHFS_BOOT_OFF_SECTORS_PER_CLUSTER = 0x30 # u32
+DHFS_BOOT_OFF_DESC_TABLE = 0x44          # u32 sectors from partition start
+DHFS_BOOT_OFF_VIDEO_AREA = 0x48          # u32 sectors from partition start
+DHFS_BOOT_OFF_DESC_COUNT = 0x4C          # u32 number of 32-byte descriptors (= number of clusters)
+DHFS_BOOT_OFF_LOG = 0xF8                 # u32 sectors
+DHFS_DESC_SIZE = 32
+DHFS_DESC_MAIN = 0x01                    # first cluster of a recording; entry point of the chain
+DHFS_DESC_FRAGMENT = 0x02                # later cluster of a recording
+DHFS_DESC_FREE_VALUES = frozenset({0xFE, 0x00})   # spec says 0xFE; Batista treats 0 as free (CONFLICT: accept both)
+DHFS_DESC_OFF_CHANNEL = 1                # camera = (byte & 0x0F) + 1   (spec; Batista: byte - 48 + 1, same for 0x30-0x3F)
+DHFS_DESC_OFF_COUNT = 2                  # u16: fragment count (main; Batista adds 1 — CONFLICT, chain length is used instead) / fragment number
+DHFS_DESC_OFF_BEGIN = 4                  # u32 packed time
+DHFS_DESC_OFF_END = 8                    # u32 packed time
+DHFS_DESC_OFF_NEXT = 12                  # u32 next descriptor id (0 or 0xFFFFFFFF = end of chain)
+DHFS_DESC_OFF_LAST_SIZE = 16             # u32 (main only): size of the last fragment in sectors
+DHFS_DESC_OFF_PREV = 20                  # u32 (fragments): previous descriptor id
+DHFS_DESC_OFF_VIDEO_ID = 24              # u32: main descriptor index of the recording (a main descriptor's own index in the sample)
+DHFS_MAX_DESCRIPTORS = 50_000_000
