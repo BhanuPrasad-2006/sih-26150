@@ -139,7 +139,7 @@ Because no real recorder disk was available, the tool is tested by building disk
 | Parsers checked against **known-answer values printed in the papers/specs** | ✅ |
 | Tamper test: change one byte of evidence → verification fails | ✅ |
 | Accuracy feature on real video: identical, truncated, and different videos give the expected recall/precision/order | ✅ |
-| **Automated suite** | **203 tests passing** |
+| **Automated suite** | **203 tests passing** (195 on a fresh clone; the other 8 need a live Supabase `DATABASE_URL`) |
 
 **A defect the accuracy check found:** on a fragmented Dahua disk with its index wiped, only ~1 of 20 frames of a static scene came back.
 The cause was a minimum frame size (100 bytes) that rejected tiny P-frames of a quiet camera; it is now 40. This is exactly the kind
