@@ -145,6 +145,45 @@ _TBL_HDR = TableStyle([
 ])
 
 
+def _accuracy_section(results: list, S) -> list:
+    """Report section for ground-truth comparisons; explicit 'not measured' when there are none."""
+    out: list = [Paragraph("Accuracy Against Ground Truth", S["h2"])]
+    if not results:
+        out.append(Paragraph(
+            "NOT MEASURED. No ground truth (a known-good video, a recording log, or the original pre-deletion "
+            "disk image) was supplied for this case, so no recovery percentage is stated. The tool cannot know "
+            "how much footage there should have been.",
+            S["body"],
+        ))
+        out.append(Spacer(1, 0.3 * cm))
+        return out
+    out.append(Paragraph(
+        "Each row was measured against ground truth the examiner supplied for that test. The figures describe that "
+        "one segment on that one disk and deletion; they are not a general recovery rate.",
+        S["small"],
+    ))
+    rows = [["Segment", "Frame recall", "Frame precision", "In order", "Byte-identical", "Byte recall (disk)", "Not measured"]]
+    for r in results:
+        f, b, pl = r.get("frames"), r.get("bytes"), r.get("placement")
+        rows.append([
+            (r.get("segment_id") or "")[:8],
+            f"{f['frame_recall_pct']}%" if f and f.get("frame_recall_pct") is not None else "-",
+            f"{f['frame_precision_pct']}%" if f and f.get("frame_precision_pct") is not None else "-",
+            f"{f['in_order_pct']}%" if f and f.get("in_order_pct") is not None else "-",
+            ("YES" if b["identical"] else "NO") if b else "-",
+            f"{pl['byte_recall_pct']}%" if pl and pl.get("byte_recall_pct") is not None else "-",
+            textwrap.shorten("; ".join(r.get("not_measured", [])) or "-", 40),
+        ])
+    out.append(Table(rows, colWidths=[2*cm, 2.2*cm, 2.4*cm, 1.7*cm, 2.3*cm, 2.6*cm, 3.8*cm], style=_TBL_HDR))
+    for r in results:
+        pl = r.get("placement")
+        if pl:
+            out.append(Paragraph("Reference for disk placement: " + pl["reference_source"] + ".", S["small"]))
+            break
+    out.append(Spacer(1, 0.3 * cm))
+    return out
+
+
 # ── Main builder ──────────────────────────────────────────────────────────────
 
 def generate_report(
@@ -156,6 +195,7 @@ def generate_report(
     audit_entries: list[AuditEntry],
     chain_ok: bool,
     correlated_events: Optional[list] = None,
+    accuracy_results: Optional[list] = None,
 ) -> None:
     """
     Generate a PDF forensic report at *output_path*.
@@ -165,6 +205,9 @@ def generate_report(
     objects exposing the same .to_dict()) describing segments whose time
     windows overlap across 2+ cameras — see backend/correlation.py. Purely
     a time-proximity clustering, not content analysis.
+
+    *accuracy_results* is the list of stored ground-truth comparisons (backend/accuracy.py). When empty,
+    the report states that recovery was NOT measured; it never invents a percentage.
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
     S = _styles()
@@ -287,6 +330,9 @@ def generate_report(
                 ])
             elements.append(Table(corr_rows, colWidths=[4*cm, 4*cm, 4.5*cm, 4.5*cm], style=_TBL_HDR))
             elements.append(Spacer(1, 0.4 * cm))
+
+        # ── 4c. Accuracy against ground truth ────────────────────────────────
+        elements.extend(_accuracy_section(accuracy_results or [], S))
 
         # ── 5. Method and limitations ────────────────────────────────────────
         elements.append(PageBreak())

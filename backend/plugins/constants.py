@@ -92,7 +92,10 @@ DHAV_VIDEO_CODEC_MJPEG = 0x3
 DHAV_VIDEO_CODEC_HEVC = 0xC
 
 # Frame length plausibility bounds (proposed — tune on real data)
-DHAV_MIN_FRAME_BYTES = 100          # Proposed — smaller is almost certainly a false positive
+DHAV_MIN_FRAME_BYTES = 40           # Proposed. 24-byte header + 8-byte trailer + a few payload bytes. Was 100, which
+                                    # silently dropped the tiny P-frames of a static scene (found by the accuracy check:
+                                    # 1 of ~20 frames recovered). The trailer 'dhav'+length match and the date check
+                                    # already reject false positives, so a large minimum is not needed.
 DHAV_MAX_FRAME_BYTES = 10 * 1024 * 1024  # Proposed — 10 MB upper bound
 
 # Channel number plausibility

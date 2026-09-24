@@ -30,6 +30,7 @@ import json
 import logging
 import os
 import re
+from uuid import uuid4
 import sys
 import traceback
 from contextlib import asynccontextmanager
@@ -55,6 +56,7 @@ from backend.auth import AuthManager
 from backend.database import (
     Database,
     DuplicateCaseNumberError,
+    get_case_accuracy_dir,
     get_case_evidence_dir,
     get_case_export_dir,
     get_case_report_dir,
@@ -76,6 +78,7 @@ from backend.plugins.constants import MIN_PLUGIN_CONFIDENCE
 from backend.plugins.cpplus import CPPlusPlugin
 from backend.plugins.dahua import DahuaPlugin
 from backend.plugins.generic import GenericStreamPlugin
+from backend.plugins.registry import PLUGINS, detect_brand
 from backend.plugins.godrej import GodrejPlugin
 from backend.plugins.hikvision import HikvisionPlugin
 from backend.plugins.honeywell import HoneywellPlugin
@@ -87,6 +90,7 @@ from backend.correlation import correlate_segments
 from backend import face_search
 from backend.face_detection import FACE_DETECTION_LABEL, detect_faces_in_video
 from backend.face_search import FaceEmbeddingRecord, index_faces_for_search
+from backend import accuracy as accuracy_mod
 from backend.reconstructor import label_all
 from backend.reporting import generate_report
 from backend.timeline import TimelineData, build_timeline, normalize_to_utc
@@ -224,38 +228,9 @@ app = FastAPI(
 app.add_middleware(AuthMiddleware)
 
 # ── Plugin registry ───────────────────────────────────────────────────────────
-
-_PLUGINS = [
-    CPPlusPlugin(),
-    DahuaPlugin(),
-    HikvisionPlugin(),
-    UniviewPlugin(),
-    MatrixPlugin(),
-    HoneywellPlugin(),
-    TPLinkPlugin(),
-    GodrejPlugin(),
-]
-
-
-def _detect_brand(img: EvidenceImage) -> tuple[str, str, float, Any]:
-    """Run all plugins' detect() and return (brand, version, confidence, plugin)."""
-    best_conf   = 0.0
-    best_plugin = UnknownPlugin()
-    for plugin in _PLUGINS:
-        try:
-            conf = plugin.detect(img)
-        except Exception:
-            conf = 0.0
-        if conf > best_conf:
-            best_conf   = conf
-            best_plugin = plugin
-    # display_name carries UI/report labels (e.g. "detection-only / unverified").
-    return (
-        best_plugin.display_name,
-        best_plugin.version_hint(),
-        best_conf,
-        best_plugin,
-    )
+# Lives in backend/plugins/registry.py so analysis code can use it without importing the web app.
+_PLUGINS = PLUGINS
+_detect_brand = detect_brand
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1142,6 +1117,127 @@ async def verify_evidence(case_id: str):
     return {"unchanged": unchanged, "sha256": ev.sha256_before, "current_sha256": current}
 
 
+# ── Accuracy against ground truth ─────────────────────────────────────────────
+
+def _load_accuracy_results(case_id: str) -> list[dict]:
+    d = get_case_accuracy_dir(case_id)
+    out: list[dict] = []
+    if d.is_dir():
+        for f in d.glob("result_*.json"):
+            try:
+                out.append(json.loads(f.read_text(encoding="utf-8")))
+            except Exception:
+                continue
+    out.sort(key=lambda r: r.get("created_at", ""), reverse=True)
+    return out
+
+
+def _parse_truth_log(raw: bytes) -> list[dict]:
+    """Accepts {"recordings": [...]} or a bare list of {name, camera?, start, end}."""
+    try:
+        data = json.loads(raw.decode("utf-8-sig"))
+    except Exception as exc:
+        raise HTTPException(400, f"Recording log is not valid JSON: {exc}")
+    entries = data.get("recordings") if isinstance(data, dict) else data
+    if not isinstance(entries, list) or not entries:
+        raise HTTPException(400, "Recording log must be a non-empty list (or {\"recordings\": [...]}).")
+    for i, e in enumerate(entries):
+        if not isinstance(e, dict) or "start" not in e or "end" not in e:
+            raise HTTPException(400, f"Log entry {i + 1} needs \"start\" and \"end\" (ISO times).")
+        try:
+            a, b = accuracy_mod._parse_dt(str(e["start"])), accuracy_mod._parse_dt(str(e["end"]))
+        except ValueError:
+            raise HTTPException(400, f"Log entry {i + 1} has an unreadable start/end time.")
+        if b < a:
+            raise HTTPException(400, f"Log entry {i + 1} ends before it starts.")
+        if "camera" in e and e["camera"] is not None and not isinstance(e["camera"], int):
+            raise HTTPException(400, f"Log entry {i + 1}: camera must be an integer.")
+    return entries
+
+
+@app.post("/api/cases/{case_id}/accuracy")
+async def run_accuracy(
+    case_id: str,
+    segment_id: str = Form(...),
+    mode: str = Form("exact"),
+    log_clock: str = Form("device"),
+    original_image_path: Optional[str] = Form(None),
+    ground_truth: Optional[UploadFile] = File(None),
+    truth_log: Optional[UploadFile] = File(None),
+):
+    """
+    Measure a recovered segment against ground truth the examiner supplies: a known-good video
+    (e.g. exported by the vendor player), a recording log, and/or the ORIGINAL pre-deletion disk image.
+    Anything not supplied is reported as "not measured" — the tool never invents a percentage.
+    """
+    if mode not in ("exact", "perceptual"):
+        raise HTTPException(400, "mode must be 'exact' or 'perceptual'")
+    if log_clock not in ("device", "utc"):
+        raise HTTPException(400, "log_clock must be 'device' or 'utc'")
+    has_video = ground_truth is not None and bool(ground_truth.filename)
+    has_log = truth_log is not None and bool(truth_log.filename)
+    has_orig = bool(original_image_path and original_image_path.strip())
+    if not (has_video or has_log or has_orig):
+        raise HTTPException(400, "Supply at least one ground truth: a video, a recording log, or the original disk image.")
+
+    evs = await asyncio.to_thread(db.list_evidence_for_case, case_id)
+    if not evs:
+        raise HTTPException(400, "No evidence for this case")
+    ev = evs[-1]
+    segments = await asyncio.to_thread(db.list_segments_for_evidence, ev.evidence_id)
+    seg = next((s for s in segments if s.segment_id == segment_id), None)
+    if seg is None:
+        raise HTTPException(404, "Segment not found")
+
+    log_entries = None
+    if has_log:
+        log_entries = _parse_truth_log(await truth_log.read())
+    if has_orig:
+        if not Path(original_image_path.strip()).is_file():
+            raise HTTPException(400, f"Original image not found or not a regular file: {original_image_path}")
+
+    acc_dir = get_case_accuracy_dir(case_id)
+    acc_dir.mkdir(parents=True, exist_ok=True)
+    result_id = str(uuid4())
+    truth_path: Optional[Path] = None
+    if has_video:
+        name = re.sub(r"[^a-zA-Z0-9_.\- ]", "_", Path(ground_truth.filename).name).strip() or "truth.bin"
+        truth_path = acc_dir / f"truth_{result_id}_{name}"
+        async with aiofiles.open(truth_path, "wb") as out:
+            while chunk := await ground_truth.read(1024 * 1024):
+                await out.write(chunk)
+
+    inputs = accuracy_mod.AccuracyInputs(
+        segment=seg, all_segments=segments, truth_file=truth_path, log_entries=log_entries,
+        log_clock=log_clock, original_image=original_image_path.strip() if has_orig else None,
+        mode=mode, device_utc_offset_minutes=ev.device_utc_offset_minutes,
+    )
+    result = await asyncio.to_thread(accuracy_mod.run_accuracy_check, inputs)
+    result["result_id"] = result_id
+    result["case_id"] = case_id
+    result["truth_file"] = truth_path.name if truth_path else None
+    result["original_image_path"] = inputs.original_image
+    result["segment_status"] = seg.status.value
+    result["segment_sha256"] = seg.sha256
+    result["measured_meaning"] = (
+        "Figures below exist only because ground truth was supplied for this test. They describe this one segment, "
+        "this one recorder disk and this one deletion; they do not describe recovery in general."
+    )
+    (acc_dir / f"result_{result_id}.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
+    _audit(case_id, "accuracy_check",
+           f"segment={segment_id} truth_sha256={(result.get('bytes') or {}).get('truth_sha256', '-')} "
+           f"| {accuracy_mod.summarize(result)}")
+    return result
+
+
+@app.get("/api/cases/{case_id}/accuracy")
+async def list_accuracy(case_id: str):
+    case = await asyncio.to_thread(db.get_case, case_id)
+    if not case:
+        raise HTTPException(404, "Case not found")
+    return await asyncio.to_thread(_load_accuracy_results, case_id)
+
+
 @app.get("/api/cases/{case_id}/report")
 async def get_report(case_id: str):
     case = await asyncio.to_thread(db.get_case, case_id)
@@ -1168,7 +1264,7 @@ async def get_report(case_id: str):
 
     await asyncio.to_thread(
         generate_report, pdf, case, ev, segments, log_evts, audit_entries, chain_ok,
-        correlated_events,
+        correlated_events, _load_accuracy_results(case_id),
     )
     _audit(case_id, "report_generated", str(pdf))
     return FileResponse(str(pdf), media_type="application/pdf",
