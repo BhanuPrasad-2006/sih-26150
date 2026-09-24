@@ -153,3 +153,39 @@ def test_report_section_wording():
         "classes": {"person": {"frames_with": 4, "max_in_frame": 2, "first_time_s": 1.5}}}], S)
     text = " ".join(getattr(f, "text", "") for f in flow)
     assert "not identification" in text
+
+
+# ── Real model on real photographs (skipped when the model or scikit-image is missing) ───────
+
+def _video_from_photos(path: Path, names: list[str], frames_each: int = 5) -> Path:
+    import cv2
+    data = pytest.importorskip("skimage.data")
+    writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), 5, (512, 512))
+    assert writer.isOpened()
+    for n in names:
+        img = cv2.resize(cv2.cvtColor(getattr(data, n)(), cv2.COLOR_RGB2BGR), (512, 512))
+        for _ in range(frames_each):
+            writer.write(img)
+    writer.release()
+    return path
+
+
+@pytest.mark.skipif(not _MODEL.is_file(), reason="YOLOX model file not present")
+def test_yolox_finds_the_right_classes_in_real_photos(tmp_path):
+    video = _video_from_photos(tmp_path / "photos.mp4", ["astronaut", "chelsea", "coffee"])
+    res = od.detect_objects_in_video(video, frame_stride=5)
+    assert res.error is None and res.engine == "yolox"
+    assert {"person", "cat"} <= set(res.classes)                              # astronaut, chelsea the cat
+    # The coffee cup scores under the default 0.5 threshold after the photo is squashed to a square and
+    # mp4v-compressed (a real example of a miss); a lower threshold finds it.
+    assert "cup" not in res.classes
+    assert "cup" in od.detect_objects_in_video(video, frame_stride=5, score_threshold=0.3).classes
+    assert res.classes["person"].first_time_s == pytest.approx(0.0, abs=0.01)  # first sampled frame
+    assert res.classes["cat"].first_time_s == pytest.approx(1.0, abs=0.01)     # photo 2 starts at frame 5 (5 fps)
+    assert res.classes["cat"].first_frame == 5
+
+
+@pytest.mark.skipif(not _MODEL.is_file(), reason="YOLOX model file not present")
+def test_yolox_reports_nothing_on_a_blank_video(tmp_path):
+    video = create_synthetic_test_video(tmp_path / "blank.mp4", has_motion=False, num_frames=10)
+    assert od.detect_objects_in_video(video).objects_detected is False

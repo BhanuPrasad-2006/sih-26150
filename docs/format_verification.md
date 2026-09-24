@@ -80,4 +80,8 @@ None found (searched DFRWS, CFReDS, Digital Corpora, GitHub). L3 requires an exa
   something software can enforce.
 - **Object detection** (`backend/object_detection.py`): YOLOX (COCO) when `cv_models/object_detection_yolox_2022nov.onnx` is
   present, otherwise OpenCV's classical HOG person detector (persons only, false positives expected). Decoding maths is
-  unit-tested; detection quality has not been measured.
+  unit-tested. With the model installed (OpenCV zoo `object_detection_yolox_2022nov.onnx`, Apache-2.0, sha256
+  `c5c2d13e59ae883e6af3b45daea64af4833a4951c92d116ec270d9ddbe998063`) it was run on three real photographs: person
+  (0.93), cat (0.94), cup/spoon/table (0.90/0.68/0.70) were found in the right places. After squashing to a square and
+  mp4v compression the cup fell below the default 0.5 threshold, i.e. it can miss. The HOG fallback, on the same person
+  photo, returned one wrong-location box and missed the person. This is three photos, not an accuracy measurement.
