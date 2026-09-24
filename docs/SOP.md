@@ -52,3 +52,18 @@ Use this procedure to create a case, process a **forensically acquired raw disk 
    - Open **Hash-Chained Audit Log** from the case navigation. Confirm it displays **CHAIN VALID** and review the sequence of evidence loading, hashing, detection, scanning, verification, export, and report events.
    - Each entry is chained as `SHA-256(Time | Action | Parameters | Previous Hash)`. Check the action details against your work notes and retain the report/audit output with the case file.
    - If the screen displays **TAMPERING DETECTED** or a chain error, stop relying on the log as intact evidence. Preserve the result, document the error, and escalate according to laboratory or agency procedure.
+
+## Supplement: acquisition from a drive, analytics and accuracy checks
+
+These steps were added after the procedure above and apply only where the corresponding feature is enabled.
+
+**A. Creating an image from a drive (only if the case has no existing image).**
+- Drive imaging is off by default. It works only when the tool runs on the examiner's own workstation with `FORENSIC_ALLOW_LOCAL_ACQUISITION=1`, and it reads drives attached to that machine.
+- Connect the source through a **hardware write blocker** (or a read-only mount) first. The software cannot enforce this; ticking the confirmation box records your attestation in the audit log.
+- In **Load Disk Image**, use *Option 3*, choose the drive or type its path, and start imaging. Raw devices usually require administrator/root rights.
+- When it finishes, record the SHA-256 shown. If the result says **not bit-exact**, the drive had unreadable sectors that were zero-filled; record the listed ranges (`<image>.acquisition.json`) in the case notes.
+- Not yet validated on a physical drive: test on a scratch disk before relying on it.
+
+**B. Analytics on exported segments.** After exporting a segment you may run *Check Motion*, *Check Faces* and *Check Objects*. These are automated aids for human review: they do not identify people, they can miss subjects, and frames are sampled. Record them as leads, not findings.
+
+**C. Accuracy measurement (controlled tests only).** A recovery percentage can be stated only against ground truth (a known-good video, a recording log, or the original pre-deletion image). Use *Accuracy Against Ground Truth* on the Recordings screen and cite the result as one test on one disk, as described in `docs/accuracy_measurement.md`. When no ground truth exists, the report says **NOT MEASURED**; do not substitute an estimate.
