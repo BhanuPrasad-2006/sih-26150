@@ -34,7 +34,7 @@
 [The problem](#-the-problem) · [What it does](#-what-it-does) · [Architecture](#-architecture) · [OEM support](#-oem-support--what-is-really-implemented) ·
 [Recovery pipeline](#-recovery-pipeline) · [Proving it works](#-how-we-check-that-it-works) · [Analytics](#-analytics) ·
 [Quick start](#-quick-start) · [Using the tool](#-using-the-tool) · [API](#-api-overview) · [Security](#-security) ·
-[Repository map](#-repository-map) · [Problem-statement checklist](#-problem-statement-checklist) · [Limitations](#-known-limitations) · [Roadmap](#-roadmap)
+[Documentation](#-documentation) · [Repository map](#-repository-map) · [Problem-statement checklist](#-problem-statement-checklist) · [Limitations](#-known-limitations) · [Roadmap](#-roadmap)
 
 ---
 
@@ -251,6 +251,17 @@ $$\text{Hash}_n = \text{SHA-256}(\text{Timestamp}_n \parallel \text{Action}_n \p
 **Legal context:** the certificate follows the structure of **Bharatiya Sakshya Adhiniyam 2023, Section 63(4)** (formerly IEA §65B); Part A is filled
 in automatically with system parameters and hashes. Practice is aligned with **ISO/IEC 27037**. This is a template to support an examiner, not legal advice.
 
+## 📚 Documentation
+
+| Document | What it is |
+|---|---|
+| [System Architecture](docs/SYSTEM_ARCHITECTURE.md) | Components, data model, scan sequence, security design, extension points |
+| [User Manual](docs/USER_MANUAL.md) | Every screen, result and label explained; troubleshooting |
+| [SOP](docs/SOP.md) | Step-by-step procedure for a live case |
+| [Validation Report](docs/VALIDATION_REPORT.md) | What was verified, what was not, defects found, and the protocol for real-recorder validation |
+| [Final Project Report](docs/FINAL_PROJECT_REPORT.md) | Abstract, method, results, OEM comparison, limitations, traceability |
+| [OEM Comparison](docs/oem_comparison.md) · [Format Admission Gate](docs/format_verification.md) · [Accuracy Measurement](docs/accuracy_measurement.md) · [Format sheets](docs/format_sheets/) | Evidence basis for each vendor and how accuracy is measured |
+
 ## 🗂️ Repository map
 
 ```
@@ -291,7 +302,7 @@ sih-26150/
 | ≥ 5–6 OEMs | ❌ honestly **2 from public sources + 1 from one paper** (+ CP Plus by assumption) |
 | Comparative OEM analysis | ✅ [docs/oem_comparison.md](docs/oem_comparison.md) (public sources only) |
 | SOP | ✅ [docs/SOP.md](docs/SOP.md) |
-| Validation report, user manual, architecture document, final report | ❌ not yet written; a validation report would have to say "synthetic disks only" |
+| Validation report, user manual, architecture document, final report | ✅ written ([docs](#-documentation)); the validation report states honestly that only synthetic disks were used |
 | A real DVR/NVR forensic image | ❌ none available |
 
 Legend: ✅ done · 🟡 partly / unvalidated · ❌ not done.
@@ -313,7 +324,7 @@ Legend: ✅ done · 🟡 partly / unvalidated · ❌ not done.
 
 1. Obtain real recorder disks (or a supervised lab test) and promote formats through the admission gate.
 2. Validate drive imaging on a scratch disk behind a write blocker.
-3. Supporting documents: architecture, user manual, validation report, final report.
+3. Fill in the validation results table with real-recorder runs ([protocol](docs/VALIDATION_REPORT.md)).
 4. Vendor formats for TP-Link, Uniview, Godrej, Matrix once a public source or sample disk exists; confirm CP Plus.
 5. Evaluate object/face analytics on real surveillance footage.
 
