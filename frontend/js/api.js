@@ -334,6 +334,24 @@ const API = {
     return res.json();
   },
 
+  /**
+   * Measure a recovered segment against ground truth (a known-good video, a recording log,
+   * and/or the original pre-deletion disk image). Anything not supplied comes back as "not measured".
+   */
+  async runAccuracy(caseId, formData) {
+    const url = `/api/cases/${caseId}/accuracy`;
+    const res = await fetch(url, { method: 'POST', body: formData });
+    await this._checkOk(res, url);
+    return res.json();
+  },
+
+  async getAccuracy(caseId) {
+    const url = `/api/cases/${caseId}/accuracy`;
+    const res = await fetch(url);
+    await this._checkOk(res, url);
+    return res.json();
+  },
+
   async verifyEvidenceIntegrity(caseId) {
     const url = `/api/cases/${caseId}/verify`;
     const res = await fetch(url);

@@ -193,11 +193,63 @@ async function renderRecordingsScreen(params) {
         <button id="face-search-btn" class="btn btn-primary btn-sm">🔎 Search</button>
       </div>
       <div id="face-search-results" style="margin-top:14px;"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span>Accuracy Against Ground Truth</span></div>
+      <p style="font-size:12px; color:var(--text-dim); margin:0 0 12px; line-height:1.6;">
+        The tool cannot know how much footage there should have been, so it never states a recovery percentage on its
+        own. To measure one, supply ground truth for a segment: a known-good video (e.g. exported by the recorder's own
+        player), a recording log, and/or the <strong>original disk image from before the deletion</strong>.
+        Anything you leave out is shown as <em>not measured</em>. Export the segment first for the video checks.
+      </p>
+      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:12px;">
+        <div class="form-group">
+          <label>Segment</label>
+          <select id="acc-segment" class="form-control">
+            ${segments.map((s, i) => `<option value="${escapeHtml(s.segment_id)}">#${i + 1} · camera ${s.camera} · ${escapeHtml(s.segment_id.substring(0, 8))}${s.export_path ? '' : ' (not exported)'}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Ground-truth video</label>
+          <input type="file" id="acc-video" accept="video/*,.mp4,.avi,.dav,.h264,.mkv" class="form-control">
+        </div>
+        <div class="form-group">
+          <label>Recording log (JSON)</label>
+          <input type="file" id="acc-log" accept=".json,application/json" class="form-control">
+        </div>
+        <div class="form-group">
+          <label>Original (pre-deletion) disk image path</label>
+          <input type="text" id="acc-original" class="form-control" placeholder="C:\\path\\to\\original_before_delete.dd">
+        </div>
+        <div class="form-group">
+          <label>Frame comparison</label>
+          <select id="acc-mode" class="form-control">
+            <option value="exact">Exact (same stream, only re-wrapped)</option>
+            <option value="perceptual">Perceptual (vendor player re-encoded)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Log times are in</label>
+          <select id="acc-clock" class="form-control">
+            <option value="device">the recorder's own clock</option>
+            <option value="utc">UTC (needs the evidence's clock offset)</option>
+          </select>
+        </div>
+      </div>
+      <p style="font-size:11px; color:var(--text-dim); margin:0 0 12px;">
+        Log format: <code>{"recordings":[{"name":"front door","camera":1,"start":"2026-03-01T10:00:00Z","end":"2026-03-01T11:00:00Z"}]}</code>
+      </p>
+      <button id="acc-run" class="btn btn-primary btn-sm">📏 Measure</button>
+      <div id="acc-results" style="margin-top:14px;"></div>
+      <div id="acc-history" style="margin-top:14px;"></div>
     </div>` : ''}
   `;
 
   if (segments.length > 0) {
     document.getElementById('face-search-btn').onclick = () => runFaceSearch(caseId);
+    document.getElementById('acc-run').onclick = () => runAccuracyCheck(caseId);
+    loadAccuracyHistory(caseId);
   }
 }
 
@@ -422,4 +474,132 @@ async function runFaceDetection(caseId, evidenceId, segmentId, btnEl) {
       btnEl.innerHTML = 'Check Faces';
     }
   }
+}
+
+
+// ── Accuracy against ground truth ────────────────────────────────────────────
+
+function accTile(label, value, hint, tone) {
+  const color = tone === 'good' ? 'var(--status-complete)' : tone === 'bad' ? 'var(--status-error)'
+              : tone === 'warn' ? 'var(--status-partial)' : 'var(--text-main)';
+  return `<div class="acc-tile" title="${escapeHtml(hint || '')}">
+      <div class="acc-tile-value" style="color:${color};">${value}</div>
+      <div class="acc-tile-label">${escapeHtml(label)}</div>
+    </div>`;
+}
+
+function accPctTone(p) {
+  if (p === null || p === undefined) return '';
+  return p >= 95 ? 'good' : p >= 60 ? 'warn' : 'bad';
+}
+
+function accFmt(p) {
+  return (p === null || p === undefined) ? '—' : `${p}%`;
+}
+
+function renderAccuracyResult(r) {
+  const tiles = [];
+  const f = r.frames, b = r.bytes, pl = r.placement;
+  if (f) {
+    tiles.push(accTile('Frames recovered', accFmt(f.frame_recall_pct),
+      `${f.matched_frames} of ${f.truth_frames} ground-truth frames were found in the recovered video.`, accPctTone(f.frame_recall_pct)));
+    tiles.push(accTile('Frames that are right', accFmt(f.frame_precision_pct),
+      `${f.extra_or_wrong_frames} recovered frame(s) are not in the ground truth.`, accPctTone(f.frame_precision_pct)));
+    tiles.push(accTile('In correct order', accFmt(f.in_order_pct),
+      'Share of matched frames that appear in the same order as the ground truth.', accPctTone(f.in_order_pct)));
+  }
+  if (b) {
+    tiles.push(accTile('Byte-identical file', b.identical ? 'YES' : 'NO', b.meaning, b.identical ? 'good' : ''));
+  }
+  if (pl) {
+    tiles.push(accTile('Original bytes recovered', accFmt(pl.byte_recall_pct),
+      'Share of the original recordings\u2019 bytes covered by recovered segments (by disk offset).', accPctTone(pl.byte_recall_pct)));
+    tiles.push(accTile('Bytes from the right place', accFmt(pl.placement_precision_pct),
+      'Share of recovered bytes that lie inside an original recording\u2019s location.', accPctTone(pl.placement_precision_pct)));
+  }
+  const parts = [];
+  if (tiles.length) parts.push(`<div class="acc-tiles">${tiles.join('')}</div>`);
+
+  if (f) {
+    parts.push(`<p class="acc-note">${escapeHtml(f.meaning)}</p>`);
+    if (f.missing_ranges && f.missing_ranges.length) {
+      const txt = f.missing_ranges.map(([a, z]) => a === z ? `${a}` : `${a}–${z}`).join(', ');
+      parts.push(`<p class="acc-note"><strong>Missing ground-truth frames (0-based):</strong> ${escapeHtml(txt)}${f.missing_ranges_truncated ? ' …' : ''}</p>`);
+    }
+  }
+  if (b && !b.identical) {
+    parts.push(`<p class="acc-note">First differing byte: ${b.first_mismatch_offset === null ? '—' : b.first_mismatch_offset}. Sizes: recovered ${b.recovered_size}, ground truth ${b.truth_size}.</p>`);
+  }
+  if (pl) {
+    parts.push(`<p class="acc-note">${escapeHtml(pl.meaning)}</p>`);
+    const mixed = (pl.per_segment || []).filter(s => s.mixes_several_originals).length;
+    if (mixed) parts.push(`<p class="acc-note"><strong>${mixed} recovered segment(s) contain bytes from more than one original recording.</strong></p>`);
+    parts.push(`<div class="table-container"><table><thead><tr><th>Original recording</th><th>Bytes</th><th>Recovered</th><th>Recall</th></tr></thead><tbody>
+      ${(pl.per_original || []).map(o => `<tr><td>${escapeHtml(o.original)}</td><td>${o.bytes}</td><td>${o.recovered_bytes}</td><td><strong>${accFmt(o.byte_recall_pct)}</strong></td></tr>`).join('')}
+    </tbody></table></div>`);
+  }
+  if (r.log) {
+    parts.push(`<div class="table-container"><table><thead><tr><th>Logged recording</th><th>Camera</th><th>Time covered</th><th>Start Δ (s)</th><th>End Δ (s)</th></tr></thead><tbody>
+      ${r.log.entries.map(e => `<tr><td>${escapeHtml(e.name || '')}</td><td>${e.camera ?? 'any'}</td><td><strong>${accFmt(e.time_coverage_pct)}</strong></td><td>${e.start_delta_seconds ?? '—'}</td><td>${e.end_delta_seconds ?? '—'}</td></tr>`).join('')}
+    </tbody></table></div><p class="acc-note">${escapeHtml(r.log.meaning)}</p>`);
+  }
+  if (r.not_measured && r.not_measured.length) {
+    parts.push(`<div class="notice-card" style="margin-top:10px;"><p style="margin:0; font-size:12px;"><strong>Not measured:</strong> ${r.not_measured.map(escapeHtml).join(' · ')}</p></div>`);
+  }
+  if (r.measured_meaning) parts.push(`<p class="acc-note">${escapeHtml(r.measured_meaning)}</p>`);
+  return parts.join('');
+}
+
+async function runAccuracyCheck(caseId) {
+  const resultsEl = document.getElementById('acc-results');
+  const btn = document.getElementById('acc-run');
+  const video = document.getElementById('acc-video').files[0];
+  const log = document.getElementById('acc-log').files[0];
+  const original = document.getElementById('acc-original').value.trim();
+
+  if (!video && !log && !original) {
+    resultsEl.innerHTML = `<div class="error-inline"><span>⚠️</span><span>Supply at least one ground truth: a video, a recording log, or the original disk image path.</span></div>`;
+    return;
+  }
+  const fd = new FormData();
+  fd.append('segment_id', document.getElementById('acc-segment').value);
+  fd.append('mode', document.getElementById('acc-mode').value);
+  fd.append('log_clock', document.getElementById('acc-clock').value);
+  if (video) fd.append('ground_truth', video);
+  if (log) fd.append('truth_log', log);
+  if (original) fd.append('original_image_path', original);
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="btn-spinner"></span> Measuring…';
+  resultsEl.innerHTML = '';
+  try {
+    const res = await API.runAccuracy(caseId, fd);
+    resultsEl.innerHTML = renderAccuracyResult(res);
+    loadAccuracyHistory(caseId);
+  } catch (err) {
+    resultsEl.innerHTML = `<div class="error-banner" style="margin-top:0;"><div class="error-banner-icon">⚠️</div><div class="error-banner-body">
+      <div class="error-banner-title">Measurement failed</div><div class="error-banner-msg">${escapeHtml(err.message)}</div></div></div>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '📏 Measure';
+  }
+}
+
+async function loadAccuracyHistory(caseId) {
+  const el = document.getElementById('acc-history');
+  if (!el) return;
+  try {
+    const items = await API.getAccuracy(caseId);
+    if (!items.length) { el.innerHTML = ''; return; }
+    el.innerHTML = `<div class="card-title" style="font-size:13px;"><span>Earlier measurements (${items.length}) — included in the PDF report</span></div>
+      <div class="table-container"><table><thead><tr><th>When</th><th>Segment</th><th>Frames recovered</th><th>In order</th><th>Byte-identical</th><th>Original bytes recovered</th></tr></thead><tbody>
+      ${items.map(r => `<tr>
+        <td>${escapeHtml((r.created_at || '').substring(0, 19).replace('T', ' '))}</td>
+        <td class="hash-font" style="font-size:11px;">${escapeHtml((r.segment_id || '').substring(0, 8))}…</td>
+        <td>${r.frames ? accFmt(r.frames.frame_recall_pct) : '—'}</td>
+        <td>${r.frames ? accFmt(r.frames.in_order_pct) : '—'}</td>
+        <td>${r.bytes ? (r.bytes.identical ? 'yes' : 'no') : '—'}</td>
+        <td>${r.placement ? accFmt(r.placement.byte_recall_pct) : '—'}</td></tr>`).join('')}
+      </tbody></table></div>`;
+  } catch (_) { el.innerHTML = ''; }
 }
