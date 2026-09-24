@@ -57,6 +57,7 @@ from backend.database import (
     Database,
     DuplicateCaseNumberError,
     get_case_accuracy_dir,
+    get_case_analysis_dir,
     get_case_evidence_dir,
     get_case_export_dir,
     get_case_report_dir,
@@ -91,6 +92,8 @@ from backend import face_search
 from backend.face_detection import FACE_DETECTION_LABEL, detect_faces_in_video
 from backend.face_search import FaceEmbeddingRecord, index_faces_for_search
 from backend import accuracy as accuracy_mod
+from backend import imaging
+from backend import object_detection
 from backend.reconstructor import label_all
 from backend.reporting import generate_report
 from backend.timeline import TimelineData, build_timeline, normalize_to_utc
@@ -1238,6 +1241,161 @@ async def list_accuracy(case_id: str):
     return await asyncio.to_thread(_load_accuracy_results, case_id)
 
 
+# ── Object detection ──────────────────────────────────────────────────────────
+
+def _load_object_results(case_id: str) -> list[dict]:
+    d = get_case_analysis_dir(case_id)
+    out: list[dict] = []
+    if d.is_dir():
+        for f in d.glob("objects_*.json"):
+            try:
+                out.append(json.loads(f.read_text(encoding="utf-8")))
+            except Exception:
+                continue
+    out.sort(key=lambda r: r.get("created_at", ""), reverse=True)
+    return out
+
+
+@app.post("/api/cases/{case_id}/object-detect/{segment_id}")
+async def detect_segment_objects(case_id: str, segment_id: str):
+    """
+    Optional post-export object detection (YOLOX when a model file is present, otherwise the
+    classical HOG person detector). Read-only on the exported video; result stored with the case.
+    """
+    evs = await asyncio.to_thread(db.list_evidence_for_case, case_id)
+    if not evs:
+        raise HTTPException(400, "No evidence for this case")
+    segments = await asyncio.to_thread(db.list_segments_for_evidence, evs[-1].evidence_id)
+    seg = next((s for s in segments if s.segment_id == segment_id), None)
+    if not seg:
+        raise HTTPException(404, "Segment not found")
+    if not seg.export_path or not Path(seg.export_path).is_file():
+        raise HTTPException(400, "Segment has not been exported yet. Export to MP4 before running object detection.")
+
+    res = await asyncio.to_thread(object_detection.detect_objects_in_video, seg.export_path)
+    if res.error:
+        raise HTTPException(500, f"Object detection error: {res.error}")
+
+    data = res.to_dict()
+    data.update({
+        "segment_id": segment_id,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "export_sha256": seg.sha256,
+    })
+    d = get_case_analysis_dir(case_id)
+    d.mkdir(parents=True, exist_ok=True)
+    (d / f"objects_{segment_id}.json").write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+    _audit(case_id, "object_detection",
+           f"segment_id={segment_id} engine={res.engine} classes={sorted(res.classes)} "
+           f"frames_sampled={res.frames_sampled}")
+    return data
+
+
+@app.get("/api/cases/{case_id}/object-detect")
+async def list_object_results(case_id: str):
+    return {"results": await asyncio.to_thread(_load_object_results, case_id),
+            "engine_available": {"yolox": object_detection.model_available(), "hog": True}}
+
+
+# ── Acquisition (imaging a local drive / file into a case) ───────────────────
+
+_acquisition_jobs: dict[str, dict] = {}
+_background_tasks: set = set()      # keep references so running tasks are not garbage-collected
+
+
+def _local_acquisition_enabled() -> bool:
+    return os.environ.get("FORENSIC_ALLOW_LOCAL_ACQUISITION", "").strip() == "1"
+
+
+class AcquireRequest(BaseModel):
+    source_path: str
+    write_blocker_confirmed: bool = False
+    verify_source: bool = False
+    max_bytes: Optional[int] = None
+    device_utc_offset_minutes: Optional[int] = None
+
+
+@app.get("/api/acquisition/drives")
+async def acquisition_drives():
+    enabled = _local_acquisition_enabled()
+    return {
+        "enabled": enabled,
+        "drives": await asyncio.to_thread(imaging.list_local_drives) if enabled else [],
+        "message": None if enabled else (
+            "Drive imaging reads drives attached to the machine running this server, so it is off by default. "
+            "Set FORENSIC_ALLOW_LOCAL_ACQUISITION=1 when running the tool locally on the examiner's workstation."
+        ),
+    }
+
+
+@app.post("/api/cases/{case_id}/acquire")
+async def start_acquisition(case_id: str, req: AcquireRequest):
+    if not _local_acquisition_enabled():
+        raise HTTPException(403, "Drive imaging is disabled on this server (set FORENSIC_ALLOW_LOCAL_ACQUISITION=1 "
+                                 "when running locally on the examiner's workstation).")
+    case = await asyncio.to_thread(db.get_case, case_id)
+    if not case:
+        raise HTTPException(404, "Case not found")
+    if not req.write_blocker_confirmed:
+        raise HTTPException(400, "Confirm that the source is connected through a hardware write blocker.")
+    if req.max_bytes is not None and req.max_bytes <= 0:
+        raise HTTPException(400, "max_bytes must be positive.")
+    if req.device_utc_offset_minutes is not None and not (-720 <= req.device_utc_offset_minutes <= 840):
+        raise HTTPException(400, "device_utc_offset_minutes must be between -720 and 840.")
+    if _acquisition_jobs.get(case_id, {}).get("state") == "running":
+        raise HTTPException(409, "An acquisition is already running for this case.")
+
+    evidence_dir = get_case_evidence_dir(case_id)
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    dest = evidence_dir / f"acquired_{stamp}.dd"
+    job = {"state": "running", "bytes_done": 0, "total_bytes": None, "dest": str(dest), "error": None, "report": None}
+    _acquisition_jobs[case_id] = job
+    _audit(case_id, "acquisition_started",
+           f"source={req.source_path} dest={dest} write_blocker_attested=True max_bytes={req.max_bytes}")
+
+    def _progress(done: int, total: Optional[int]) -> None:
+        job["bytes_done"], job["total_bytes"] = done, total
+
+    async def _run() -> None:
+        try:
+            report = await asyncio.to_thread(
+                imaging.acquire_image, req.source_path, dest,
+                write_blocker_attested=True, max_bytes=req.max_bytes,
+                verify_source=req.verify_source, progress_cb=_progress,
+            )
+            ev = Evidence(case_id=case_id, path=str(dest), device_utc_offset_minutes=req.device_utc_offset_minutes,
+                          size_bytes=report.bytes_written, sha256_before=report.sha256, md5_before=report.md5)
+            ev = await asyncio.to_thread(db.save_evidence, ev)
+            _progress_queues[case_id] = asyncio.Queue()
+            job.update(state="done", report=report.to_dict(), evidence_id=ev.evidence_id)
+            _audit(case_id, "acquisition_completed",
+                   f"evidence_id={ev.evidence_id} bytes={report.bytes_written} sha256={report.sha256} "
+                   f"md5={report.md5} verified={report.dest_hash_verified} bit_exact={report.is_bit_exact} "
+                   f"bad_bytes={report.bad_bytes} source_rehash={report.source_rehash_verified}")
+        except (AcquisitionError, OSError) as exc:
+            job.update(state="failed", error=str(exc))
+            _audit(case_id, "acquisition_failed", str(exc)[:500])
+        except Exception as exc:                                   # never leave the job "running"
+            log.exception("acquisition crashed")
+            job.update(state="failed", error=f"Unexpected error: {exc}")
+            _audit(case_id, "acquisition_failed", f"unexpected: {exc}"[:500])
+
+    task = asyncio.create_task(_run())
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return {"state": "running", "dest": str(dest)}
+
+
+@app.get("/api/cases/{case_id}/acquire/status")
+async def acquisition_status(case_id: str):
+    job = _acquisition_jobs.get(case_id)
+    if not job:
+        return {"state": "idle"}
+    return job
+
+
 @app.get("/api/cases/{case_id}/report")
 async def get_report(case_id: str):
     case = await asyncio.to_thread(db.get_case, case_id)
@@ -1264,7 +1422,7 @@ async def get_report(case_id: str):
 
     await asyncio.to_thread(
         generate_report, pdf, case, ev, segments, log_evts, audit_entries, chain_ok,
-        correlated_events, _load_accuracy_results(case_id),
+        correlated_events, _load_accuracy_results(case_id), _load_object_results(case_id),
     )
     _audit(case_id, "report_generated", str(pdf))
     return FileResponse(str(pdf), media_type="application/pdf",

@@ -98,6 +98,11 @@ def get_case_accuracy_dir(case_id: str) -> Path:
     return _get_case_dir() / case_id / "accuracy"
 
 
+def get_case_analysis_dir(case_id: str) -> Path:
+    """Stored results of post-export analytics (object detection)."""
+    return _get_case_dir() / case_id / "analysis"
+
+
 
 # ── Schema ────────────────────────────────────────────────────────────────────
 

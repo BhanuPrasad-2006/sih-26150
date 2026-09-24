@@ -47,8 +47,13 @@ async function renderRecordingsScreen(params) {
     </div>`;
 
   let segments;
+  let objectResults = {};
   try {
     segments = await API.getSegments(caseId, evidenceId);
+    try {
+      const o = await API.getObjectResults(caseId);
+      (o.results || []).forEach(r => { objectResults[r.segment_id] = r; });
+    } catch (_) { /* object results are optional */ }
   } catch (err) {
     root.innerHTML = `
       <div class="page-header">
@@ -109,6 +114,7 @@ async function renderRecordingsScreen(params) {
                    <th>Export</th>
                    <th>Basic Motion Detection</th>
                    <th>AI-Based Face Detection</th>
+                   <th>Object Detection</th>
                    <th>Action</th>
                  </tr>
                </thead>
@@ -148,6 +154,22 @@ async function renderRecordingsScreen(params) {
                      }
                    }
 
+                   let objectCell = `<span style="font-size:11px; color:var(--text-dim);">Export required</span>`;
+                   if (isExported) {
+                     const o = objectResults[s.segment_id];
+                     if (o) {
+                       const names = Object.keys(o.classes || {});
+                       objectCell = names.length
+                         ? `<span class="badge badge-partial" data-tooltip="${escapeHtml(o.summary || '')}">${escapeHtml(names.slice(0, 3).join(', '))}${names.length > 3 ? '…' : ''}</span>`
+                         : `<span class="badge badge-pending" data-tooltip="${escapeHtml(o.summary || '')}">None found</span>`;
+                     } else {
+                       objectCell = `<button id="obj-btn-${s.segment_id}" class="btn btn-secondary btn-sm" style="font-size:11px; padding:3px 8px;"
+                         onclick="runObjectDetection('${caseId}', '${evidenceId}', '${s.segment_id}', this)">
+                         Check Objects
+                       </button>`;
+                     }
+                   }
+
                    return `
                      <tr>
                        <td><strong>Camera ${s.camera ?? s.camera_id ?? '?'}</strong></td>
@@ -165,6 +187,7 @@ async function renderRecordingsScreen(params) {
                        </td>
                        <td>${motionCell}</td>
                        <td>${faceCell}</td>
+                       <td>${objectCell}</td>
                        <td>
                          <button id="export-btn-${s.segment_id}" class="btn btn-secondary btn-sm"
                            onclick="exportSegment('${caseId}', '${evidenceId}', '${s.segment_id}', this)">
@@ -428,6 +451,56 @@ async function runMotionDetection(caseId, evidenceId, segmentId, btnEl) {
     if (btnEl) {
       btnEl.disabled = false;
       btnEl.innerHTML = 'Check Motion';
+    }
+  }
+}
+
+async function runObjectDetection(caseId, evidenceId, segmentId, btnEl) {
+  if (btnEl) {
+    btnEl.disabled = true;
+    btnEl.innerHTML = '<span class="btn-spinner"></span> Analyzing…';
+  }
+  try {
+    const res = await API.detectObjects(caseId, segmentId);
+    const rows = Object.entries(res.classes || {}).map(([name, st]) => `
+      <tr>
+        <td>${escapeHtml(name)}</td>
+        <td>${st.frames_with} / ${res.frames_sampled}</td>
+        <td>${st.max_in_frame}</td>
+        <td>${st.first_time_s == null ? '—' : st.first_time_s + ' s'}</td>
+        <td>${st.best_score}</td>
+      </tr>`).join('');
+    showModal(
+      'Object Detection Results',
+      `
+        <div class="${res.objects_detected ? 'notice-card' : 'success-inline'}" style="margin-bottom:12px;">
+          <strong>${escapeHtml(res.label)}</strong><br>${escapeHtml(res.summary)}
+        </div>
+        ${rows ? `<div class="table-container"><table>
+          <thead><tr><th>Object</th><th>Sampled frames</th><th>Max at once</th><th>First seen</th><th>Best score</th></tr></thead>
+          <tbody>${rows}</tbody></table></div>` : ''}
+        <div style="font-size:11px; color:var(--text-dim); margin-top:10px; line-height:1.5;">
+          Automated detections for human review — not identification. Frames are sampled, so an object visible only in
+          skipped frames is missed. Evidence hash and video container remain unaltered.
+        </div>
+      `,
+      [{ label: 'OK', class: 'btn-primary', onClick: () => renderRecordingsScreen({ caseId, evidenceId }) }]
+    );
+  } catch (err) {
+    showModal(
+      'Object Detection Error',
+      `<div class="error-banner" style="margin-top:0;">
+         <div class="error-banner-icon">⚠️</div>
+         <div class="error-banner-body">
+           <div class="error-banner-title">Object detection failed</div>
+           <div class="error-banner-msg">${escapeHtml(err.message)}</div>
+         </div>
+       </div>`,
+      [{ label: 'OK', class: 'btn-secondary', onClick: () => {} }]
+    );
+    if (btnEl) {
+      btnEl.disabled = false;
+      btnEl.innerHTML = 'Check Objects';
     }
   }
 }
