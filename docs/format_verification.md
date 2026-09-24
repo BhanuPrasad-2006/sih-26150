@@ -71,3 +71,13 @@ from someone else's reverse engineering; the gate exists to decide how far each 
 ## Public real-disk test data
 
 None found (searched DFRWS, CFReDS, Digital Corpora, GitHub). L3 requires an examiner-produced disk.
+
+## Related capabilities that are not format claims
+
+- **Drive imaging** (`backend/imaging.py`, evidence dialog "Option 3"): read-only copy of a file or raw device into a hashed `.dd`
+  with re-verification. Off unless `FORENSIC_ALLOW_LOCAL_ACQUISITION=1`. Tested on ordinary files (including simulated
+  unreadable sectors); **not yet run on a real physical drive**. The write-blocker requirement is an examiner attestation, not
+  something software can enforce.
+- **Object detection** (`backend/object_detection.py`): YOLOX (COCO) when `cv_models/object_detection_yolox_2022nov.onnx` is
+  present, otherwise OpenCV's classical HOG person detector (persons only, false positives expected). Decoding maths is
+  unit-tested; detection quality has not been measured.

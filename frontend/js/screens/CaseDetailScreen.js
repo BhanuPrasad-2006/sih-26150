@@ -88,7 +88,7 @@ async function renderCaseDetailScreen(params) {
       `
         <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px; line-height:1.6;">
           Attach evidence by choosing a file from your computer or by specifying an existing file path.<br>
-          <em style="color:var(--text-dim);">Physical drives (\\\\.\\PhysicalDriveN) are rejected to protect live data.</em>
+          <em style="color:var(--text-dim);">Options 1 and 2 take an image file that already exists. To create an image from a drive, use Option 3.</em>
         </p>
 
         <div class="form-group">
@@ -133,6 +133,20 @@ async function renderCaseDetailScreen(params) {
             <p style="font-size:12px; color:var(--text-dim); margin-top:6px; margin-bottom:0;">
               Enter absolute path on this machine (recommended for large multi-GB / TB images).
             </p>
+          </div>
+
+          <div style="display:flex; align-items:center; gap:12px; margin:14px 0;">
+            <div style="flex:1; height:1px; background:var(--border-color, rgba(255,255,255,0.1));"></div>
+            <span style="font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--text-dim); font-weight:700;">OR</span>
+            <div style="flex:1; height:1px; background:var(--border-color, rgba(255,255,255,0.1));"></div>
+          </div>
+
+          <!-- Option 3: Image a drive -->
+          <div class="form-group" style="margin-bottom:0;">
+            <label style="font-weight:600; display:flex; align-items:center; gap:6px; margin-bottom:8px;">
+              <span>🧲</span> Option 3: Create an Image from a Drive (this machine)
+            </label>
+            <div id="modal-acq-area" style="font-size:12px; color:var(--text-dim);">Checking whether drive imaging is available…</div>
           </div>
         </div>
 
@@ -238,6 +252,8 @@ async function renderCaseDetailScreen(params) {
       ]
     );
 
+    initAcquisitionPanel(caseId);
+
     // Wire up file picker controls
     const fileInput = document.getElementById('modal-ev-file-input');
     const browseBtn = document.getElementById('modal-ev-browse-btn');
@@ -286,6 +302,87 @@ async function renderCaseDetailScreen(params) {
           fileClearBtn.style.display = 'none';
         }
       };
+    }
+  };
+}
+
+/** Option 3 of the evidence modal: image a local drive or file into the case (read-only, hashed, verified). */
+async function initAcquisitionPanel(caseId) {
+  const area = document.getElementById('modal-acq-area');
+  if (!area) return;
+  let info;
+  try {
+    info = await API.getDrives();
+  } catch (err) {
+    area.textContent = 'Could not check drive imaging: ' + err.message;
+    return;
+  }
+  if (!info.enabled) {
+    area.innerHTML = escapeHtml(info.message || 'Drive imaging is disabled on this server.');
+    return;
+  }
+  const options = (info.drives || []).map(d =>
+    `<option value="${escapeHtml(d.path)}">${escapeHtml(d.path)} — ${escapeHtml(d.model || 'unknown model')}` +
+    `${d.size_bytes ? ' — ' + (d.size_bytes / 1e9).toFixed(1) + ' GB' : ''}</option>`).join('');
+  area.innerHTML = `
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      <select id="acq-drive" class="form-control"><option value="">Pick a drive…</option>${options}</select>
+      <input type="text" id="acq-path" class="form-control" placeholder="…or type a device / file path">
+      <label style="display:flex; gap:8px; align-items:flex-start; line-height:1.5; color:var(--text-muted);">
+        <input type="checkbox" id="acq-wb" style="margin-top:3px;">
+        <span>I confirm this source is connected through a <strong>hardware write blocker</strong> (or a read-only mount).
+        The software cannot enforce this; your confirmation is recorded in the audit log.</span>
+      </label>
+      <label style="display:flex; gap:8px; align-items:center; color:var(--text-muted);">
+        <input type="checkbox" id="acq-verify"> Also re-read the source afterwards to confirm it did not change (slower)
+      </label>
+      <div style="color:var(--status-partial);">Imaging a real drive reads the whole disk and can take hours. Raw devices usually need administrator/root rights.</div>
+      <button type="button" id="acq-start" class="btn btn-secondary">Start imaging</button>
+      <div id="acq-status" style="font-family:var(--font-mono); word-break:break-all;"></div>
+    </div>`;
+
+  document.getElementById('acq-drive').onchange = (e) => {
+    if (e.target.value) document.getElementById('acq-path').value = e.target.value;
+  };
+  document.getElementById('acq-start').onclick = async () => {
+    const source = document.getElementById('acq-path').value.trim();
+    const status = document.getElementById('acq-status');
+    const btn = document.getElementById('acq-start');
+    if (!source) { status.textContent = 'Choose a drive or enter a path.'; return; }
+    if (!document.getElementById('acq-wb').checked) { status.textContent = 'Confirm the write blocker first.'; return; }
+    btn.disabled = true;
+    status.textContent = 'Starting…';
+    try {
+      await API.startAcquisition(caseId, {
+        source_path: source,
+        write_blocker_confirmed: true,
+        verify_source: document.getElementById('acq-verify').checked,
+      });
+      const timer = setInterval(async () => {
+        try {
+          const st = await API.getAcquisitionStatus(caseId);
+          const el = document.getElementById('acq-status');
+          if (!el) { clearInterval(timer); return; }
+          if (st.state === 'running') {
+            const total = st.total_bytes ? ' / ' + (st.total_bytes / 1048576).toFixed(0) + ' MB' : '';
+            el.textContent = `Imaging… ${(st.bytes_done / 1048576).toFixed(0)} MB${total}`;
+          } else if (st.state === 'done') {
+            clearInterval(timer);
+            const r = st.report;
+            el.innerHTML = `Done. SHA-256 ${escapeHtml(r.sha256)}<br>` +
+              (r.is_bit_exact ? 'Image verified and bit-exact.'
+                              : `<span style="color:var(--status-partial);">Not bit-exact: ${escapeHtml((r.notes || []).join(' '))}</span>`);
+            setTimeout(() => { closeModal(); navigateTo('evidence-scan', { caseId, evidenceId: st.evidence_id }); }, 1500);
+          } else if (st.state === 'failed') {
+            clearInterval(timer);
+            el.textContent = 'Failed: ' + st.error;
+            btn.disabled = false;
+          }
+        } catch (e) { /* transient poll error; keep polling */ }
+      }, 1000);
+    } catch (err) {
+      status.textContent = err.message;
+      btn.disabled = false;
     }
   };
 }

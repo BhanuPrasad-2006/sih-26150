@@ -184,6 +184,35 @@ def _accuracy_section(results: list, S) -> list:
     return out
 
 
+def _object_section(results: list, S) -> list:
+    """Report section for object-detection runs; says so when none were run."""
+    out: list = [Paragraph("Object Detection", S["h2"])]
+    if not results:
+        out.append(Paragraph("Not run for this case.", S["body"]))
+        out.append(Spacer(1, 0.3 * cm))
+        return out
+    out.append(Paragraph(
+        "Automated detections for human review. A detection means a detector scored a region above its threshold; "
+        "it is not identification, and absence of a detection does not prove absence of the object. Frames are "
+        "sampled, so objects visible only in skipped frames are missed.",
+        S["small"],
+    ))
+    rows = [["Segment", "Engine", "Object", "Sampled frames with it", "Max at once", "First seen (s)"]]
+    for r in results:
+        seg = (r.get("segment_id") or "")[:8]
+        engine = textwrap.shorten(r.get("label", r.get("engine", "")), 34)
+        classes = r.get("classes") or {}
+        if not classes:
+            rows.append([seg, engine, "nothing detected", f"0 of {r.get('frames_sampled', 0)}", "-", "-"])
+        for name, st in classes.items():
+            first = st.get("first_time_s")
+            rows.append([seg, engine, name, f"{st['frames_with']} of {r.get('frames_sampled', 0)}",
+                         str(st["max_in_frame"]), "-" if first is None else f"{first}"])
+    out.append(Table(rows, colWidths=[2*cm, 5*cm, 2.6*cm, 3.2*cm, 1.9*cm, 2.2*cm], style=_TBL_HDR))
+    out.append(Spacer(1, 0.3 * cm))
+    return out
+
+
 # ── Main builder ──────────────────────────────────────────────────────────────
 
 def generate_report(
@@ -196,6 +225,7 @@ def generate_report(
     chain_ok: bool,
     correlated_events: Optional[list] = None,
     accuracy_results: Optional[list] = None,
+    object_results: Optional[list] = None,
 ) -> None:
     """
     Generate a PDF forensic report at *output_path*.
@@ -333,6 +363,7 @@ def generate_report(
 
         # ── 4c. Accuracy against ground truth ────────────────────────────────
         elements.extend(_accuracy_section(accuracy_results or [], S))
+        elements.extend(_object_section(object_results or [], S))
 
         # ── 5. Method and limitations ────────────────────────────────────────
         elements.append(PageBreak())

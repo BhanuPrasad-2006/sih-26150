@@ -312,6 +312,47 @@ const API = {
     return res.json();
   },
 
+  /** Object detection (YOLOX if a model file is installed, otherwise the classical HOG person detector). */
+  async detectObjects(caseId, segmentId) {
+    const url = `/api/cases/${caseId}/object-detect/${segmentId}`;
+    const res = await fetch(url, { method: 'POST' });
+    await this._checkOk(res, url);
+    return res.json();
+  },
+
+  async getObjectResults(caseId) {
+    const url = `/api/cases/${caseId}/object-detect`;
+    const res = await fetch(url);
+    await this._checkOk(res, url);
+    return res.json();
+  },
+
+  /** Drive imaging (only enabled when the server runs locally with FORENSIC_ALLOW_LOCAL_ACQUISITION=1). */
+  async getDrives() {
+    const url = '/api/acquisition/drives';
+    const res = await fetch(url);
+    await this._checkOk(res, url);
+    return res.json();
+  },
+
+  async startAcquisition(caseId, body) {
+    const url = `/api/cases/${caseId}/acquire`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    await this._checkOk(res, url);
+    return res.json();
+  },
+
+  async getAcquisitionStatus(caseId) {
+    const url = `/api/cases/${caseId}/acquire/status`;
+    const res = await fetch(url);
+    await this._checkOk(res, url);
+    return res.json();
+  },
+
   /** AI-Based Face Detection (OpenCV YuNet) — detection only, no recognition/identification. */
   async detectFaces(caseId, segmentId) {
     const url = `/api/cases/${caseId}/face-detect/${segmentId}`;
