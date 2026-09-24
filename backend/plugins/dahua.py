@@ -2,12 +2,15 @@
 dahua.py — Dahua DVR/NVR brand plugin.
 
 What is implemented in v1:
-  - detect():          Scan for DHAV frame magic bytes → confidence score.
-  - list_recordings(): NOT IMPLEMENTED (DHFS index layout not yet verified).
-                       Returns ([], "not implemented") immediately.
-  - carve():           Full rolling scan with mmap.find for DHAV frames.
-                       Every candidate is validated against the checklist in
-                       docs/format_sheets/dahua.md §2 and PRD §5.6.1.
+  - detect():          A valid DHFS 4.1 partition table, or DHAV frames → confidence.
+  - list_recordings(): Reads the DHFS 4.1 disk index (dahua_dhfs.py; Wullen 2025 + Batista's
+                       extractor, L2 in docs/format_verification.md) and reassembles each
+                       recording from its descriptor chain, with camera and start times.
+  - carve():           Full rolling scan with mmap.find for DHAV frames, validated per
+                       docs/format_sheets/dahua.md §2. When a DHFS index exists, frames inside
+                       indexed clusters are left to the index, so what carve() returns is the
+                       footage OUTSIDE indexed recordings (deleted, free or slack space).
+                       Not validated on a real Dahua disk.
 
 Carving algorithm:
   1. Use mm.find(b'DHAV', search_from) — C-speed search, no Python byte loops.
@@ -38,6 +41,7 @@ from typing import Callable, Optional, TYPE_CHECKING
 
 from backend.models import LogEvent, RawFrame
 from backend.plugins.base import BrandPlugin
+from backend.plugins.dahua_dhfs import iter_recordings, read_partitions
 from backend.plugins.constants import (
     CPPLUS_IDENTIFYING_MARKERS,
     DHAV_DATE_YEAR_MIN,
@@ -93,6 +97,7 @@ class DahuaPlugin(BrandPlugin):
             limit = min(img.size, self._DETECT_SCAN_BYTES)
             valid_count = 0
             search_from = 0
+            dhfs_ok = bool(read_partitions(mm, img.size))
 
             while search_from < limit:
                 pos = mm.find(DHAV_HEADER_MAGIC, search_from, limit)
@@ -105,14 +110,14 @@ class DahuaPlugin(BrandPlugin):
                 else:
                     search_from = pos + len(DHAV_HEADER_MAGIC)
 
-            if valid_count == 0:
+            if valid_count == 0 and not dhfs_ok:
                 return 0.0
             # If CP Plus brand strings are present, Dahua yields primary brand attribution to CP Plus stub
             for marker in CPPLUS_IDENTIFYING_MARKERS:
                 if mm.find(marker, 0, limit) != -1:
                     return 0.90
 
-            if valid_count >= self._DETECT_MIN_FRAMES:
+            if dhfs_ok or valid_count >= self._DETECT_MIN_FRAMES:
                 return 1.0
             # Linear ramp between 1 and _DETECT_MIN_FRAMES valid frames
             return 0.5 + 0.5 * (valid_count / self._DETECT_MIN_FRAMES)
@@ -127,17 +132,36 @@ class DahuaPlugin(BrandPlugin):
 
     def list_recordings(self, img: "EvidenceImage") -> tuple[list[RawFrame], str]:
         """
-        DHFS index parsing is NOT implemented in v1.
-        The DHFS superblock and index entry layout are not yet verified on a real disk.
-        See docs/format_sheets/dahua.md §1 for details.
+        Read the DHFS 4.1 disk index (Wullen 2025 + Batista's extractor; see
+        docs/format_verification.md): partition table, boot sector, descriptor table, and follow
+        each recording's cluster chain. Every fragment becomes one RawFrame carrying the
+        recording's camera, the fragment's start time, and the recording's stream_id, so the
+        reconstructor keeps a recording together even across time gaps. Returns [] if the disk
+        has no valid DHFS 4.1 index (then only carving applies).
         """
-        note = (
-            "Dahua DHFS index parsing is not implemented in v1. "
-            "The file-system index layout is unverified (TO VERIFY — see "
-            "docs/format_sheets/dahua.md §1). Using carving only."
+        frames: list[RawFrame] = []
+        try:
+            parts = read_partitions(img.mm, img.size)
+            for part in parts:
+                for rec in iter_recordings(img.mm, img.size, part):
+                    for n, fr in enumerate(rec.fragments):
+                        frames.append(RawFrame(
+                            brand="dahua", camera=rec.camera, sequence=n + 1,
+                            timestamp=(fr.begin if n else rec.begin),
+                            disk_offset=fr.offset, frame_size=fr.size,
+                            frame_type=0, is_keyframe=False, stream_id=rec.stream_id,
+                        ))
+        except Exception as exc:
+            note = f"Dahua DHFS 4.1 index could not be read ({exc}); carving only."
+            log.warning(note)
+            return [], note
+        if not parts:
+            return [], "No DHFS 4.1 index found on this disk (carving only)."
+        n_rec = len({f.stream_id for f in frames})
+        return frames, (
+            f"Dahua DHFS 4.1 index: {len(parts)} partition(s), {n_rec} recording(s), "
+            f"{len(frames)} fragment(s) reassembled from descriptor chains."
         )
-        log.info(note)
-        return [], note
 
     # ── carve ─────────────────────────────────────────────────────────────────
 
@@ -155,6 +179,8 @@ class DahuaPlugin(BrandPlugin):
         frames: list[RawFrame] = []
         rejected_count = 0
         search_from = 0
+        indexed = _indexed_ranges(img)
+        skipped_indexed = 0
 
         try:
             while search_from < total:
@@ -164,7 +190,10 @@ class DahuaPlugin(BrandPlugin):
 
                 frame = _validate_dhav_frame(mm, pos, total)
                 if frame is not None:
-                    frames.append(frame)
+                    if _in_ranges(indexed, pos):
+                        skipped_indexed += 1   # already reported through the DHFS index
+                    else:
+                        frames.append(frame)
                     search_from = pos + frame.frame_size
                 else:
                     rejected_count += 1
@@ -184,8 +213,36 @@ class DahuaPlugin(BrandPlugin):
             f"Dahua carving complete: {len(frames)} valid DHAV frames found, "
             f"{rejected_count} candidates rejected."
         )
+        if indexed:
+            note += (
+                f" {skipped_indexed} frame(s) inside indexed clusters were left to the DHFS index; "
+                "the frames above lie OUTSIDE indexed recordings (deleted, free, or slack space)."
+            )
         log.info(note)
         return frames, note
+
+
+# ── DHFS index helpers ────────────────────────────────────────────────────────
+
+def _indexed_ranges(img) -> list[tuple[int, int]]:
+    """Sorted byte ranges of every cluster that belongs to an indexed recording."""
+    try:
+        ranges: list[tuple[int, int]] = []
+        for part in read_partitions(img.mm, img.size):
+            for rec in iter_recordings(img.mm, img.size, part):
+                ranges.extend((fr.offset, fr.offset + part.cluster_size) for fr in rec.fragments)
+        ranges.sort()
+        return ranges
+    except Exception:
+        return []
+
+
+def _in_ranges(ranges: list[tuple[int, int]], pos: int) -> bool:
+    if not ranges:
+        return False
+    import bisect
+    i = bisect.bisect_right(ranges, (pos, float("inf"))) - 1
+    return i >= 0 and ranges[i][0] <= pos < ranges[i][1]
 
 
 # ── Frame validation ──────────────────────────────────────────────────────────

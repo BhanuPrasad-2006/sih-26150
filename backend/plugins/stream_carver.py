@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import logging
 import re
+from dataclasses import dataclass
+from datetime import datetime
 from typing import Callable, Optional, TYPE_CHECKING
 
 from backend.models import RawFrame
@@ -44,31 +46,50 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class CarveRegion:
+    """A byte range to carve, with the camera/time window an on-disk index assigned to it."""
+    start: int
+    stop: int
+    camera: int = 0
+    window_start: Optional[datetime] = None
+    window_end: Optional[datetime] = None
+
+
 def carve_standard_streams(
     img: "EvidenceImage",
     brand: str,
     progress_cb: Optional[Callable[[int, int], None]] = None,
+    regions: Optional[list[CarveRegion]] = None,
 ) -> tuple[list[RawFrame], str]:
-    """Carve MPEG-PS and H.264 Annex B streams; tag frames with *brand*."""
+    """
+    Carve MPEG-PS and H.264 Annex B streams; tag frames with *brand*.
+    With *regions*, only those byte ranges are scanned (a run never extends past its
+    region's end) and frames inherit the region's camera and index time window.
+    """
     mm = img.mm
     total = img.size
+    if regions is None:
+        regions = [CarveRegion(0, total)]
     frames: list[RawFrame] = []
-    pos = 0
     ps_runs = 0
     annexb_runs = 0
     counter = 0
 
     try:
-        while pos < total:
-            m = _CANDIDATE_RE.search(mm, pos)
+      for region in regions:
+        pos = region.start
+        limit = min(region.stop, total)
+        while pos < limit:
+            m = _CANDIDATE_RE.search(mm, pos, limit)
             if m is None:
                 break
             p = m.start()
             if mm[p + 3] == 0xBA:
-                run = _carve_ps_run(mm, p, total)
+                run = _carve_ps_run(mm, p, limit)
                 kind = "ps"
             else:
-                run = _carve_annexb_run(mm, p, total)
+                run = _carve_annexb_run(mm, p, limit)
                 kind = "annexb"
 
             if run is None:
@@ -78,9 +99,10 @@ def carve_standard_streams(
             spans, end = run
             for start, stop, ftype, key in spans:
                 frames.append(RawFrame(
-                    brand=brand, camera=0, sequence=counter, timestamp=None,
+                    brand=brand, camera=region.camera, sequence=counter, timestamp=None,
                     disk_offset=start, frame_size=stop - start,
                     frame_type=ftype, is_keyframe=key,
+                    window_start=region.window_start, window_end=region.window_end,
                 ))
                 counter += 1
             if kind == "ps":
@@ -139,6 +161,20 @@ def _ps_pack_header_len(mm, pos: int, size: int) -> Optional[int]:
         if (b[6] & 1) and (b[8] & 1) and (b[9] & 0x80) and (b[11] & 1):
             return 12
     return None
+
+
+def _ps_header_end(mm, pos: int, size: int) -> Optional[int]:
+    """End offset of an MPEG-PS pack header (BA) or a length-prefixed system/map header (BB/BC)."""
+    sid = mm[pos + 3]
+    if sid == 0xBA:
+        n = _ps_pack_header_len(mm, pos, size)
+        return pos + n if n is not None else None
+    if pos + 6 > size:
+        return None
+    length = (mm[pos + 4] << 8) | mm[pos + 5]
+    if length == 0 or pos + 6 + length > size:
+        return None
+    return pos + 6 + length
 
 
 def _carve_ps_run(mm, start: int, size: int):
@@ -207,6 +243,25 @@ def _carve_annexb_run(mm, sps_code_pos: int, size: int):
 
     while p + 4 <= size:
         header = mm[p + 3]
+        if header in (0xBA, 0xBB, 0xBC):
+            # Han 2015 sec. 2.3 / Fig. 4: Hikvision data blocks put `00 00 01 BA` (and `BC` at
+            # keyframes) before each picture's NAL units. These are MPEG-PS pack-header / program-
+            # stream-map start codes, so they are skipped by the MPEG-PS length rules and kept in
+            # the recovered bytes (they belong to the stream).
+            hdr_end = _ps_header_end(mm, p, size)
+            if hdr_end is None:
+                break
+            nals.append((unit_start, hdr_end, 0, p))
+            q = hdr_end
+            zeros = 0
+            while q < size and mm[q] == 0 and zeros < _MAX_TRAILING_ZEROS:
+                zeros += 1
+                q += 1
+            if q < size and mm[q] == 1 and zeros >= 2:
+                p = q - 2
+                unit_start = hdr_end
+                continue
+            break
         nal_type = header & 0x1F
         if (header & 0x80) or nal_type not in H264_VALID_NAL_TYPES:
             break

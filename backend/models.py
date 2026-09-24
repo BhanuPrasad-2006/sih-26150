@@ -166,6 +166,10 @@ class RawFrame:
     # unknown at carve time (e.g. Honeywell): frames from different streams must never
     # be merged or interleaved by timestamp.
     stream_id:    int = 0
+    # Time window from an on-disk INDEX entry (e.g. a Hikvision HIKBTREE data-block entry).
+    # Block-level, NOT per-frame: every frame in the block shares it. None when no index was read.
+    window_start: Optional[datetime] = None
+    window_end:   Optional[datetime] = None
 
     @property
     def disk_offset_end(self) -> int:

@@ -23,13 +23,23 @@
 | Used in | NVR (digital IP cameras) and some DVR (analog) | ✅ Dragonas 2024 |
 | Some NVR disks use | Standard file system (XFS mentioned) | ✅ MDPI 2025 |
 | Some NVR disks use | Mixed DHFS + XFS | ✅ MDPI 2025 |
-| DHFS superblock location | Partition offset — exact offset not confirmed | ❓ TO VERIFY on real disk |
-| DHFS superblock magic | Not yet identified from a verified source | ❓ TO VERIFY |
-| Partition table | Standard MBR or no partition table | 🔵 Proposed (MDPI 2025 mentions both) |
+| DHFS signature | `DHFS4.1` (7 bytes) at the very start of the disk | ✅ Wullen 2025 + Batista extractor (read `DHFS4.1` at offset 0) |
+| Partition table | at sector 30 (`0x3C00`); entries begin `0x34` into the sector, 64 bytes each: boot-sector offset (u32 @ +20, sectors, 34 in the samples), partition start (u64 @ +48, sectors), length (u32 @ +56); ends with `AA 55 AA 55` (`0x3D34` after four partitions) | ✅ both sources; positions confirmed against the spec's Fig. 2 hex dump |
+| Boot sector | partition start + boot offset; fields at `0x10` begin time, `0x14` end time, `0x2C` bytes/sector (512), `0x30` sectors/cluster (4096), `0x44` descriptor table (sector), `0x48` video area (sector), `0x4C` descriptor count, `0xF8` log | ✅ both sources; Fig. 3 sample: table at sector 187, video area 6656, 29807 descriptors |
+| Descriptor table | 32-byte descriptors, one per cluster: `0x01` main, `0x02` fragment; free is `0xFE` (spec) or `0` (Batista); channel byte, next (@12), last-fragment size in sectors (@16, main), prev (@20), video ID (@24, = the main descriptor's own index in the sample) | ✅ agreed; ⚠ free byte differs (both accepted) |
+| Cluster address | partition start + video area + index × cluster size | ✅ both |
+| Timestamps | same packed layout as DHAV (yr6/mo4/day5/hr5/min6/sec6, +2000), local clock, no timezone | ✅ FFmpeg + Wullen (worked example reproduced) + Batista |
+| Camera number | `(channel byte & 0x0F) + 1` (spec: `0x23` → 4). Batista uses `byte − 48 + 1`, which is only right for `0x3X` bytes and gives negative numbers on the spec's own disk | ✅ spec; ⚠ reference formula conflicts (mask used) |
+| Declared fragment count | Batista adds 1 to the main descriptor's count; spec does not | ⚠ conflict — chain length is used instead, count is ignored |
+| Some NVR disks use XFS / mixed DHFS+XFS | not handled | 🔵 MDPI 2025 |
 
-**Implementation note (v1):** `list_recordings()` is NOT implemented. The DHFS index layout is not yet verified.
-The plugin returns `[]` with the message `"DHFS index parsing not implemented — use carving"`.
-Do not add index parsing until the layout is confirmed on a real disk.
+**Implementation (2026-09-24):** `list_recordings()` reads this index (`backend/plugins/dahua_dhfs.py`) and
+reassembles each recording from its cluster chain, with camera and start times. A chain stops at the end marker
+(`0`/`0xFFFFFFFF`), a loop, an out-of-range id, a non-fragment descriptor, or a fragment naming a different video
+(so a stale pointer cannot splice another recording in). `carve()` then reports only DHAV frames **outside** indexed
+clusters (deleted, free or slack space). Verified by known-answer tests from the spec's printed samples, and by a
+differential run of an independent extractor (Batista) on the same synthetic disk: same recordings, chains, start
+times and bytes. **Not validated on a real Dahua disk.** Descriptor `0` cannot head a chain (0 is the end marker).
 
 ---
 

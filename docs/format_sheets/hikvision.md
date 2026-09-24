@@ -1,155 +1,130 @@
 # Hikvision DVR/NVR — Format Sheet
 
-**Status key**
-- ✅ Verified — confirmed by two or more independent published sources
-- 🔵 Proposed — one source only, or inferred
-- ❓ TO VERIFY — from an unverified or AI-generated report; do NOT code against it until confirmed
+**Primary source (read in full, figures inspected, 2026-09-24):**
+J. Han, D. Jeong, S. Lee, "Analysis of the HIKVISION DVR File System", ICDF2C 2015, LNICST 157, pp. 189-199,
+DOI 10.1007/978-3-319-25512-5_13 ("Han 2015"). Tested on one Hikvision DS-7204HVI-SV DVR with a 160 GB disk.
 
-**Primary sources**
-1. Han, Jeong, Lee (2015). "Analysis of the HIKVISION DVR File System." ICDF2C, Springer. ("Han 2015")
-2. MDPI Information 16(11):983, 2025 — cites Han 2015 and adds evaluation data ("MDPI 2025")
-3. Dragonas et al. (2023). "IoT forensics: Exploiting unexplored log records from the HIKVISION file system."
-   Journal of Forensic Sciences. ("Dragonas 2023")
+**Other sources:** FFmpeg `libavformat/mpeg.c` (Hikvision "IMKH" export files are MPEG program streams);
+Dragonas et al. 2023 (log records, not used here). MDPI Information 16(11):983 (2025) was read too; its Hikvision
+frame format is **rejected** (see §6).
 
----
+**Status key:** ✅ stated by Han 2015 (and read from its text/figure) · 🔵 inferred or our own choice ·
+❓ not published / unverified · ⚠ conflict or ambiguity in the source.
+Trust level and cross-checks: `docs/format_verification.md`. **Nothing here has been validated on a real disk.**
 
-## 1. Master sector
-
-| Item | Detail | Status |
-|------|--------|--------|
-| Master sector disk offset | 0x200 (512 bytes from start of disk) | ✅ Han 2015 (cited in MDPI 2025) |
-| Magic text in master sector | `HIKVISION@HANGZHOU` (ASCII, at the start of the sector) | ✅ Han 2015 (cited in MDPI 2025) |
-| Sector size | 512 bytes (standard) | ✅ assumed from disk offset |
-| Additional fields in master sector | Not yet documented from a verified source | ❓ TO VERIFY |
-
-**Detection rule (v1):** Read 512 bytes at offset 0x200.
-If the bytes contain `HIKVISION@HANGZHOU`, return confidence 1.0.
-If not found, return confidence 0.0.
-Do not read any other fields from the master sector until verified.
+An earlier version of this sheet marked the `0xBA`/`0xBC` prefix, the 1 GB block size and the `OFNI` table as
+"from an unverified AI report". They are in Han 2015 itself. That error came from not having read the paper.
 
 ---
 
-## 2. Index structure (HIKB-TREE)
+## 1. Layout (Han §2, Fig. 1)
 
-| Item | Detail | Status |
-|------|--------|--------|
-| Index name | HIKB-TREE | ✅ Han 2015 (name verified; cited in MDPI 2025) |
-| Index location on disk | Follows the master sector; exact offset not confirmed | ❓ TO VERIFY with Han 2015 paper |
-| Entry layout (fields, sizes) | Not yet extracted from a verified source | ❓ TO VERIFY |
-| Effect of "delete from menu" | Resets index entry timestamps; video data remains until overwritten | 🔵 Consistent with Han 2015; exact values TO VERIFY |
-| Effect of "quick format" | May re-initialise the index but leave data blocks intact | 🔵 Han 2015 (general description) |
-| Effect of "full format" | Overwrites data blocks; recovery unlikely | 🔵 Han 2015 |
+Master Sector → System Logs → Video Data Area (numerous data blocks) → HIKBTREE (metadata). A backup Master
+Sector follows the system logs; a backup HIKBTREE follows the primary one. ✅
 
-**Implementation note (v1):** `list_recordings()` is NOT implemented.
-The exact byte layout of HIKB-TREE entries is not yet confirmed.
-The method returns `[]` with message `"HIKB-TREE index parsing not implemented — TO VERIFY layout first"`.
+## 2. Master sector (§2.1, Fig. 2)
 
----
+Starts at disk offset **0x200**, 256 bytes, little-endian. ✅ Signature `HIKVISION@HANGZHOU` at offset 0.
+Field offsets below are relative to the master sector and were **read from the hex-dump figure**; the paper prints
+the sample values, which are arithmetically consistent (and the implementation rejects a sector that isn't).
 
-## 3. Data blocks
+| Offset | Size | Field | Sample value (Han Fig. 2) |
+|---|---|---|---|
+| 0x38 | u64 | capacity of the hard disk | 0x25433D6000 (~160 GB) |
+| 0x50 | u64 | offset to system logs | 0x3D13200 |
+| 0x58 | u64 | size of system logs | 0xF42C00 |
+| 0x68 | u64 | offset to video data area | 0x4C5E000 |
+| 0x78 | u64 | size of a data block | bytes `00 00 00 40` = 0x40000000 (1 GB) ⚠ |
+| 0x80 | u32 | total number of data blocks | 0x94 (148) |
+| 0x88 | u64 | offset to HIKBTREE1 | 0x25433BDC00 |
+| 0x90 | u32 | size of HIKBTREE1 | 0x6000 |
+| 0x98 | u64 | offset to HIKBTREE2 (backup) | 0x25433C3C00 |
+| 0xA0 | u32 | size of HIKBTREE2 | 0x6000 |
+| 0xE0 | u32 | time of last system initialisation (UNIX, UTC) | bytes `37 22 77 54` ⚠ |
 
-| Item | Detail | Status |
-|------|--------|--------|
-| Data block size | 1 GB | ❓ TO VERIFY (stated in an unverified AI report; not confirmed in Han 2015) |
-| Block alignment | Unknown | ❓ TO VERIFY |
-| Video stored within blocks | Yes — H.264 or H.265 NAL units | 🔵 Inferred from output format |
+⚠ The paper's text gives the block size as `0x400000`, but the figure bytes and the block count agree on 1 GB
+(0x25433D6000 ÷ 1 GB = 148 = 0x94, and §2.3 says "generally 1 GB"). ⚠ The text prints the init time as
+`0x37227754` (bytes left to right); read little-endian it is 0x54772237 = 2014-11-30 UTC, which fits a 2015 paper.
 
----
+Self-consistency checks implemented (`master_sector_problems`): block size in range; block count > 0; video area
+fits inside the stated capacity; logs end before the video area; backup HIKBTREE follows the primary.
 
-## 4. Video stream structure
+## 3. HIKBTREE (§2.4, Figs. 5-6)
 
-**2026-09 review (same method as the Dahua correction):** the "firmware prefix `0xBA`/`0xBC`" items
-below came from an unverified AI-generated report. They are not Hikvision-specific: `0xBA` and `0xBC`
-are the standard **MPEG program stream** pack-header and program-stream-map start-code IDs
-(ISO/IEC 13818-1). FFmpeg's real `libavformat/mpeg.c` (fetched and read 2026-09-23) confirms
-Hikvision "IMKH" video files are MPEG-PS (`imkh_cctv` flag; es_type `0x91` = G.711 µ-law audio).
-Secondary web sources also describe raw H.264 in data blocks. **Which container a real Hikvision
-data block uses is not verified**, so the carver supports both, using only public standards.
+Signature `HIKBTREE` (no hyphen). ✅ Header, page list, 4 KB pages, footer. The header holds created time,
+offset to footer, offset to page list, offset to page 1 (Fig. 5a). ✅ The page list starts with the total number
+of pages and page offsets (Fig. 5b). 🔵 Only the parts below are used.
 
-| Item | Detail | Status |
-|------|--------|--------|
-| H.264 NAL start code | `\x00\x00\x01` / `\x00\x00\x00\x01` | ✅ ITU-T H.264 Annex B |
-| NAL header / types / SPS→PPS→slice opening | forbidden bit 0, `nal_unit_type` low 5 bits; SPS=7, PPS=8, IDR=5, slice=1 | ✅ ITU-T H.264 §7.3.1 |
-| NAL end rule | Next `00 00 00`/`00 00 01` (emulation prevention forbids them inside payloads) | ✅ ITU-T H.264 Annex B |
-| MPEG-PS pack header + PES chain | `00 00 01 BA`, marker bits, PES length-delimited packets | ✅ ISO/IEC 13818-1 §2.5.3 |
-| Hikvision export files are MPEG-PS ("IMKH" 4-byte header) | | ✅ FFmpeg mpeg.c |
-| Firmware prefix `0xBA` / `0xBC` | = MPEG-PS pack header / program stream map IDs | 🔵 Explained by the standard; not Hikvision-specific |
-| OFNI marker (IDR table at end of block) | Reportedly marks the keyframe table | ❓ TO VERIFY (also appears in Han 2015 summaries; not parsed) |
-| OFNI entry size | 56 bytes (reported) | ❓ TO VERIFY |
-| Whether real HDD data blocks store raw H.264, MPEG-PS, or a private wrapper | | ❓ TO VERIFY on a real disk |
+**Data block entry — 48 bytes (Fig. 6B):**
 
----
+| Offset | Size | Field | Notes |
+|---|---|---|---|
+| 0x00 | 8 | (FF…) | unknown |
+| 0x08 | 8 | existence of video data | `00…` block holds video; `FF…` no video / none recorded ✅ |
+| 0x10 | 1 | 0 (or FF when no video) | |
+| 0x11 | 1 | channel (1-based camera number) ✅ | |
+| 0x18 | 4 | start time (UNIX UTC) ✅ | |
+| 0x1C | 4 | end time (UNIX UTC) ✅ | `FF FF FF 7F 00 00 00 00` when not available ✅ |
+| 0x20 | 8 | offset of the data block ✅ | in every sample = video area offset + n × 1 GB (checked) |
+| 0x28 | 8 | unknown | |
 
-## 5. Carving approach (standards-based, decode-validated)
+⚠ The paper's text says times are valid "only when the block is full", but its "Recording" sample shows real times
+and its "Recorded" sample shows the sentinel; treated as: sentinel ⇒ no time, otherwise use the time.
+Entries are located by this fixed structure and validated against the master sector; how the page list and
+"next page" pointers tie pages together is only partly shown, so they are not followed. ❓
 
-The HIKB-TREE layout is not verified, so the carver does **not** parse any Hikvision-specific structure.
-It recovers contiguous standard video streams from raw bytes:
+## 4. Data blocks (§2.3, Fig. 4)
 
-1. Single forward scan (`re` over the mmap) for either an MPEG-PS pack start (`00 00 01 BA`) or an H.264
-   SPS start code (`00 00 01` + `27|47|67`).
-2. **MPEG-PS run:** validate pack-header marker bits (MPEG-1 and MPEG-2 forms), then walk PES packets by
-   their length fields until the chain breaks. Requires a video PES (`E0–EF`) and ≥3 elements. Run extent
-   is exact. One unit per pack.
-3. **H.264 Annex B run:** must open SPS (known `profile_idc`, ≤1 KiB) → PPS → slice; NAL ends follow the
-   Annex B rule, so extents are exact **except the last slice** (see limitations). One unit per slice
-   (spans tile the run exactly; also covers preceding SPS/PPS/SEI).
-4. Byte-contiguous units form one segment (`reconstructor.split_on_gaps`); a gap starts a new segment.
-5. Segments start **UNCERTAIN**. Export remuxes with FFmpeg (`-c copy`; MPEG-PS autodetected, raw H.264 via
-   `-f h264`); only if `ffprobe` decodes it does status become **PARTIAL**. **COMPLETE is never assigned.**
-6. Not available (unverified): channel/camera number (always 0), timestamps (none), HIKB-TREE index.
+- Block size generally **1 GB**. ✅ A block holds video data followed, at the back, by an **IDR table**. ✅
+- Video is **H.264**; each frame is a NAL unit with the 4-byte start code `00 00 00 01`; types `06 09 61 65 67 68`. ✅
+- **Before each picture** the block stores a one-byte-id header `0xBA` or `0xBC` after a 3-byte `00 00 01`
+  (`BA` before every picture; `BC` also before keyframes in Fig. 4), then the NAL units. ✅ These are the standard
+  MPEG-PS pack-header / program-stream-map ids (FFmpeg `mpeg.c` confirms Hikvision files are MPEG-PS), which is why
+  other players show noise on raw blocks. 🔵 The bytes that follow `BA`/`BC` are not published; the carver skips them
+  with the MPEG-PS length rules and keeps them in the recovered bytes.
+- **IDR table:** records start with `OFNI` (`4F 46 4E 49`), fixed **56 bytes** each, written backwards from the end of
+  the block; hold index, channel and timestamp of each IDR picture. ✅ **The record layout is not published** ❓, so
+  per-frame timestamps are not available.
 
-**Verification performed 2026-09-23** (`backend/tests/manual/e2e_hikvision_real_video_verification.py`,
-`backend/tests/test_hikvision_carving.py`): real ffmpeg/libx264 video of an AI-generated face, embedded in
-a Hikvision-style image (valid master sector, noise, random decoys resembling SPS/pack starts) as raw H.264
-and as MPEG-PS. Recovered bytes were byte-identical to the embedded stream in both forms; exports decoded
-(40/40 frames, face detected); face search scored 0.80 same-person vs 0.21 different-person; decoys and
-random data yielded zero units. Bugs found and fixed while doing this: a stray SPS-like code before a real
-stream absorbed junk into the run (fixed with the SPS/PPS size guard), and a blanket identical-byte trim
-truncated real slices (now applied to the last slice only).
+## 5. What the plugin does
 
-**Not proven:** that any real Hikvision recorder writes video this way on disk. This validates the
-carver against the public standards, not against real hardware.
+1. `detect()`: master sector signature at 0x200 → confidence 1.0. 🔵
+2. `carve()`: if the master sector parses and passes the arithmetic checks, scan **every** data block in
+   the video area. Blocks with exactly one live HIKBTREE entry get that entry's channel as the camera and its
+   start/end as a **block-level** time window. Blocks with no usable entry (overwritten, wiped by initialisation,
+   or missing) are still carved as unindexed footage (camera 0, no window). Blocks with several live entries are
+   not assigned. If the master sector is missing or inconsistent, the whole image is carved. 🔵
+3. Inside blocks: standards-based carving (MPEG-PS / H.264 Annex B, `stream_carver.py`) including the `BA`/`BC`
+   headers above.
+4. Segments start UNCERTAIN; PARTIAL only if FFmpeg decodes the export; never COMPLETE.
 
----
+Why carve blocks whose entry says "no video": Han §3.2 — initialisation resets the HIKBTREE and logs but "all video
+data in data blocks will remain".
 
-## 6. Log records
+## 6. Rejected claim: MDPI 2025 "HKVI" frame format
 
-| Item | Detail | Status |
-|------|--------|--------|
-| Log records present | Yes — formatting, recording status, login events | ✅ Dragonas 2023 |
-| Log location | Inside the Hikvision file system partition | 🔵 Inferred from Dragonas 2023 |
-| Log parsing | Not implemented in v1 (requires HIKB-TREE layout verification first) | — |
+MDPI Information 16(11):983 states a Hikvision frame format with magic `0x484B5649` ("HKVI") at offset 0, type at 4,
+size at 8, timestamp at 12, channel at 16, payload at 20 "minus 24 bytes of header overhead". Not implemented:
+uncorroborated (Han and FFmpeg describe NAL/PS data, not this), internally inconsistent (payload at 20 but 24-byte
+overhead), and the paper's Dahua detection offsets contradict the Dahua spec.
 
----
+## 7. Facts still to confirm on a real disk
 
-## 7. Facts table (confirm before coding)
-
-For each row, state the result when confirmed on a real disk.
-
-| Fact | Expected value | Confirmed? | Confirmed by | Notes |
-|------|----------------|-----------|--------------|-------|
-| Master sector magic at 0x200 | `HIKVISION@HANGZHOU` | — | — | First check on every disk |
-| HIKB-TREE present | Yes | — | — | Read name from master sector fields |
-| Data block size | 1 GB | — | — | Measure from disk hex dump |
-| OFNI marker | `b'OFNI'` | — | — | Search near block boundaries |
-| OFNI entry size | 56 bytes | — | — | Count bytes between entries |
-| Firmware prefix | 0xBA or 0xBC before NAL | — | — | Compare hex dumps, two firmware versions |
-| Delete resets timestamp | Yes | — | — | Delete one recording; diff master image |
-
----
+| Fact | Expected | Confirmed? |
+|---|---|---|
+| Master sector field offsets (Fig. 2 read from image) | as §2 | — |
+| Data block entry offsets (Fig. 6B) | as §3 | — |
+| Block size 1 GB on current firmware / NVRs | 0x40000000 | — |
+| Bytes following `00 00 01 BA` / `BC` | unknown | — |
+| `OFNI` record layout | 56 bytes, unknown fields | — |
+| Behaviour on H.265 and newer firmware/filesystems | unknown | — |
 
 ## 8. Known limitations
 
-- Detection (master sector magic) and standards-based stream carving are implemented; index reading is not.
-- Camera number, timestamps and recording boundaries from the HIKB-TREE index are unavailable (camera=0,
-  no time range). Streams from different cameras/times that happen to be byte-contiguous merge into one segment.
-- The **last slice** of an H.264 Annex B run has a heuristic end (first ≥16 identical-byte run); if real
-  trailing data differs from filler, junk may be included, and a real slice containing such a run would be
-  truncated. ffprobe decode-validation gates the PARTIAL label either way.
-- Only standard MPEG-PS/H.264 is handled; H.265, private wrappers, and audio-only content are not carved.
-- No accuracy numbers can be reported for Hikvision until KAT-01 and KAT-02 pass on a real disk.
-- All items marked ❓ must be verified with Han et al. (2015) full text and a real disk hex dump.
+- One DVR model and firmware (2015). Newer Hikvision recorders and NVRs are unverified.
+- Per-frame timestamps unavailable; time windows are per 1 GB block and may cover several recordings.
+- Ambiguity where one block has several entries; those blocks are carved without camera or window.
+- Log parsing not implemented.
+- No accuracy figures can be reported until known-answer tests pass on a real disk.
 
----
-
-*Last updated: 2026-09-20. Update this sheet whenever a real disk test confirms or disproves an item.*
+*Last updated: 2026-09-24 (rewritten after reading Han 2015 in full).*
