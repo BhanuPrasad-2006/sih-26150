@@ -66,3 +66,15 @@ length `0x016560`, and 2025-11-26 21:48:41.896 UTC, matching the paper's text.
 were recovered byte-exact as two separate segments with header timestamps, exported, 40/40 frames decoded with the face
 detected, and face search scored 0.80 same-person vs 0.21 different-person. The test data follows the paper's layout, so
 this shows the parser matches the paper, not that every real Honeywell disk matches the paper.
+
+## Follow-up work by the same lab (added 2026-09-26)
+
+Giri, Yoon and Hwang, *CARVE: Recovering and Reconstructing Deleted H.264/H.265 Video from Honeywell Surveillance Systems*,
+DFRWS APAC 2026 (SKKU SoftSec Lab). Per its abstract: carves residual H.264 **and H.265** fragments, separates deleted footage from current
+recordings using embedded timestamps, groups fragments by camera (OCR of overlay text, or PRNU sensor-noise fingerprints when no overlay),
+and rebuilds timelines including internal gaps; average recovery 99.89 % in data-expiration, overwrite and format-deletion scenarios (authors'
+figure, their devices). We have the abstract only, no public code or data.
+
+Consequences for this project: (1) our carver handles **H.264 only**; Honeywell recorders using H.265 will not be recovered; (2) the camera is not
+recoverable from the video region alone after a format, and CARVE's answer (overlay OCR, sensor fingerprints) is outside our scope; (3) our
+Honeywell results stay UNCERTAIN/PARTIAL until run on a real device with the validation kit.

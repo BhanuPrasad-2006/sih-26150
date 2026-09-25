@@ -94,3 +94,15 @@ None found (searched DFRWS, CFReDS, Digital Corpora, GitHub). L3 requires an exa
   (0.93), cat (0.94), cup/spoon/table (0.90/0.68/0.70) were found in the right places. After squashing to a square and
   mp4v compression the cup fell below the default 0.5 threshold, i.e. it can miss. The HOG fallback, on the same person
   photo, returned one wrong-location box and missed the person. This is three photos, not an accuracy measurement.
+
+## Claims checked and not accepted (2026-09-26)
+
+AI-chat answers about Honeywell, Uniview and Matrix were traced to sources before anything was recorded as a fact.
+
+| Claim | Check | Result |
+|---|---|---|
+| A DFRWS framework "CARVE" recovers deleted Honeywell video | Real: *CARVE: Recovering and Reconstructing Deleted H.264/H.265 Video from Honeywell Surveillance Systems*, Giri, Yoon, Hwang (SKKU SoftSec Lab), DFRWS APAC 2026. Same lab as the arXiv Honeywell file-system paper we implement. Reported: H.264 **and H.265**, timestamps from OCR of on-screen overlays or PRNU camera fingerprints, 99.89 % average recovery (authors' figure). No public code found | **Accepted as a source, not as validation.** Our Honeywell carver is H.264 only (H.265 is a known gap). The recovery figure is theirs, on their devices |
+| `haliner/dvr-recover` extracts Honeywell H.264 | It is a GPL-3.0 tool for Panasonic consumer recorders (MPEG-PS chunks ordered by clock). Honeywell uses 20-byte record headers plus Annex B, per the arXiv paper | **Rejected** |
+| `tsvetomir/dvrdecode` shows Uniview's format | The repository is "Decode DAHUA DVR clips from raw disk data" (Ruby, 2015), not Uniview | **Rejected** for Uniview |
+| Uniview stores plain elementary streams that Scalpel/foremost can carve | No source found | **Unverified (L0)**; the generic carver may or may not find such streams |
+| Matrix SATATYA stores files on ext3/ext4, possibly RAID | Searches of Matrix's manuals and wiki found nothing about the file system | **Unverified (L0)**. If a Matrix disk does turn out to be ext4, the tool's foreign-filesystem detection will report it and standard tools (mmls, mount read-only, Autopsy) apply |
