@@ -157,6 +157,40 @@ const API = {
     return res.json();
   },
 
+  async totpRecoveryCodes(password, code) {
+    const res = await fetch('/api/auth/totp/recovery-codes', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password, code }),
+    });
+    await this._checkOk(res, '/api/auth/totp/recovery-codes');
+    return res.json();
+  },
+
+  async securityStatus() {
+    const res = await fetch('/api/security/status');
+    await this._checkOk(res, '/api/security/status');
+    return res.json();
+  },
+
+  /** Passphrase-encrypted case archive (no evidence images). Triggers a browser download. */
+  async downloadCasePackage(caseId, passphrase) {
+    const url = `/api/cases/${caseId}/package`;
+    const fd = new FormData();
+    fd.append('passphrase', passphrase);
+    const res = await fetch(url, { method: 'POST', body: fd });
+    await this._checkOk(res, url);
+    const blob = await res.blob();
+    const disp = res.headers.get('Content-Disposition') || '';
+    const m = disp.match(/filename="?([^";]+)"?/);
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = m ? m[1] : 'case.sihpkg';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+    return { size_bytes: blob.size };
+  },
+
   /** Logout — clears the session cookie on the server. */
   async logout() {
     const url = '/api/auth/logout';

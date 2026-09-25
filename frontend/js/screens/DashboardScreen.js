@@ -12,6 +12,7 @@ async function renderDashboardScreen() {
           <div class="page-subtitle">Select an active case or register a new investigation.</div>
         </div>
         <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button id="btn-security" class="btn btn-secondary">🛡 Security</button>
           <button id="btn-2fa" class="btn btn-secondary">🔐 Two-factor</button>
           <button id="btn-new-case" class="btn btn-primary">➕ Register New Case</button>
         </div>
@@ -55,6 +56,7 @@ async function renderDashboardScreen() {
 
   document.getElementById('btn-new-case').onclick = () => navigateTo('new-case');
   document.getElementById('btn-2fa').onclick = openTwoFactorDialog;
+  document.getElementById('btn-security').onclick = openSecurityStatusDialog;
 
   try {
     const cases = await API.listCases();
@@ -132,8 +134,12 @@ async function openTwoFactorDialog() {
               <div id="tf-msg" style="margin-top:8px; font-size:13px;"></div>`;
             document.getElementById('tf-confirm').onclick = async () => {
               const msg = document.getElementById('tf-msg');
-              try { await API.totpConfirm(document.getElementById('tf-code').value.trim()); msg.textContent = 'Two-factor authentication is now ON.'; }
-              catch (e2) { msg.textContent = e2.message; }
+              try {
+                const done = await API.totpConfirm(document.getElementById('tf-code').value.trim());
+                msg.innerHTML = 'Two-factor authentication is now <strong>ON</strong>. Save these one-time recovery codes offline (each works once; shown only now):' +
+                  '<pre style="margin-top:8px; padding:10px; background:rgba(0,0,0,0.3); border-radius:6px; font-family:var(--font-mono); user-select:all;">' +
+                  escapeHtml((done.recovery_codes || []).join('\n')) + '</pre>';
+              } catch (e2) { msg.textContent = e2.message; }
             };
           } catch (e1) { area.innerHTML = `<div class="error-inline">${escapeHtml(e1.message)}</div>`; }
       } },
@@ -142,13 +148,39 @@ async function openTwoFactorDialog() {
     showModal('Two-factor authentication',
       `<p style="margin:0 0 10px;">Two-factor authentication is <strong>ON</strong>. To turn it off, enter your password and a current code.</p>
        <div class="form-group"><label>Password</label><input id="tf-pw" type="password" class="form-control"></div>
-       <div class="form-group"><label>Current 6-digit code</label><input id="tf-code" class="form-control" inputmode="numeric" maxlength="6"></div>
+       <div class="form-group"><label>Current 6-digit code (or a recovery code)</label><input id="tf-code" class="form-control" maxlength="16"></div>
        <div id="tf-msg" style="font-size:13px;"></div>`,
-      [{ label: 'Turn off', class: 'btn-primary', autoClose: false, onClick: async () => {
+      [{ label: 'New recovery codes', class: 'btn-secondary', autoClose: false, onClick: async () => {
+          const msg = document.getElementById('tf-msg');
+          try {
+            const r = await API.totpRecoveryCodes(document.getElementById('tf-pw').value, document.getElementById('tf-code').value.trim());
+            msg.innerHTML = 'New recovery codes (the old ones no longer work). Save them offline:' +
+              '<pre style="margin-top:8px; padding:10px; background:rgba(0,0,0,0.3); border-radius:6px; font-family:var(--font-mono); user-select:all;">' +
+              escapeHtml(r.recovery_codes.join('\n')) + '</pre>';
+          } catch (e) { msg.textContent = e.message; }
+      } },
+       { label: 'Turn off', class: 'btn-primary', autoClose: false, onClick: async () => {
           const msg = document.getElementById('tf-msg');
           try { await API.totpDisable(document.getElementById('tf-pw').value, document.getElementById('tf-code').value.trim()); msg.textContent = 'Two-factor authentication is now OFF.'; }
           catch (e) { msg.textContent = e.message; }
       } },
        { label: 'Close', class: 'btn-secondary', onClick: () => {} }]);
   }
+}
+
+
+/** Live security self-check of this installation. */
+async function openSecurityStatusDialog() {
+  showModal('Security status', '<div id="sec-area">Checking…</div>', [{ label: 'Close', class: 'btn-primary', onClick: () => {} }]);
+  const area = document.getElementById('sec-area');
+  try {
+    const r = await API.securityStatus();
+    const dot = { ok: 'var(--status-complete)', warn: 'var(--status-partial)', info: 'var(--text-dim)' };
+    area.innerHTML = `<p style="margin:0 0 10px;">${r.warnings ? r.warnings + ' item(s) need attention.' : 'All checks pass.'}</p>` +
+      r.checks.map(c => `
+        <div style="display:flex; gap:10px; align-items:flex-start; padding:6px 0; border-top:1px solid rgba(255,255,255,0.06);">
+          <span style="width:10px; height:10px; border-radius:50%; margin-top:6px; flex:none; background:${dot[c.status] || dot.info};"></span>
+          <div><strong>${escapeHtml(c.title)}</strong><div style="font-size:12px; color:var(--text-muted);">${escapeHtml(c.detail)}</div></div>
+        </div>`).join('');
+  } catch (e) { area.textContent = e.message; }
 }

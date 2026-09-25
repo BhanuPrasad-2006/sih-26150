@@ -18,7 +18,11 @@ Design principles (per project brief):
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
 import os
+import re
 import secrets
 import threading
 import time
@@ -39,6 +43,22 @@ def _timeout_minutes() -> int:
         return max(1, val)  # never less than 1 minute
     except (TypeError, ValueError):
         return 30
+
+
+def _max_session_hours() -> float:
+    """Absolute session lifetime regardless of activity (default 12 h, override via env)."""
+    try:
+        return max(0.25, float(os.environ.get("SESSION_MAX_HOURS", "12")))
+    except (TypeError, ValueError):
+        return 12.0
+
+
+_RECOVERY_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"      # no 0/O/1/I
+RECOVERY_CODE_COUNT = 10
+
+
+def _norm_recovery(code: str) -> str:
+    return re.sub(r"[\s-]", "", (code or "")).upper()
 
 
 # ── Auth state ─────────────────────────────────────────────────────────────────
@@ -130,19 +150,65 @@ class AuthManager:
             self._db.set_auth_value("totp_pending", encrypt_text(secret))
             return secret
 
-    def confirm_totp(self, code: str) -> bool:
+    def confirm_totp(self, code: str) -> Optional[list[str]]:
+        """Activate two-factor. Returns the one-time recovery codes (shown once), or None if the code was wrong."""
         with self._lock:
             pending = self._db.get_auth_value("totp_pending")
             if not pending:
-                return False
+                return None
             secret = decrypt_text(pending)
             ok, counter = totp.verify(secret, code)
             if not ok:
-                return False
+                return None
             self._db.set_auth_value("totp_secret", encrypt_text(secret))
             self._db.set_auth_value("totp_last_counter", str(counter))
             self._db.set_auth_value("totp_pending", "")
-            return True
+            return self._store_new_recovery_codes()
+
+    # ── Recovery codes (lost-phone fallback) ───────────────────────────────────
+
+    def _store_new_recovery_codes(self) -> list[str]:
+        """Caller holds self._lock. Only salted hashes are stored (encrypted); the plain codes are shown once."""
+        codes = ["".join(secrets.choice(_RECOVERY_ALPHABET) for _ in range(5)) + "-" +
+                 "".join(secrets.choice(_RECOVERY_ALPHABET) for _ in range(5)) for _ in range(RECOVERY_CODE_COUNT)]
+        entries = []
+        for c in codes:
+            salt = secrets.token_hex(8)
+            entries.append({"s": salt, "h": hashlib.sha256((salt + _norm_recovery(c)).encode()).hexdigest()})
+        self._db.set_auth_value("totp_recovery", encrypt_text(json.dumps(entries)))
+        return codes
+
+    def regenerate_recovery_codes(self) -> list[str]:
+        with self._lock:
+            if not self.totp_enabled():
+                raise ValueError("Two-factor authentication is not enabled.")
+            return self._store_new_recovery_codes()
+
+    def recovery_codes_remaining(self) -> int:
+        stored = self._db.get_auth_value("totp_recovery")
+        return len(json.loads(decrypt_text(stored))) if stored else 0
+
+    def verify_recovery_code(self, code: str) -> bool:
+        """One-time use: a matching code is removed."""
+        with self._lock:
+            stored = self._db.get_auth_value("totp_recovery")
+            if not stored:
+                return False
+            entries = json.loads(decrypt_text(stored))
+            norm = _norm_recovery(code)
+            for e in entries:
+                if hmac.compare_digest(e["h"], hashlib.sha256((e["s"] + norm).encode()).hexdigest()):
+                    entries.remove(e)
+                    self._db.set_auth_value("totp_recovery", encrypt_text(json.dumps(entries)))
+                    return True
+            return False
+
+    def verify_second_factor(self, code: str) -> bool:
+        """A 6-digit authenticator code, or (when it does not look like one) a one-time recovery code."""
+        c = (code or "").strip()
+        if re.fullmatch(r"\d{3}\s?\d{3}", c):
+            return self.verify_totp(c)
+        return self.verify_recovery_code(c)
 
     def verify_totp(self, code: str) -> bool:
         """Verify a login code; a code (counter) can be used only once."""
@@ -158,7 +224,7 @@ class AuthManager:
 
     def disable_totp(self) -> None:
         with self._lock:
-            for k in ("totp_secret", "totp_pending", "totp_last_counter"):
+            for k in ("totp_secret", "totp_pending", "totp_last_counter", "totp_recovery"):
                 self._db.set_auth_value(k, "")
 
     # ── Lockout management ─────────────────────────────────────────────────────
@@ -202,7 +268,8 @@ class AuthManager:
         """
         token = secrets.token_urlsafe(32)
         with self._lock:
-            self._sessions[token] = {"last_activity": time.time()}
+            now = time.time()
+            self._sessions[token] = {"last_activity": now, "created": now}
         return token
 
     def validate_session(self, token: Optional[str]) -> bool:
@@ -221,9 +288,13 @@ class AuthManager:
             session = self._sessions.get(token)
             if not session:
                 return False
-            elapsed = time.time() - session["last_activity"]
-            if elapsed > _timeout_minutes() * 60:
+            now = time.time()
+            if now - session["last_activity"] > _timeout_minutes() * 60:
                 # Session has timed out — delete it
+                del self._sessions[token]
+                return False
+            if now - session.get("created", now) > _max_session_hours() * 3600:
+                # Absolute lifetime reached: even an active session must log in again
                 del self._sessions[token]
                 return False
             return True
@@ -243,6 +314,14 @@ class AuthManager:
             return
         with self._lock:
             self._sessions.pop(token, None)
+
+    def invalidate_other_sessions(self, keep_token: Optional[str]) -> int:
+        """End every session except `keep_token` (after a security setting changes). Returns how many ended."""
+        with self._lock:
+            drop = [t for t in self._sessions if t != keep_token]
+            for t in drop:
+                del self._sessions[t]
+            return len(drop)
 
     def session_count(self) -> int:
         """Return the number of active sessions (for diagnostics only)."""

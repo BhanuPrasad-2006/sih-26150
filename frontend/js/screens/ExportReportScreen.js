@@ -73,12 +73,38 @@ async function renderExportReportScreen(params) {
       </div>
     </div>
 
+    <div class="card">
+      <div class="card-title">Encrypted Case Package</div>
+      <p style="font-size:12px; color:var(--text-muted); margin:0 0 10px; line-height:1.6;">
+        A single passphrase-encrypted file (AES-256-GCM) with this case's exports, signed reports, analyses and audit log,
+        for archiving or hand-over. Evidence images are not included. Any change to the file is detected when it is opened
+        (<code>python -m backend.case_package decrypt file.sihpkg out.zip</code>). Lose the passphrase and it cannot be opened.
+      </p>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+        <input type="password" id="pkg-pass" class="form-control" style="max-width:320px;" placeholder="Passphrase (12+ characters)" autocomplete="new-password">
+        <button id="btn-package" class="btn btn-secondary">🔒 Create encrypted package</button>
+        <span id="pkg-msg" style="font-size:12px; color:var(--text-muted);"></span>
+      </div>
+    </div>
+
     <!-- Result panel — hidden until generation completes -->
     <div id="report-result-card" style="display:none;"></div>
 
     <!-- Generation error — hidden until an error occurs -->
     <div id="report-error-card" style="display:none;"></div>
   `;
+
+  document.getElementById('btn-package').onclick = async () => {
+    const msg = document.getElementById('pkg-msg');
+    const pass = document.getElementById('pkg-pass').value;
+    if (pass.length < 12) { msg.textContent = 'Use a passphrase of at least 12 characters.'; return; }
+    msg.textContent = 'Encrypting…';
+    try {
+      const r = await API.downloadCasePackage(caseId, pass);
+      msg.textContent = `Downloaded (${(r.size_bytes / 1024).toFixed(0)} KB). Keep the passphrase safe.`;
+      document.getElementById('pkg-pass').value = '';
+    } catch (e) { msg.textContent = e.message; }
+  };
 
   // ── Generate PDF ───────────────────────────────────────────────────────────
   const genBtn = document.getElementById('btn-generate-pdf');

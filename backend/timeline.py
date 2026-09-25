@@ -90,12 +90,14 @@ def _gaps_for_lane(camera: int, segments: list[Segment]) -> list[TimelineGap]:
 
     gaps: list[TimelineGap] = []
     covered_until = segments[0].end_time
-    assert covered_until is not None  # guaranteed by _normalised_segment
+    if covered_until is None:  # guaranteed by _normalised_segment; explicit check survives python -O
+        return []
 
     for segment in segments[1:]:
         start_time = segment.start_time
         end_time = segment.end_time
-        assert start_time is not None and end_time is not None
+        if start_time is None or end_time is None:
+            continue
 
         if start_time > covered_until:
             gaps.append(TimelineGap(
@@ -147,7 +149,8 @@ def build_timeline(segments: Iterable[Segment]) -> TimelineData:
 
     start_time = min(segment.start_time for segment in placed_segments)
     end_time = max(segment.end_time for segment in placed_segments)
-    assert start_time is not None and end_time is not None
+    if start_time is None or end_time is None:
+        raise ValueError("placed segments must have start and end times")
     return TimelineData(
         start_time=start_time,
         end_time=end_time,

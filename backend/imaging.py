@@ -95,7 +95,7 @@ class ImagingReport:
 
 
 def _sha_md5_file(path: Path, progress_cb: Optional[Callable[[int, int], None]] = None) -> tuple[str, str]:
-    sha, md5 = hashlib.sha256(), hashlib.md5()
+    sha, md5 = hashlib.sha256(), hashlib.md5(usedforsecurity=False)   # MD5: reported for forensic practice only
     total = path.stat().st_size
     done = 0
     with open(path, "rb") as f:
@@ -214,7 +214,7 @@ def acquire_image(
         sha256="", md5="", started_utc=started.isoformat(), finished_utc="", duration_seconds=0.0,
         write_blocker_attested=True,
     )
-    sha, md5 = hashlib.sha256(), hashlib.md5()
+    sha, md5 = hashlib.sha256(), hashlib.md5(usedforsecurity=False)   # MD5: reported for forensic practice only
 
     try:
         total = _device_size(f, str(src)) if src_is_device else src.stat().st_size

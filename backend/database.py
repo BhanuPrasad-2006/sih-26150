@@ -348,7 +348,7 @@ class Database:
             if segment_ids:
                 placeholders = ",".join("?" for _ in segment_ids)
                 conn.execute(
-                    f"DELETE FROM face_embeddings WHERE segment_id IN ({placeholders})",
+                    f"DELETE FROM face_embeddings WHERE segment_id IN ({placeholders})",  # nosec B608: placeholders are "?" only, values are bound
                     segment_ids,
                 )
             conn.execute("DELETE FROM segments WHERE evidence_id=?", (evidence_id,))
@@ -414,7 +414,7 @@ class Database:
         placeholders = ",".join("?" for _ in segment_ids)
         with self._connect() as conn:
             rows = conn.execute(
-                f"SELECT segment_id, frame_offset_seconds, bbox_json, embedding_json "
+                f"SELECT segment_id, frame_offset_seconds, bbox_json, embedding_json "  # nosec B608: placeholders are "?" only
                 f"FROM face_embeddings WHERE segment_id IN ({placeholders})",
                 segment_ids,
             ).fetchall()

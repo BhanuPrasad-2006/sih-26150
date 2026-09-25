@@ -95,9 +95,14 @@ from backend.face_search import FaceEmbeddingRecord, index_faces_for_search
 from backend import accuracy as accuracy_mod
 from backend import imaging
 from backend import audit_seal
+from backend import pdf_signing
 from backend import report_signing
+from backend import case_package
+from backend import security_status
+from backend import model_integrity
 from backend import totp as totp_mod
 from backend.security import HostOriginMiddleware, SecurityHeadersMiddleware, ensure_path_allowed
+from backend.security import evidence_roots as security_module_roots
 from backend import object_detection
 from backend.reconstructor import label_all
 from backend.reporting import generate_report
@@ -299,13 +304,22 @@ async def _push_progress(case_id: str, prog: ScanProgress) -> None:
 _global_audit = AuditLog.from_entries(db.load_audit_entries(case_id=None))
 
 
+def _global_seal_dir() -> Path:
+    return get_case_analysis_dir("_").parent.parent          # the folder that holds every case
+
+
 def _global_audit_event(action: str, details: str = "") -> None:
     """Append to the global access audit log (login/logout events)."""
-    entry = _global_audit.append(action, details)
-    try:
-        db.save_audit_entry(entry, case_id=None)
-    except Exception:
-        pass
+    with _audit_write_lock:
+        entry = _global_audit.append(action, details)
+        try:
+            db.save_audit_entry(entry, case_id=None)
+        except Exception:
+            log.exception("Could not persist a global audit entry (%s)", action)
+        try:
+            audit_seal.write_seal(_global_seal_dir(), "__global__", len(_global_audit), _global_audit.last_hash())
+        except Exception:
+            log.exception("Could not seal the global audit log")
 
 
 # ── Background scan ───────────────────────────────────────────────────────────
@@ -526,7 +540,7 @@ async def auth_status_with_session(request: Request):
 
 
 @app.post("/api/auth/setup")
-async def setup_password(req: SetupRequest, response: Response):
+async def setup_password(req: SetupRequest, response: Response, request: Request):
     """
     First-run endpoint: set the examiner password.
     Only works when no password has been set yet.
@@ -551,12 +565,13 @@ async def setup_password(req: SetupRequest, response: Response):
         # secure=True would be added if this were ever served over HTTPS.
         # On localhost HTTP, secure=True would prevent the cookie from being sent.
         max_age=None,           # Session cookie — expires when browser closes
+        secure=(request.url.scheme == "https"),   # Secure whenever the session is served over HTTPS
     )
     return {"ok": True}
 
 
 @app.post("/api/auth/login")
-async def login(req: LoginRequest, response: Response):
+async def login(req: LoginRequest, response: Response, request: Request):
     """
     Login endpoint. Protected against brute force by per-account lockout.
 
@@ -581,7 +596,10 @@ async def login(req: LoginRequest, response: Response):
     # The code is only checked (and so consumed) once the password is right, so a typo in the password does not
     # burn a valid code.
     if ok and auth.totp_enabled():
-        ok = await asyncio.to_thread(auth.verify_totp, req.totp_code or "")
+        remaining_before = auth.recovery_codes_remaining()
+        ok = await asyncio.to_thread(auth.verify_second_factor, req.totp_code or "")
+        if ok and auth.recovery_codes_remaining() < remaining_before:
+            _global_audit_event("recovery_code_used", f"remaining={auth.recovery_codes_remaining()}")
 
     if not ok:
         failure_count, just_locked = auth.record_failure()
@@ -617,13 +635,14 @@ async def login(req: LoginRequest, response: Response):
         # secure=True would be set if this were served over HTTPS.
         # On localhost HTTP, secure=True prevents the cookie from being sent.
         max_age=None,           # Session cookie
+        secure=(request.url.scheme == "https"),   # Secure whenever the session is served over HTTPS
     )
     return {"ok": True}
 
 
 @app.get("/api/auth/totp")
 async def totp_status():
-    return {"enabled": auth.totp_enabled()}
+    return {"enabled": auth.totp_enabled(), "recovery_codes_remaining": auth.recovery_codes_remaining()}
 
 
 @app.post("/api/auth/totp/enroll")
@@ -637,20 +656,35 @@ async def totp_enroll():
 
 
 @app.post("/api/auth/totp/confirm")
-async def totp_confirm(req: TotpConfirmRequest):
-    if not await asyncio.to_thread(auth.confirm_totp, req.code):
+async def totp_confirm(req: TotpConfirmRequest, request: Request):
+    codes = await asyncio.to_thread(auth.confirm_totp, req.code)
+    if codes is None:
         raise HTTPException(400, "That code is not valid. Check the app's clock and try the current code.")
-    _global_audit_event("totp_enabled", "Two-factor authentication enabled")
-    return {"enabled": True}
+    ended = auth.invalidate_other_sessions(request.cookies.get(SESSION_COOKIE_NAME))
+    _global_audit_event("totp_enabled", f"Two-factor authentication enabled; other sessions ended={ended}")
+    return {"enabled": True, "recovery_codes": codes,
+            "note": "Store these one-time recovery codes offline. They are shown only once."}
+
+
+@app.post("/api/auth/totp/recovery-codes")
+async def totp_new_recovery_codes(req: TotpDisableRequest):
+    """Replace all recovery codes. Needs the password and a current authenticator code."""
+    if not (await asyncio.to_thread(auth.verify_password, req.password)
+            and await asyncio.to_thread(auth.verify_second_factor, req.code)):
+        raise HTTPException(401, "Password or authentication code is incorrect.")
+    codes = await asyncio.to_thread(auth.regenerate_recovery_codes)
+    _global_audit_event("recovery_codes_regenerated", "Old recovery codes are void")
+    return {"recovery_codes": codes}
 
 
 @app.post("/api/auth/totp/disable")
-async def totp_disable(req: TotpDisableRequest):
+async def totp_disable(req: TotpDisableRequest, request: Request):
     if not (await asyncio.to_thread(auth.verify_password, req.password)
-            and await asyncio.to_thread(auth.verify_totp, req.code)):
+            and await asyncio.to_thread(auth.verify_second_factor, req.code)):
         raise HTTPException(401, "Password or authentication code is incorrect.")
     await asyncio.to_thread(auth.disable_totp)
-    _global_audit_event("totp_disabled", "Two-factor authentication disabled")
+    ended = auth.invalidate_other_sessions(request.cookies.get(SESSION_COOKIE_NAME))
+    _global_audit_event("totp_disabled", f"Two-factor authentication disabled; other sessions ended={ended}")
     return {"enabled": False}
 
 
@@ -671,10 +705,15 @@ async def logout(request: Request, response: Response):
 async def global_audit_log():
     """Return the global access audit log (login/logout events)."""
     chain_ok, error = _global_audit.verify_chain()
+    seal_status, seal_msg = audit_seal.check_seal(_global_seal_dir(), "__global__", len(_global_audit),
+                                                  _global_audit.last_hash())
+    if seal_status == "tampered":
+        chain_ok, error = False, (error + " | " if error else "") + seal_msg
     return {
         "chain_intact": chain_ok,
         "error": error,
         "entries": _global_audit.export_entries(),
+        "seal": {"status": seal_status, "message": seal_msg},
     }
 
 
@@ -1219,6 +1258,7 @@ def _load_accuracy_results(case_id: str) -> list[dict]:
             try:
                 out.append(json.loads(f.read_text(encoding="utf-8")))
             except Exception:
+                log.warning("Skipping unreadable result file %s", f)
                 continue
     out.sort(key=lambda r: r.get("created_at", ""), reverse=True)
     return out
@@ -1341,6 +1381,7 @@ def _load_object_results(case_id: str) -> list[dict]:
             try:
                 out.append(json.loads(f.read_text(encoding="utf-8")))
             except Exception:
+                log.warning("Skipping unreadable result file %s", f)
                 continue
     out.sort(key=lambda r: r.get("created_at", ""), reverse=True)
     return out
@@ -1520,9 +1561,10 @@ async def get_report(case_id: str):
         correlated_events, _load_accuracy_results(case_id), _load_object_results(case_id),
         {"status": seal_status, "message": seal_msg, "head": audit_log.last_hash(), "count": len(audit_log)},
     )
-    signature = await asyncio.to_thread(report_signing.sign_report, pdf, case_id)
+    await asyncio.to_thread(pdf_signing.embed_signature, pdf)          # signature inside the PDF (viewers show it)
+    signature = await asyncio.to_thread(report_signing.sign_report, pdf, case_id)   # detached, over the final bytes
     _audit(case_id, "report_generated",
-           f"{pdf} sha256={signature['sha256']} signed_with_key={signature['key_id']}")
+           f"{pdf} sha256={signature['sha256']} signed_with_key={signature['key_id']} embedded_signature=yes")
     return FileResponse(str(pdf), media_type="application/pdf",
                         filename=f"report_case_{case.case_number}_{ts}.pdf")
 
@@ -1531,6 +1573,55 @@ async def get_report(case_id: str):
 async def report_signing_key():
     pub = await asyncio.to_thread(report_signing.public_key_hex)
     return {"algorithm": report_signing.ALGORITHM, "public_key": pub, "key_id": report_signing.key_id(pub)}
+
+
+@app.get("/api/report-signing-cert")
+async def report_signing_cert():
+    """The certificate that signs the PDFs' embedded signatures (self-signed): pin or trust it to verify reports."""
+    return {"certificate_pem": await asyncio.to_thread(pdf_signing.certificate_pem)}
+
+
+@app.get("/api/security/status")
+async def security_status_endpoint(request: Request):
+    case_base = _global_seal_dir()
+    seals = {}
+    st, _ = audit_seal.check_seal(case_base, "__global__", len(_global_audit), _global_audit.last_hash())
+    seals["global log"] = st
+    for cid, alog in list(_audit_logs.items()):
+        seals[f"case {cid[:8]}"] = _audit_seal_status(cid, alog)[0]
+    models_dir = Path(model_integrity.__file__).parent / "cv_models"
+    model_ok = all(model_integrity.verify_model(models_dir / n)[0] for n in model_integrity.PINNED_SHA256
+                   if (models_dir / n).is_file())
+    checks = await asyncio.to_thread(
+        security_status.run_checks,
+        totp_enabled=auth.totp_enabled(), recovery_remaining=auth.recovery_codes_remaining(),
+        https=request.url.scheme == "https", case_dir=case_base,
+        evidence_roots=security_module_roots(), seal_states=seals, model_ok=model_ok,
+        acquisition_enabled=_local_acquisition_enabled())
+    return {"checks": checks, "warnings": sum(1 for c in checks if c["status"] == "warn")}
+
+
+@app.post("/api/cases/{case_id}/package")
+async def create_case_package(case_id: str, passphrase: str = Form(...)):
+    """
+    Passphrase-encrypted archive of a case (exports, reports + signatures, analyses, audit export; NOT the evidence
+    images). AES-256-GCM, scrypt-derived key; any change or truncation is detected on decryption.
+    """
+    case = await asyncio.to_thread(db.get_case, case_id)
+    if not case:
+        raise HTTPException(404, "Case not found")
+    if len(passphrase) < case_package.MIN_PASSPHRASE:
+        raise HTTPException(400, f"The passphrase must be at least {case_package.MIN_PASSPHRASE} characters.")
+    case_dir = _case_dir_for(case_id)
+    audit_log = _get_case_audit_log(case_id)
+    (case_dir / "audit_export.json").write_text(json.dumps(
+        {"chain_intact": audit_log.verify_chain()[0], "head": audit_log.last_hash(), "entries": audit_log.export_entries()},
+        indent=2), encoding="utf-8")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    dest = case_dir / "packages" / f"case_{stamp}.sihpkg"
+    info = await asyncio.to_thread(case_package.create_package, case_dir, dest, passphrase)
+    _audit(case_id, "case_package_created", f"{info['file']} sha256={info['sha256']} bytes={info['bytes']}")
+    return FileResponse(str(dest), media_type="application/octet-stream", filename=dest.name)
 
 
 @app.get("/api/cases/{case_id}/report/verify")
@@ -1542,10 +1633,12 @@ async def verify_report_file(case_id: str, name: str):
     if not pdf.is_file():
         raise HTTPException(404, "Report not found")
     status, message = await asyncio.to_thread(report_signing.verify_report, pdf)
+    embedded, embedded_msg = await asyncio.to_thread(pdf_signing.verify_embedded, pdf)
     digest = await asyncio.to_thread(report_signing.sha256_file, pdf)
     in_audit = any(e["action"] == "report_generated" and f"sha256={digest}" in e["details"]
                    for e in _get_case_audit_log(case_id).export_entries())
     return {"name": name, "sha256": digest, "signature": status, "message": message,
+            "embedded_signature": embedded, "embedded_message": embedded_msg,
             "recorded_in_audit_log": in_audit}
 
 

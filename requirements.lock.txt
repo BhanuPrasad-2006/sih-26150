@@ -19,3 +19,4 @@ numpy==2.2.6
 psycopg2-binary==2.9.12
 python-dotenv==1.2.2
 cryptography==50.0.1
+pyHanko==0.37.0

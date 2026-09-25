@@ -1,0 +1,28 @@
+# Hardened run profile: read-only filesystem, no capabilities, no privilege escalation, resource limits,
+# published to the host's loopback only. Cases and keys live in named volumes (back the keys up separately).
+# Evidence images are mounted read-only from ./evidence (create it) so the tool cannot alter them.
+services:
+  forensic-tool:
+    build: .
+    image: sih-forensic-tool:local
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      FORENSIC_EVIDENCE_ROOTS: /evidence
+    volumes:
+      - cases:/data/cases
+      - keys:/data/keys
+      - ./evidence:/evidence:ro
+    read_only: true
+    tmpfs:
+      - /tmp:size=1g,mode=1777
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    mem_limit: 4g
+    restart: "no"
+
+volumes:
+  cases:
+  keys:
