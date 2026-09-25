@@ -1,0 +1,4 @@
+[bandit]
+exclude = backend/tests
+# B404/B603/B607: subprocess is used only with fixed argument lists (ffmpeg, ffprobe, powershell, lsblk); no shell, no user text in the command name.
+skips = B404,B603,B607

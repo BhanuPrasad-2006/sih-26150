@@ -189,9 +189,9 @@ function renderLoginScreen() {
           </div>
 
           <div class="form-group" id="totp-group" style="display:none;">
-            <label for="login-totp">Authentication code</label>
-            <input type="text" id="login-totp" class="form-control" inputmode="numeric" maxlength="6"
-                   placeholder="6-digit code from your authenticator app" autocomplete="one-time-code" />
+            <label for="login-totp">Authentication code (or a one-time recovery code)</label>
+            <input type="text" id="login-totp" class="form-control" maxlength="16"
+                   placeholder="6-digit code, or XXXXX-XXXXX recovery code" autocomplete="one-time-code" />
           </div>
 
           <div id="login-error" style="display:none;" class="error-inline">
@@ -252,8 +252,8 @@ function renderLoginScreen() {
       return;
     }
     const totpCode = document.getElementById('login-totp').value.trim();
-    if (totpRequired && !/^\d{6}$/.test(totpCode)) {
-      errMsg.textContent = 'Enter the 6-digit authentication code.';
+    if (totpRequired && !(/^\d{3}\s?\d{3}$/.test(totpCode) || /^[A-Za-z0-9]{5}-?[A-Za-z0-9]{5}$/.test(totpCode))) {
+      errMsg.textContent = 'Enter the 6-digit code, or a recovery code (XXXXX-XXXXX).';
       errEl.style.display = 'flex';
       return;
     }

@@ -1,4 +1,4 @@
-"""
+r"""
 acquisition.py — Safe, read-only disk image loading and hashing.
 
 Rules (PRD §5.6.5, §FR-02, §FR-03, §FR-04):
@@ -184,7 +184,7 @@ def _hash_mmap(
     because large drives can take many minutes to read (PRD §4.3 / 2013 paper).
     """
     sha256 = hashlib.sha256()
-    md5    = hashlib.md5()
+    md5    = hashlib.md5(usedforsecurity=False)   # MD5 is reported because forensic practice and the brief require it; never used for security
     total  = mm.size()
     done   = 0
     mm.seek(0)

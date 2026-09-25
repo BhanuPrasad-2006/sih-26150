@@ -55,7 +55,7 @@ def allowed_hosts() -> set[str]:
     extra = os.environ.get("SIH_ALLOWED_HOSTS", "")
     hosts.update(h.strip().lower() for h in extra.split(",") if h.strip())
     sih_host = os.environ.get("SIH_HOST", "").strip().lower()
-    if sih_host and sih_host not in ("0.0.0.0", "::"):
+    if sih_host and sih_host not in ("0.0.0.0", "::"):   # nosec B104: comparison, not a bind
         hosts.add(sih_host)                       # the operator explicitly chose this bind address
     return hosts
 
@@ -93,6 +93,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             if k == "Cache-Control" and "cache-control" in response.headers:
                 continue                              # keep the static files' own no-cache policy
             response.headers[k] = v
+        if request.url.scheme == "https":
+            response.headers["Strict-Transport-Security"] = "max-age=31536000"
         if request.url.path != "/api/docs":           # Swagger UI loads assets from a CDN
             response.headers["Content-Security-Policy"] = CSP
         return response

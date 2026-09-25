@@ -144,8 +144,8 @@ Analytics read the exported MP4 only: YuNet (faces), SFace (embeddings, similari
 | Concern | Control |
 |---|---|
 | Network exposure | Binds to `127.0.0.1`; warns if `SIH_HOST` differs |
-| Authentication | Single examiner, bcrypt hash, ≥ 12 characters; optional TOTP second factor (single-use codes, encrypted secret) |
-| Sessions | `HttpOnly`, `SameSite=Strict` cookie; idle timeout 30 min (`SESSION_TIMEOUT_MINUTES`) |
+| Authentication | Single examiner, bcrypt hash, ≥ 12 characters; optional TOTP second factor (single-use codes, encrypted secret) with one-time recovery codes |
+| Sessions | `HttpOnly`, `SameSite=Strict` cookie (`Secure` over HTTPS, HSTS); idle timeout 30 min (`SESSION_TIMEOUT_MINUTES`) and absolute lifetime 12 h (`SESSION_MAX_HOURS`) |
 | Brute force | 5 failures → 60 s lock (HTTP 429 with `retry_after`) |
 | Evidence integrity | Read-only mmap; hash on open, re-hash at end of scan and on `/verify` |
 | Path handling | Upload names sanitised; physical-device paths refused for scanning; imaging refuses device destinations and existing files; optional server-side allow-list (`FORENSIC_EVIDENCE_ROOTS`) for evidence, original-image and imaging-source paths, resolved through `..` and symlinks |
@@ -154,13 +154,17 @@ Analytics read the exported MP4 only: YuNet (faces), SFace (embeddings, similari
 | Model integrity | `model_integrity.py`: the three ONNX models are SHA-256 pinned; a mismatch disables the analytic |
 | Supply chain | `requirements.lock.txt` (exact versions) and `pip-audit`; `starlette` and `python-multipart` were upgraded after audit findings |
 | Hostile input | `fuzz_lib.py`: seeded mutation fuzzing of every parser (never raise, bounded time/memory); `sandbox.py`: ffmpeg/ffprobe with timeout, memory cap, no child processes (Windows), scrubbed environment and `-protocol_whitelist file,pipe` |
-| Report authenticity | `report_signing.py`: detached Ed25519 signature, SHA-256 and key id logged in the audit chain, verification endpoint and CLI |
+| Report authenticity | `pdf_signing.py`: signature embedded in the PDF (ECDSA P-256, self-signed cert); `report_signing.py`: detached Ed25519 signature, SHA-256 and key id logged in the audit chain; verification endpoint and CLI |
+| Hand-over | `case_package.py`: passphrase-encrypted case archive (AES-256-GCM, scrypt, authenticated chunks) |
+| Transport | `tls.py` / `serve.py`: optional HTTPS with a local self-signed certificate |
+| Posture check | `security_status.py`: live self-check shown on the dashboard |
+| Container | `Dockerfile`, `docker-compose.yml`: non-root, read-only rootfs, no capabilities (untested here) |
 | Data at rest | `secure_store.py`: face embeddings and the 2FA secret AES-encrypted (Fernet) with a key outside the database |
 | Drive imaging | Off unless `FORENSIC_ALLOW_LOCAL_ACQUISITION=1`; write-blocker attestation mandatory and logged |
 | Repudiation | Hash-chained audit log for logins, evidence, scans, exports, analytics, accuracy checks, imaging, reports; `audit_seal.py` HMAC-seals the chain head and count with a key kept outside the database, so truncation or a full rewrite of the stored chain is detected, and the head hash is printed in the report |
 | Secrets | `.env` git-ignored; tests force `DATABASE_URL=""` so they cannot touch a real database |
 
-Residual risks and the full control list are in [SECURITY.md](SECURITY.md): a compromised workstation defeats every control; evidence files and PDFs are not encrypted (use disk encryption); sandboxing is process-level, not a container; the PDF signature is detached; no independent penetration test.
+Residual risks and the full control list are in [SECURITY.md](SECURITY.md): a compromised workstation defeats every control; evidence files and PDFs are not encrypted by the application (use disk encryption); sandboxing is process-level (the container profile is untested here); the signing certificate is self-signed; no independent penetration test.
 
 ## 9. Extension points
 

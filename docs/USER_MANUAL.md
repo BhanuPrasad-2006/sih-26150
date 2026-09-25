@@ -28,13 +28,18 @@ The installer creates `.venv` and installs `requirements.txt`; the start script 
 | `SIH_ALLOWED_HOSTS` | Extra host names accepted besides localhost |
 | `SIH_KEY_DIR` | Folder for the audit-seal, data-encryption and report-signing keys (default `~/.sih_forensic/`). Back it up, away from the database |
 | `SIH_MAX_UPLOAD_GB` | Upload size cap, default 200 |
+| `SIH_TLS=1` | Serve HTTPS (`https://127.0.0.1:8000`, browser asks once to trust the local certificate) |
+| `SESSION_MAX_HOURS` | Absolute session lifetime, default 12 |
 
 ## 2. Signing in
 
 On first launch you create the examiner password (at least 12 characters); it is stored only as a bcrypt hash. Afterwards, sign in with it. After 5 wrong attempts the login locks for 60 seconds (a countdown is shown). After 30 idle minutes you are signed out. There is one examiner account; there is no password-reset email — if the password is lost, the stored hash must be cleared by whoever administers the database (this is deliberate: no recovery path is a back door).
 
 ### Two-factor authentication (recommended)
-Dashboard → **🔐 Two-factor** → **Set up**. Enter the secret key (or setup link) into an authenticator app (Google/Microsoft Authenticator, Authy, 1Password), type the current 6-digit code and confirm. From then on the login asks for password **and** code. Each code works once. To turn it off you need the password and a current code. If the phone is lost and no copy of the key exists, an administrator has to clear the stored secret from the database (see [SECURITY.md](SECURITY.md) §3).
+Dashboard → **🔐 Two-factor** → **Set up**. Enter the secret key (or setup link) into an authenticator app (Google/Microsoft Authenticator, Authy, 1Password), type the current 6-digit code and confirm. From then on the login asks for password **and** code. Each code works once. **Save the 10 recovery codes shown at that moment offline** (each works once, instead of the 6-digit code, when the phone is lost). To turn two-factor off, or to get a new set of recovery codes, you need the password and a current code (or a recovery code). If both the phone and the recovery codes are lost, an administrator has to clear the stored secret from the database (see [SECURITY.md](SECURITY.md) §3).
+
+### Security self-check
+Dashboard → **🛡 Security** lists two-factor, HTTPS, network exposure, key files, disk encryption of the case drive, audit seals and model integrity, and marks what needs attention.
 
 ## 3. Dashboard and cases
 
@@ -124,7 +129,9 @@ The timeline shows segments per camera on a common time axis, and groups segment
 - **Report & Certificate** generates the PDF (and a detached signature file beside it; see below): cover, integrity hashes, segments, cross-camera events, accuracy (or "NOT MEASURED"), object detection, method and limitations, the audit log, and the BSA 2023 §63(4) certificate template. Review it, complete the parts that need your declaration and signature, and keep it with the case file. It supports the examiner; it is not legal advice.
 - **Hash Audit Log** shows every recorded action with its chain hash and a **CHAIN VALID** or **TAMPERING DETECTED** banner. If tampering is shown, stop relying on the log, preserve the result and escalate per your procedure.
 
-**Checking a report later.** Reports are signed (`report_….pdf.sig.json` beside the PDF). `python -m backend.report_signing verify report_….pdf` prints VALID / MODIFIED / INVALID; the same check is at `GET /api/cases/{id}/report/verify?name=report_….pdf`, which also confirms the audit log recorded the file's hash. Note the public key from `/api/report-signing-key` somewhere outside this machine so signatures can be pinned.
+**Encrypted case package.** On this screen, *Create encrypted package* downloads one passphrase-encrypted file with the case's exports, signed reports, analyses and audit log (not the evidence images), for archiving or hand-over. Open it with `python -m backend.case_package decrypt case.sihpkg out.zip`.
+
+**Checking a report later.** Each PDF carries an embedded signature (PDF viewers show it as signed and flag any change) and a detached one (`report_….pdf.sig.json` beside the PDF). `python -m backend.report_signing verify report_….pdf` prints VALID / MODIFIED / INVALID; the same check is at `GET /api/cases/{id}/report/verify?name=report_….pdf`, which also confirms the audit log recorded the file's hash. Note the public key from `/api/report-signing-key` somewhere outside this machine so signatures can be pinned.
 
 ## 11. Troubleshooting
 

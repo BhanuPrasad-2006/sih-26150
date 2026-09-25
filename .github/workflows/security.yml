@@ -1,0 +1,33 @@
+name: security-and-tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 3 * * 1"        # weekly: new advisories appear without any code change
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: System packages (ffmpeg for the media tests)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Install pinned dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.lock.txt pyhanko
+          pip install pip-audit bandit
+      - name: Tests (includes parser fuzzing, sandbox, security)
+        run: python -m pytest backend/tests -q
+      - name: Known vulnerabilities in dependencies
+        run: pip-audit -r requirements.lock.txt --no-deps --disable-pip
+      - name: Static analysis (medium and high severity fail the build)
+        run: bandit -r backend --ini .bandit -ll -q

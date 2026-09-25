@@ -9,7 +9,7 @@ SIH26150 · DVR/NVR Forensic Analysis Tool · state of `main` after the last com
 | Has the tool been validated on a **real DVR/NVR disk**? | **No.** No real recorder disk was available. |
 | What was validated, then? | The software's behaviour on **disk images we built ourselves** from published format descriptions and from **real ffmpeg-encoded video**, plus the forensic bookkeeping (hashing, audit, reports, auth). |
 | Can any recovery rate or accuracy be quoted for real recorders? | **No.** Numbers from synthetic disks describe our test disks, not recorders. |
-| Automated tests | **262 passing** (254 without a live Supabase connection; the other 8 exercise the Postgres backend). 59 of them are security tests (headers, Host/Origin, audit seal, encryption, 2FA, signing, sandbox, parser fuzzing). |
+| Automated tests | **278 passing** (270 without a live Supabase connection; the other 8 exercise the Postgres backend). 75 of them are security tests (headers, strict CSP, Host/Origin, audit seals, encryption, 2FA and recovery codes, signing, encrypted packages, HTTPS, sandbox, parser fuzzing). |
 | Trust level of every vendor format (see `format_verification.md`) | **L2 at best** (corroborated by sources and tested on synthetic data). **None is L3** (validated on a real disk). |
 
 This report therefore documents *verification* (does the code do what it is specified to do) and does **not** claim *validation* (does it work on the real thing). Section 7 gives the protocol for turning it into real validation.
@@ -73,7 +73,8 @@ Independence caveat: the disk builders and the parsers were written by the same 
 | test_security_level2.py | 18 | Encryption at rest, TOTP (RFC vectors, replay), signed reports, upload cap |
 | test_sandbox.py | 8 | ffmpeg limits, scrubbed environment, protocol whitelist |
 | test_fuzz_parsers.py | 5 | Mutation fuzzing of all parsers, oracle self-tests |
-| **Total** | **262** (includes parametrised cases) | |
+| test_security_full.py | 16 | Recovery codes, session lifetime, sealed login log, HTTPS, embedded PDF signature, encrypted packages, security status |
+| **Total** | **278** (includes parametrised cases) | |
 
 ## 5. Defects found by testing
 
