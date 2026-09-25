@@ -69,7 +69,7 @@ async function renderAuditLogScreen(params) {
                <thead>
                  <tr>
                    <th>Seq #</th>
-                   <th>Timestamp (UTC)</th>
+                   <th>Timestamp (IST)</th>
                    <th>Action</th>
                    <th>Parameters</th>
                    <th>Entry Hash (SHA-256)</th>
@@ -79,7 +79,7 @@ async function renderAuditLogScreen(params) {
                  ${auditData.entries.map((e, idx) => `
                    <tr>
                      <td><strong style="color:var(--text-muted);">#${idx + 1}</strong></td>
-                     <td style="font-size:12px; color:var(--text-muted); font-family:var(--font-mono);">${e.created_at}</td>
+                     <td style="font-size:12px; color:var(--text-muted); font-family:var(--font-mono);">${escapeHtml(formatIST(e.created_at))}</td>
                      <td><span style="color:var(--accent-cyan); font-weight:600; font-size:13px;">${escapeHtml(e.action)}</span></td>
                      <td style="font-size:11px; max-width:220px; color:var(--text-muted); font-family:var(--font-mono); word-break:break-all;">${escapeHtml(e.details || '—')}</td>
                      <td class="hash-font">${escapeHtml(e.entry_hash)}</td>
