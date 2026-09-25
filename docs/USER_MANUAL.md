@@ -26,11 +26,15 @@ The installer creates `.venv` and installs `requirements.txt`; the start script 
 | `SESSION_TIMEOUT_MINUTES` | Idle timeout, default 30 |
 | `FORENSIC_EVIDENCE_ROOTS` | Restrict server-side paths to these folders (leave unset on your own workstation) |
 | `SIH_ALLOWED_HOSTS` | Extra host names accepted besides localhost |
-| `SIH_AUDIT_KEY`, `SIH_KEY_DIR` | Audit-seal key, or the folder for its key file (default `~/.sih_forensic/`). Back it up and keep it away from the database |
+| `SIH_KEY_DIR` | Folder for the audit-seal, data-encryption and report-signing keys (default `~/.sih_forensic/`). Back it up, away from the database |
+| `SIH_MAX_UPLOAD_GB` | Upload size cap, default 200 |
 
 ## 2. Signing in
 
 On first launch you create the examiner password (at least 12 characters); it is stored only as a bcrypt hash. Afterwards, sign in with it. After 5 wrong attempts the login locks for 60 seconds (a countdown is shown). After 30 idle minutes you are signed out. There is one examiner account; there is no password-reset email — if the password is lost, the stored hash must be cleared by whoever administers the database (this is deliberate: no recovery path is a back door).
+
+### Two-factor authentication (recommended)
+Dashboard → **🔐 Two-factor** → **Set up**. Enter the secret key (or setup link) into an authenticator app (Google/Microsoft Authenticator, Authy, 1Password), type the current 6-digit code and confirm. From then on the login asks for password **and** code. Each code works once. To turn it off you need the password and a current code. If the phone is lost and no copy of the key exists, an administrator has to clear the stored secret from the database (see [SECURITY.md](SECURITY.md) §3).
 
 ## 3. Dashboard and cases
 
@@ -117,8 +121,10 @@ The timeline shows segments per camera on a common time axis, and groups segment
 
 ## 10. Report and audit log
 
-- **Report & Certificate** generates the PDF: cover, integrity hashes, segments, cross-camera events, accuracy (or "NOT MEASURED"), object detection, method and limitations, the audit log, and the BSA 2023 §63(4) certificate template. Review it, complete the parts that need your declaration and signature, and keep it with the case file. It supports the examiner; it is not legal advice.
+- **Report & Certificate** generates the PDF (and a detached signature file beside it; see below): cover, integrity hashes, segments, cross-camera events, accuracy (or "NOT MEASURED"), object detection, method and limitations, the audit log, and the BSA 2023 §63(4) certificate template. Review it, complete the parts that need your declaration and signature, and keep it with the case file. It supports the examiner; it is not legal advice.
 - **Hash Audit Log** shows every recorded action with its chain hash and a **CHAIN VALID** or **TAMPERING DETECTED** banner. If tampering is shown, stop relying on the log, preserve the result and escalate per your procedure.
+
+**Checking a report later.** Reports are signed (`report_….pdf.sig.json` beside the PDF). `python -m backend.report_signing verify report_….pdf` prints VALID / MODIFIED / INVALID; the same check is at `GET /api/cases/{id}/report/verify?name=report_….pdf`, which also confirms the audit log recorded the file's hash. Note the public key from `/api/report-signing-key` somewhere outside this machine so signatures can be pinned.
 
 ## 11. Troubleshooting
 

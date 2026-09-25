@@ -26,7 +26,8 @@ def test_security_headers_on_api_static_and_error_responses(auth_client):
         assert h["referrer-policy"] == "no-referrer"
         assert "frame-ancestors 'none'" in h["content-security-policy"]
         assert "object-src 'none'" in h["content-security-policy"]
-        assert "script-src 'self' 'unsafe-inline'" in h["content-security-policy"]   # documented limitation
+        script_src = [d for d in h["content-security-policy"].split(";") if d.strip().startswith("script-src")][0]
+        assert script_src.strip() == "script-src 'self'"                              # no inline script allowed
 
 
 def test_headers_also_on_unauthenticated_rejection(isolated_app):
@@ -245,3 +246,15 @@ def test_risky_fields_are_never_interpolated_raw(rel, pattern):
 def test_error_messages_are_escaped_everywhere():
     for f in (_FRONTEND / "screens").glob("*.js"):
         assert "${err.message}" not in f.read_text(encoding="utf-8"), f.name
+
+
+def test_frontend_has_no_inline_handlers_or_javascript_urls():
+    """The strict CSP only works if no page relies on inline script."""
+    import re
+    pattern = re.compile(r"\son(click|change|input|submit|load|error|focus|blur|keydown|keyup|mouse\w+)\s*=|javascript:", re.I)
+    offenders = []
+    for f in list(_FRONTEND.rglob("*.js")) + [_FRONTEND.parent / "index.html"]:
+        for n, line in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
+            if pattern.search(line) and not line.lstrip().startswith(("//", "*")):
+                offenders.append(f"{f.name}:{n}")
+    assert not offenders, offenders

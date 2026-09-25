@@ -26,6 +26,9 @@ from typing import Optional
 
 import bcrypt
 
+from backend import totp
+from backend.secure_store import decrypt_text, encrypt_text
+
 
 # ── Configuration ──────────────────────────────────────────────────────────────
 
@@ -112,6 +115,51 @@ class AuthManager:
         if not stored:
             return False
         return bcrypt.checkpw(plaintext.encode("utf-8"), stored.encode("utf-8"))
+
+    # ── Two-factor (TOTP) ──────────────────────────────────────────────────────
+
+    def totp_enabled(self) -> bool:
+        return bool(self._db.get_auth_value("totp_secret"))
+
+    def begin_totp_enrollment(self) -> str:
+        """Create a pending secret. It only becomes active after confirm_totp() sees a valid code."""
+        with self._lock:
+            if self.totp_enabled():
+                raise ValueError("Two-factor authentication is already enabled.")
+            secret = totp.generate_secret()
+            self._db.set_auth_value("totp_pending", encrypt_text(secret))
+            return secret
+
+    def confirm_totp(self, code: str) -> bool:
+        with self._lock:
+            pending = self._db.get_auth_value("totp_pending")
+            if not pending:
+                return False
+            secret = decrypt_text(pending)
+            ok, counter = totp.verify(secret, code)
+            if not ok:
+                return False
+            self._db.set_auth_value("totp_secret", encrypt_text(secret))
+            self._db.set_auth_value("totp_last_counter", str(counter))
+            self._db.set_auth_value("totp_pending", "")
+            return True
+
+    def verify_totp(self, code: str) -> bool:
+        """Verify a login code; a code (counter) can be used only once."""
+        with self._lock:
+            stored = self._db.get_auth_value("totp_secret")
+            if not stored:
+                return True                       # not enabled: nothing to check
+            last = int(self._db.get_auth_value("totp_last_counter") or -1)
+            ok, counter = totp.verify(decrypt_text(stored), code, last)
+            if ok:
+                self._db.set_auth_value("totp_last_counter", str(counter))
+            return ok
+
+    def disable_totp(self) -> None:
+        with self._lock:
+            for k in ("totp_secret", "totp_pending", "totp_last_counter"):
+                self._db.set_auth_value(k, "")
 
     # ── Lockout management ─────────────────────────────────────────────────────
 

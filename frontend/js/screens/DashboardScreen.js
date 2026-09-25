@@ -11,7 +11,10 @@ async function renderDashboardScreen() {
           <div class="page-title">Forensic Cases</div>
           <div class="page-subtitle">Select an active case or register a new investigation.</div>
         </div>
-        <button id="btn-new-case" class="btn btn-primary">➕ Register New Case</button>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button id="btn-2fa" class="btn btn-secondary">🔐 Two-factor</button>
+          <button id="btn-new-case" class="btn btn-primary">➕ Register New Case</button>
+        </div>
       </div>
     </div>
 
@@ -51,6 +54,7 @@ async function renderDashboardScreen() {
   `;
 
   document.getElementById('btn-new-case').onclick = () => navigateTo('new-case');
+  document.getElementById('btn-2fa').onclick = openTwoFactorDialog;
 
   try {
     const cases = await API.listCases();
@@ -64,7 +68,7 @@ async function renderDashboardScreen() {
               <div class="empty-state-icon">📂</div>
               <div class="empty-state-title">No cases yet</div>
               <div class="empty-state-subtitle">Create your first forensic case to get started — each case tracks a chain of custody for one investigation.</div>
-              <button class="btn btn-primary" onclick="navigateTo('new-case')">➕ Register First Case</button>
+              <button class="btn btn-primary" ${navAttrs('new-case')}>➕ Register First Case</button>
             </div>
           </td>
         </tr>`;
@@ -78,7 +82,7 @@ async function renderDashboardScreen() {
         <td style="color:var(--text-muted); font-size:12px;">${c.notes ? escapeHtml(c.notes) : '—'}</td>
         <td style="color:var(--text-dim); font-size:12px;">${new Date(c.created_at).toLocaleString()}</td>
         <td>
-          <button class="btn btn-secondary btn-sm" onclick="navigateTo('case-detail', { caseId: '${c.case_id}' })">Open ➔</button>
+          <button class="btn btn-secondary btn-sm" ${navAttrs('case-detail', { caseId: c.case_id })}>Open ➔</button>
         </td>
       </tr>
     `).join('');
@@ -97,5 +101,54 @@ async function renderDashboardScreen() {
           </div>
         </td>
       </tr>`;
+  }
+}
+
+
+/** Two-factor authentication: enable (secret + confirmation code) or disable (password + code). */
+async function openTwoFactorDialog() {
+  let enabled = false;
+  try { enabled = (await API.totpStatus()).enabled; } catch (err) {
+    showModal('Two-factor authentication', `<div class="error-inline">${escapeHtml(err.message)}</div>`, [{ label: 'Close', class: 'btn-secondary', onClick: () => {} }]);
+    return;
+  }
+  if (!enabled) {
+    showModal('Two-factor authentication',
+      `<p style="margin:0 0 10px;">Adds a 6-digit code from an authenticator app to every login. Keep a copy of the key in a safe place:
+       if the phone is lost and no copy exists, an administrator has to clear the stored secret from the database.</p>
+       <div id="tf-area"></div>`,
+      [{ label: 'Set up', class: 'btn-primary', autoClose: false, onClick: async () => {
+          const area = document.getElementById('tf-area');
+          try {
+            const r = await API.totpEnroll();
+            area.innerHTML = `
+              <div class="form-group"><label>Secret key (enter manually in the app)</label>
+                <input class="form-control" readonly value="${escapeHtml(r.secret)}" style="font-family:var(--font-mono);"></div>
+              <div class="form-group"><label>Or the setup link</label>
+                <input class="form-control" readonly value="${escapeHtml(r.otpauth_uri)}" style="font-size:11px;"></div>
+              <div class="form-group"><label>Current 6-digit code</label>
+                <input id="tf-code" class="form-control" inputmode="numeric" maxlength="6"></div>
+              <button id="tf-confirm" class="btn btn-primary">Confirm and enable</button>
+              <div id="tf-msg" style="margin-top:8px; font-size:13px;"></div>`;
+            document.getElementById('tf-confirm').onclick = async () => {
+              const msg = document.getElementById('tf-msg');
+              try { await API.totpConfirm(document.getElementById('tf-code').value.trim()); msg.textContent = 'Two-factor authentication is now ON.'; }
+              catch (e2) { msg.textContent = e2.message; }
+            };
+          } catch (e1) { area.innerHTML = `<div class="error-inline">${escapeHtml(e1.message)}</div>`; }
+      } },
+       { label: 'Close', class: 'btn-secondary', onClick: () => {} }]);
+  } else {
+    showModal('Two-factor authentication',
+      `<p style="margin:0 0 10px;">Two-factor authentication is <strong>ON</strong>. To turn it off, enter your password and a current code.</p>
+       <div class="form-group"><label>Password</label><input id="tf-pw" type="password" class="form-control"></div>
+       <div class="form-group"><label>Current 6-digit code</label><input id="tf-code" class="form-control" inputmode="numeric" maxlength="6"></div>
+       <div id="tf-msg" style="font-size:13px;"></div>`,
+      [{ label: 'Turn off', class: 'btn-primary', autoClose: false, onClick: async () => {
+          const msg = document.getElementById('tf-msg');
+          try { await API.totpDisable(document.getElementById('tf-pw').value, document.getElementById('tf-code').value.trim()); msg.textContent = 'Two-factor authentication is now OFF.'; }
+          catch (e) { msg.textContent = e.message; }
+      } },
+       { label: 'Close', class: 'btn-secondary', onClick: () => {} }]);
   }
 }

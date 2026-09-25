@@ -17,3 +17,6 @@ numpy>=1.26.0
 # is unset. See .env.example.
 psycopg2-binary>=2.9.9
 python-dotenv>=1.0.1
+
+# Encryption at rest, report signing (Ed25519)
+cryptography>=49.0.0   # 46.x has known vulnerabilities (pip-audit)

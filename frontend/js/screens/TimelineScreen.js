@@ -200,7 +200,7 @@ async function renderTimelineScreen(params) {
         <div class="empty-state-icon">🕒</div>
         <div class="empty-state-title">${title}</div>
         <div class="empty-state-subtitle">${subtitle}</div>
-        <button class="btn btn-primary" onclick="navigateTo('case-detail', { caseId: '${caseId}' })">Return to Case Overview</button>
+        <button class="btn btn-primary" ${navAttrs('case-detail', { caseId: caseId })}>Return to Case Overview</button>
       </div>`;
     return;
   }
