@@ -24,7 +24,7 @@ async function renderCaseDetailScreen(params) {
         <div class="page-title">Case Details</div>
       </div>
       <div class="error-banner">
-        <div class="error-banner-icon">⚠️</div>
+        <div class="error-banner-icon">${icon('alert')}</div>
         <div class="error-banner-body">
           <div class="error-banner-title">Failed to load case — GET /api/cases/${caseId}</div>
           <div class="error-banner-msg">${escapeHtml(err.message)}</div>
@@ -46,7 +46,7 @@ async function renderCaseDetailScreen(params) {
           <div class="page-title">Case: <span style="color:var(--accent-cyan);">${escapeHtml(caseObj.case_number)}</span></div>
           <div class="page-subtitle">Investigator: ${escapeHtml(caseObj.examiner)}</div>
         </div>
-        <button id="btn-add-evidence" class="btn btn-primary">➕ Load Disk Image (.dd/.img)</button>
+        <button id="btn-add-evidence" class="btn btn-primary btn-lg">${icon('upload-cloud')} Add disk image</button>
       </div>
     </div>
 
@@ -84,11 +84,10 @@ async function renderCaseDetailScreen(params) {
     let selectedFile = null;
 
     showModal(
-      'Load Raw Disk Image (.dd / .img)',
+      `${icon('hard-drive')} Add disk image`,
       `
-        <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px; line-height:1.6;">
-          Attach evidence by choosing a file from your computer or by specifying an existing file path.<br>
-          <em style="color:var(--text-dim);">Options 1 and 2 take an image file that already exists. To create an image from a drive, use Option 3.</em>
+        <p class="card-lead" style="margin-top:0;">
+          Add the recorder's disk image to this case. It is hashed on load and only ever read, never changed. Pick <b>one</b> of the three ways below.
         </p>
 
         <div class="form-group">
@@ -96,57 +95,42 @@ async function renderCaseDetailScreen(params) {
           <input type="text" id="modal-ev-label" class="form-control" value="EVID-00${evidence.length + 1}">
         </div>
 
-        <div style="background:var(--bg-surface-2, rgba(255,255,255,0.03)); border:1px solid var(--border-color, rgba(255,255,255,0.08)); border-radius:8px; padding:16px; margin-bottom:16px;">
+        <div class="option-stack">
           <!-- Option 1: Choose File -->
-          <div class="form-group" style="margin-bottom:14px;">
-            <label style="font-weight:600; display:flex; align-items:center; gap:6px; margin-bottom:8px;">
-              <span>📁</span> Option 1: Choose File from Computer
-            </label>
-            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-              <input type="file" id="modal-ev-file-input" accept=".dd,.img,.raw,.bin,.001,.iso,*" style="display:none;">
-              <button type="button" id="modal-ev-browse-btn" class="btn btn-secondary" style="display:inline-flex; align-items:center; gap:6px;">
-                📂 Choose File...
-              </button>
-              <span id="modal-ev-file-name" style="font-size:13px; color:var(--text-muted); max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-                No file chosen
-              </span>
-              <button type="button" id="modal-ev-file-clear" class="btn btn-sm btn-secondary" style="display:none; padding:2px 8px; font-size:12px;" title="Clear selected file">✕</button>
+          <div class="option-card">
+            <h4>${iconChip('upload-cloud')} Option 1 · Upload from this computer</h4>
+            <input type="file" id="modal-ev-file-input" accept=".dd,.img,.raw,.bin,.001,.iso,*" style="display:none;">
+            <div id="modal-ev-browse-btn" class="dropzone" role="button" tabindex="0" aria-label="Choose a disk image file">
+              ${dropArt()}
+              <div class="dropzone-title">Drop your disk image here</div>
+              <div class="dropzone-sub">or <b>browse your computer</b> to pick a file</div>
+              <div class="dropzone-types">.dd · .img · .raw · .bin · .001 · .iso</div>
             </div>
-            <p style="font-size:12px; color:var(--text-dim); margin-top:6px; margin-bottom:0;">
-              Select a raw image (.dd, .img, .raw, etc.) to upload directly to case storage.
-            </p>
+            <div id="modal-ev-file-chip" class="file-chip">
+              ${iconChip('hard-drive', 'ok')}
+              <div class="grow">
+                <div class="file-chip-name" id="modal-ev-file-name">No file chosen</div>
+                <div class="file-chip-meta">Ready to upload to case storage</div>
+              </div>
+              <button type="button" id="modal-ev-file-clear" class="modal-close" style="display:none;" title="Remove selected file" aria-label="Remove selected file">${icon('x')}</button>
+            </div>
           </div>
 
-          <!-- Divider -->
-          <div style="display:flex; align-items:center; gap:12px; margin:14px 0;">
-            <div style="flex:1; height:1px; background:var(--border-color, rgba(255,255,255,0.1));"></div>
-            <span style="font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--text-dim); font-weight:700;">OR</span>
-            <div style="flex:1; height:1px; background:var(--border-color, rgba(255,255,255,0.1));"></div>
-          </div>
+          <div class="option-or">or</div>
 
           <!-- Option 2: File Path -->
-          <div class="form-group" style="margin-bottom:0;">
-            <label style="font-weight:600; display:flex; align-items:center; gap:6px; margin-bottom:8px;">
-              <span>💻</span> Option 2: Local Server File Path
-            </label>
+          <div class="option-card">
+            <h4>${iconChip('server')} Option 2 · Use a file already on this machine</h4>
             <input type="text" id="modal-ev-path" class="form-control" placeholder="C:\\path\\to\\evidence_image.dd">
-            <p style="font-size:12px; color:var(--text-dim); margin-top:6px; margin-bottom:0;">
-              Enter absolute path on this machine (recommended for large multi-GB / TB images).
-            </p>
+            <p class="form-hint">Best for very large (multi-GB or TB) images: nothing is copied, the file is read where it is.</p>
           </div>
 
-          <div style="display:flex; align-items:center; gap:12px; margin:14px 0;">
-            <div style="flex:1; height:1px; background:var(--border-color, rgba(255,255,255,0.1));"></div>
-            <span style="font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--text-dim); font-weight:700;">OR</span>
-            <div style="flex:1; height:1px; background:var(--border-color, rgba(255,255,255,0.1));"></div>
-          </div>
+          <div class="option-or">or</div>
 
           <!-- Option 3: Image a drive -->
-          <div class="form-group" style="margin-bottom:0;">
-            <label style="font-weight:600; display:flex; align-items:center; gap:6px; margin-bottom:8px;">
-              <span>🧲</span> Option 3: Create an Image from a Drive (this machine)
-            </label>
-            <div id="modal-acq-area" style="font-size:12px; color:var(--text-dim);">Checking whether drive imaging is available…</div>
+          <div class="option-card">
+            <h4>${iconChip('hard-drive', 'warn')} Option 3 · Create an image from a connected drive</h4>
+            <div id="modal-acq-area" style="font-size:12.5px; color:var(--text-dim);">Checking whether drive imaging is available…</div>
           </div>
         </div>
 
@@ -161,18 +145,18 @@ async function renderCaseDetailScreen(params) {
           </p>
         </div>
 
-        <div id="modal-ev-progress-box" style="display:none; margin-top:14px; padding:10px; background:var(--bg-surface-3, rgba(255,255,255,0.04)); border-radius:6px; border:1px solid var(--border-color, rgba(255,255,255,0.08));">
-          <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:6px; color:var(--text-muted);">
+        <div id="modal-ev-progress-box" class="upload-progress" style="display:none;">
+          <div style="display:flex; justify-content:space-between; font-size:12.5px; color:var(--text-muted);">
             <span id="modal-ev-progress-status">Uploading evidence file...</span>
-            <span id="modal-ev-progress-pct" style="font-weight:600;">0%</span>
+            <span id="modal-ev-progress-pct" style="font-weight:700; color:var(--accent-cyan);">0%</span>
           </div>
-          <div style="background:rgba(255,255,255,0.1); height:8px; border-radius:4px; overflow:hidden;">
-            <div id="modal-ev-progress-bar" style="background:var(--color-primary, #2563eb); height:100%; width:0%; transition:width 0.2s;"></div>
+          <div class="progress-bar-container" style="margin:8px 0 0;">
+            <div id="modal-ev-progress-bar" class="progress-bar-fill" style="width:0%;"></div>
           </div>
         </div>
 
         <div id="modal-ev-error" style="display:none; margin-top:12px;" class="error-inline">
-          <span>⚠️</span><span id="modal-ev-error-msg"></span>
+          <span>${icon('alert')}</span><span id="modal-ev-error-msg"></span>
         </div>
       `,
       [
@@ -259,10 +243,23 @@ async function renderCaseDetailScreen(params) {
     const browseBtn = document.getElementById('modal-ev-browse-btn');
     const fileNameSpan = document.getElementById('modal-ev-file-name');
     const fileClearBtn = document.getElementById('modal-ev-file-clear');
+    const fileChip = document.getElementById('modal-ev-file-chip');
     const pathInput = document.getElementById('modal-ev-path');
 
     if (browseBtn && fileInput) {
       browseBtn.onclick = () => fileInput.click();
+      browseBtn.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } };
+      // Drag & drop feeds the same file input, so it takes the exact same code path as browsing.
+      browseBtn.ondragover = (e) => { e.preventDefault(); browseBtn.classList.add('dragover'); };
+      browseBtn.ondragleave = () => browseBtn.classList.remove('dragover');
+      browseBtn.ondrop = (e) => {
+        e.preventDefault();
+        browseBtn.classList.remove('dragover');
+        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+          fileInput.files = e.dataTransfer.files;
+          fileInput.onchange({ target: fileInput });
+        }
+      };
     }
 
     if (fileInput) {
@@ -274,7 +271,8 @@ async function renderCaseDetailScreen(params) {
           fileNameSpan.textContent = `${file.name} (${sizeMb} MB)`;
           fileNameSpan.style.color = 'var(--text-bright, #fff)';
           fileNameSpan.style.fontWeight = '500';
-          fileClearBtn.style.display = 'inline-block';
+          fileClearBtn.style.display = 'inline-flex';
+          if (fileChip) fileChip.classList.add('show');
           if (pathInput) pathInput.value = '';
         }
       };
@@ -288,6 +286,7 @@ async function renderCaseDetailScreen(params) {
         fileNameSpan.style.color = 'var(--text-muted)';
         fileNameSpan.style.fontWeight = 'normal';
         fileClearBtn.style.display = 'none';
+        if (fileChip) fileChip.classList.remove('show');
       };
     }
 
@@ -300,6 +299,7 @@ async function renderCaseDetailScreen(params) {
           fileNameSpan.style.color = 'var(--text-muted)';
           fileNameSpan.style.fontWeight = 'normal';
           fileClearBtn.style.display = 'none';
+          if (fileChip) fileChip.classList.remove('show');
         }
       };
     }
@@ -392,9 +392,9 @@ function renderEvidenceTable(evidence, caseId) {
   if (evidence.length === 0) {
     return `
       <div class="empty-state">
-        <div class="empty-state-icon">📂</div>
+        ${emptyArt()}
         <div class="empty-state-title">No evidence loaded yet</div>
-        <div class="empty-state-subtitle">Click "Load Disk Image" to attach a raw disk image (.dd / .img) to this case and begin forensic acquisition.</div>
+        <div class="empty-state-subtitle">Use “Add disk image” to attach a raw disk image (.dd / .img) to this case. It is hashed on load and never modified.</div>
       </div>`;
   }
 
@@ -420,7 +420,7 @@ function renderEvidenceTable(evidence, caseId) {
             const badgeClass = scanStatus === 'COMPLETED' ? 'badge-complete'
                              : scanStatus === 'SCANNING'  ? 'badge-scanning'
                              : 'badge-pending';
-            const scanLabel = scanStatus === 'COMPLETED' ? 'View Scan Results ➔' : 'Scan Disk Image ➔';
+            const scanLabel = scanStatus === 'COMPLETED' ? 'View Scan Results' : 'Scan Disk Image';
             const scanTitle = scanStatus === 'COMPLETED'
               ? 'Scan complete — click to view carved segments'
               : scanStatus === 'SCANNING'

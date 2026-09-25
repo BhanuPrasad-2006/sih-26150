@@ -5,22 +5,38 @@ async function renderDashboardScreen() {
   const root = document.getElementById('content-root');
 
   root.innerHTML = `
-    <div class="page-header">
-      <div class="page-header-row">
-        <div>
-          <div class="page-title">Forensic Cases</div>
-          <div class="page-subtitle">Select an active case or register a new investigation.</div>
+    <section class="hero">
+      <div>
+        <h2>Recover CCTV evidence you can defend in court.</h2>
+        <p>Load a DVR/NVR disk image, carve the video that is still on it, prove nothing was altered, and export a signed forensic report. The evidence file is only ever read, never written.</p>
+        <div class="hero-actions">
+          <button id="btn-new-case" class="btn btn-primary btn-lg">${icon('plus-circle')} Register New Case</button>
+          <button id="btn-security" class="btn btn-secondary btn-lg">${icon('shield-check')} Security status</button>
+          <button id="btn-2fa" class="btn btn-secondary btn-lg">${icon('key')} Two-factor</button>
         </div>
-        <div style="display:flex; gap:10px; flex-wrap:wrap;">
-          <button id="btn-security" class="btn btn-secondary">🛡 Security</button>
-          <button id="btn-2fa" class="btn btn-secondary">🔐 Two-factor</button>
-          <button id="btn-new-case" class="btn btn-primary">➕ Register New Case</button>
-        </div>
+      </div>
+      <div class="hero-art">${heroArt()}</div>
+    </section>
+
+    <div class="stat-grid">
+      <div class="stat-card">${iconChip('folder')}<div><div class="stat-value" id="stat-cases">–</div><div class="stat-label">Cases registered</div></div></div>
+      <div class="stat-card">${iconChip('fingerprint', 'ok')}<div><div class="stat-value">SHA-256</div><div class="stat-label">Every image hashed on load</div></div></div>
+      <div class="stat-card">${iconChip('lock', 'warn')}<div><div class="stat-value">Read-only</div><div class="stat-label">Evidence is never modified</div></div></div>
+      <div class="stat-card">${iconChip('link')}<div><div class="stat-value">Chained</div><div class="stat-label">Tamper-evident audit log</div></div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span>${icon('layers')} How an investigation flows</span></div>
+      <div class="step-list">
+        <div class="step-card"><span class="n">1</span><h4>Register a case</h4><p>Case number and examiner start the chain of custody.</p></div>
+        <div class="step-card"><span class="n">2</span><h4>Load the disk image</h4><p>Upload a .dd/.img file, point to one, or image a connected drive.</p></div>
+        <div class="step-card"><span class="n">3</span><h4>Scan and recover</h4><p>The carver finds recordings, including deleted ones, and rates each result.</p></div>
+        <div class="step-card"><span class="n">4</span><h4>Report</h4><p>Export a signed PDF, or an encrypted package for another examiner.</p></div>
       </div>
     </div>
 
     <div class="card">
-      <div class="card-title">Active Cases</div>
+      <div class="card-title"><span>${icon('folder-open')} Your cases</span></div>
       <div class="table-container">
         <table>
           <thead>
@@ -60,6 +76,7 @@ async function renderDashboardScreen() {
 
   try {
     const cases = await API.listCases();
+    document.getElementById('stat-cases').textContent = String(cases.length);
     const tbody = document.getElementById('cases-table-body');
 
     if (cases.length === 0) {
@@ -67,10 +84,10 @@ async function renderDashboardScreen() {
         <tr>
           <td colspan="5" style="padding: 0; border: none;">
             <div class="empty-state">
-              <div class="empty-state-icon">📂</div>
+              ${emptyArt()}
               <div class="empty-state-title">No cases yet</div>
               <div class="empty-state-subtitle">Create your first forensic case to get started — each case tracks a chain of custody for one investigation.</div>
-              <button class="btn btn-primary" ${navAttrs('new-case')}>➕ Register First Case</button>
+              <button class="btn btn-primary" ${navAttrs('new-case')}>${icon('plus-circle')} Register First Case</button>
             </div>
           </td>
         </tr>`;
@@ -84,7 +101,7 @@ async function renderDashboardScreen() {
         <td style="color:var(--text-muted); font-size:12px;">${c.notes ? escapeHtml(c.notes) : '—'}</td>
         <td style="color:var(--text-dim); font-size:12px;">${new Date(c.created_at).toLocaleString()}</td>
         <td>
-          <button class="btn btn-secondary btn-sm" ${navAttrs('case-detail', { caseId: c.case_id })}>Open ➔</button>
+          <button class="btn btn-secondary btn-sm" ${navAttrs('case-detail', { caseId: c.case_id })}>Open ${icon('arrow-right')}</button>
         </td>
       </tr>
     `).join('');
@@ -95,7 +112,7 @@ async function renderDashboardScreen() {
       <tr>
         <td colspan="5" style="padding: 12px; border: none;">
           <div class="error-banner">
-            <div class="error-banner-icon">⚠️</div>
+            <div class="error-banner-icon">${icon('alert')}</div>
             <div class="error-banner-body">
               <div class="error-banner-title">Failed to load cases</div>
               <div class="error-banner-msg">${escapeHtml(err.message)}</div>
@@ -137,7 +154,7 @@ async function openTwoFactorDialog() {
               try {
                 const done = await API.totpConfirm(document.getElementById('tf-code').value.trim());
                 msg.innerHTML = 'Two-factor authentication is now <strong>ON</strong>. Save these one-time recovery codes offline (each works once; shown only now):' +
-                  '<pre style="margin-top:8px; padding:10px; background:rgba(0,0,0,0.3); border-radius:6px; font-family:var(--font-mono); user-select:all;">' +
+                  '<pre style="margin-top:8px; padding:10px; background:var(--bg-surface-3); border-radius:6px; font-family:var(--font-mono); user-select:all;">' +
                   escapeHtml((done.recovery_codes || []).join('\n')) + '</pre>';
               } catch (e2) { msg.textContent = e2.message; }
             };
@@ -155,7 +172,7 @@ async function openTwoFactorDialog() {
           try {
             const r = await API.totpRecoveryCodes(document.getElementById('tf-pw').value, document.getElementById('tf-code').value.trim());
             msg.innerHTML = 'New recovery codes (the old ones no longer work). Save them offline:' +
-              '<pre style="margin-top:8px; padding:10px; background:rgba(0,0,0,0.3); border-radius:6px; font-family:var(--font-mono); user-select:all;">' +
+              '<pre style="margin-top:8px; padding:10px; background:var(--bg-surface-3); border-radius:6px; font-family:var(--font-mono); user-select:all;">' +
               escapeHtml(r.recovery_codes.join('\n')) + '</pre>';
           } catch (e) { msg.textContent = e.message; }
       } },
@@ -178,7 +195,7 @@ async function openSecurityStatusDialog() {
     const dot = { ok: 'var(--status-complete)', warn: 'var(--status-partial)', info: 'var(--text-dim)' };
     area.innerHTML = `<p style="margin:0 0 10px;">${r.warnings ? r.warnings + ' item(s) need attention.' : 'All checks pass.'}</p>` +
       r.checks.map(c => `
-        <div style="display:flex; gap:10px; align-items:flex-start; padding:6px 0; border-top:1px solid rgba(255,255,255,0.06);">
+        <div style="display:flex; gap:10px; align-items:flex-start; padding:6px 0; border-top:1px solid var(--border-color);">
           <span style="width:10px; height:10px; border-radius:50%; margin-top:6px; flex:none; background:${dot[c.status] || dot.info};"></span>
           <div><strong>${escapeHtml(c.title)}</strong><div style="font-size:12px; color:var(--text-muted);">${escapeHtml(c.detail)}</div></div>
         </div>`).join('');

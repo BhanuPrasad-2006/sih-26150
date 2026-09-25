@@ -166,7 +166,7 @@ async function renderTimelineScreen(params) {
     root.innerHTML = `
       <div class="page-header"><div class="page-title">Cross-Camera Timeline</div></div>
       <div class="error-banner">
-        <div class="error-banner-icon">⚠️</div>
+        <div class="error-banner-icon">${icon('alert')}</div>
         <div class="error-banner-body">
           <div class="error-banner-title">Failed to load timeline</div>
           <div class="error-banner-msg">${escapeHtml(err.message)}</div>
@@ -197,7 +197,7 @@ async function renderTimelineScreen(params) {
         <div class="page-subtitle">A shared UTC view of recovered footage across every camera and evidence image in this case.</div>
       </div>
       <div class="card empty-state">
-        <div class="empty-state-icon">🕒</div>
+        ${emptyArt()}
         <div class="empty-state-title">${title}</div>
         <div class="empty-state-subtitle">${subtitle}</div>
         <button class="btn btn-primary" ${navAttrs('case-detail', { caseId: caseId })}>Return to Case Overview</button>
@@ -249,7 +249,7 @@ async function renderTimelineScreen(params) {
 
     ${timeline.unplaced_segments?.length ? `
       <div class="notice-card">
-        <h3>⚠️ ${timeline.unplaced_segments.length} segment${timeline.unplaced_segments.length === 1 ? '' : 's'} not positioned</h3>
+        <h3>${icon('alert')} ${timeline.unplaced_segments.length} segment${timeline.unplaced_segments.length === 1 ? '' : 's'} not positioned</h3>
         <p>These recovered segments lack a valid start/end timestamp and are therefore excluded from the visual timeline. Review them in Recordings before relying on their chronology.</p>
       </div>` : ''}
   `;

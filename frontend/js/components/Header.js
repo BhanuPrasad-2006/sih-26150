@@ -11,21 +11,24 @@ function renderHeader(breadcrumbs = []) {
   const isLocal = host === '127.0.0.1' || host === 'localhost';
   const hostLabel = isLocal ? '127.0.0.1' : `${host}`;
 
+  const themeIcon = currentTheme() === 'dark' ? 'sun' : 'moon';
   root.innerHTML = `
     <div class="logo-area">
-      <div class="logo-icon">SIH</div>
+      ${logoMark()}
       <div class="logo-text">
         <h1>DVR/NVR Forensic Analysis Tool</h1>
-        <p>SIH26150 — Standardised Acquisition &amp; Carving</p>
+        <p>SIH26150 · Recover, verify and report CCTV evidence</p>
       </div>
     </div>
     <div class="header-meta">
-      <div style="font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
-        <span style="width: 7px; height: 7px; border-radius: 50%; background: var(--status-complete); display: inline-block; box-shadow: 0 0 6px var(--status-complete);"></span>
-        ${hostLabel}
-      </div>
+      <div class="host-pill" data-tooltip="This tool is served from this machine. Nothing leaves it unless you export."><span class="dot"></span><span class="label">${escapeHtml(hostLabel)}</span></div>
+      <button type="button" id="theme-toggle" class="icon-btn" aria-label="Switch light or dark theme" title="Switch light / dark theme">${icon(themeIcon)}</button>
     </div>
   `;
+  document.getElementById('theme-toggle').addEventListener('click', () => {
+    const next = toggleTheme();
+    document.getElementById('theme-toggle').innerHTML = icon(next === 'dark' ? 'sun' : 'moon');
+  });
 
   // ── Breadcrumb strip ──────────────────────────────────────────────────────
   // Ensure the strip element exists (created once in index.html is ideal,
@@ -43,17 +46,18 @@ function renderHeader(breadcrumbs = []) {
 
   // Always start with a "Dashboard" home crumb
   const allCrumbs = [
-    { label: '🏠 Dashboard', screen: 'dashboard', params: {} },
+    { label: 'Dashboard', screen: 'dashboard', params: {}, icon: 'home' },
     ...breadcrumbs
   ];
 
   strip.innerHTML = allCrumbs.map((crumb, idx) => {
     const isLast = idx === allCrumbs.length - 1;
-    const sep = idx > 0 ? '<span class="crumb-sep"> / </span>' : '';
+    const sep = idx > 0 ? `<span class="crumb-sep">${icon('chevron-right')}</span>` : '';
+    const ico = crumb.icon ? icon(crumb.icon) : '';
     if (isLast) {
-      return `${sep}<span class="crumb-current">${escapeHtml(crumb.label)}</span>`;
+      return `${sep}<span class="crumb-current">${ico}${escapeHtml(crumb.label)}</span>`;
     }
-    return `${sep}<span class="crumb-link" data-screen="${escapeHtml(crumb.screen)}" data-params="${escapeHtml(JSON.stringify(crumb.params || {}))}">${escapeHtml(crumb.label)}</span>`;
+    return `${sep}<span class="crumb-link" data-screen="${escapeHtml(crumb.screen)}" data-params="${escapeHtml(JSON.stringify(crumb.params || {}))}">${ico}${escapeHtml(crumb.label)}</span>`;
   }).join('');
 
   // Wire up clicks on crumb links

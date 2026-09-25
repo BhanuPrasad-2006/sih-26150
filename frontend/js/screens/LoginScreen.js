@@ -42,13 +42,14 @@ function _brandPanelHtml() {
     <div class="auth-brand-panel">
       <div class="auth-brand-mesh"></div>
       <div class="auth-brand-content">
-        <div class="auth-brand-badge">${_ICON_SHIELD}</div>
+        <div class="auth-brand-badge">${logoMark()}</div>
         <div class="auth-brand-name">DVR/NVR Forensic<br>Analysis Tool</div>
         <div class="auth-brand-tag">SIH26150 &middot; NTRO</div>
+        <div class="auth-brand-art">${authArt()}</div>
         <ul class="auth-feature-list">
-          <li>${_ICON_CHECK}<span>Read-only evidence acquisition — the source disk image is never modified</span></li>
-          <li>${_ICON_CHECK}<span>Hash-chained, tamper-evident audit log of every action</span></li>
-          <li>${_ICON_CHECK}<span>Single-examiner access, bcrypt-hashed credentials, session lockout on repeated failures</span></li>
+          <li>${_ICON_CHECK}<span><b>Evidence is only ever read.</b> The source disk image is never modified.</span></li>
+          <li>${_ICON_CHECK}<span><b>Every action is logged</b> in a hash-chained, tamper-evident audit trail.</span></li>
+          <li>${_ICON_CHECK}<span><b>Locked down by default:</b> single-examiner access, hashed credentials, lockout after repeated failures.</span></li>
         </ul>
       </div>
     </div>`;
@@ -64,7 +65,7 @@ function renderSetupScreen() {
       <div class="auth-form-panel">
       <div class="auth-card">
         <div class="auth-icon">${_ICON_LOCK_PLUS}</div>
-        <div class="auth-title">First-Run Setup</div>
+        <div class="auth-title">Set up your workspace</div>
         <div class="auth-subtitle">
           Create a password to protect access to this forensic tool.<br>
           <strong>Minimum 12 characters.</strong> The password will be stored only as a bcrypt hash.
@@ -99,8 +100,8 @@ function renderSetupScreen() {
             <span id="setup-error-msg"></span>
           </div>
 
-          <button type="submit" id="btn-setup" class="btn btn-primary" style="width:100%; margin-top:8px;">
-            Set Password &amp; Open Tool ➔
+          <button type="submit" id="btn-setup" class="btn btn-primary btn-lg" style="width:100%; margin-top:8px;">
+            Set Password &amp; Open Tool ${icon('arrow-right')}
           </button>
         </form>
       </div>
@@ -140,13 +141,13 @@ function renderSetupScreen() {
     } catch (err) {
       const isAlreadySet = err.message && err.message.toLowerCase().includes('already set');
       if (isAlreadySet) {
-        errMsg.innerHTML = 'Password is already set. <a href="#" data-nav="login" style="color:var(--accent-cyan); text-decoration:underline; font-weight:600; margin-left:6px;">Click here to Login ➔</a>';
+        errMsg.innerHTML = 'Password is already set. <a href="#" data-nav="login" style="color:var(--accent-cyan); text-decoration:underline; font-weight:600; margin-left:6px;">Go to sign in</a>';
       } else {
         errMsg.textContent = err.message || 'Setup failed. Please try again.';
       }
       errEl.style.display = 'flex';
       btnSetup.disabled = false;
-      btnSetup.innerHTML = 'Set Password &amp; Open Tool ➔';
+      btnSetup.innerHTML = 'Set Password &amp; Open Tool ' + icon('arrow-right');
     }
   };
 }
@@ -162,10 +163,10 @@ function renderLoginScreen() {
       <div class="auth-form-panel">
       <div class="auth-card">
         <div class="auth-icon">${_ICON_LOCK}</div>
-        <div class="auth-title">Forensic Tool — Login</div>
-        <div class="auth-subtitle">Enter your access password to continue.</div>
+        <div class="auth-title">Welcome back</div>
+        <div class="auth-subtitle">Sign in to open your cases. Everything you do here is recorded in the audit log.</div>
 
-        <div id="lockout-banner" style="display:none;" class="error-banner" style="margin-bottom:16px;">
+        <div id="lockout-banner" style="display:none; margin-bottom:16px;" class="error-banner">
           <div class="error-banner-icon">${_ICON_BLOCK}</div>
           <div class="error-banner-body">
             <div class="error-banner-title">Login temporarily locked</div>
@@ -199,8 +200,8 @@ function renderLoginScreen() {
             <span id="login-error-msg"></span>
           </div>
 
-          <button type="submit" id="btn-login" class="btn btn-primary" style="width:100%; margin-top:8px;">
-            Login ➔
+          <button type="submit" id="btn-login" class="btn btn-primary btn-lg" style="width:100%; margin-top:8px;">
+            Sign in ${icon('arrow-right')}
           </button>
         </form>
       </div>
@@ -266,7 +267,7 @@ function renderLoginScreen() {
 
       if (result.locked) {
         _startLockoutCountdown(result.retry_after || 60);
-        btnLogin.innerHTML = 'Login ➔';
+        btnLogin.innerHTML = 'Sign in ' + icon('arrow-right');
         return;
       }
 
@@ -279,13 +280,13 @@ function renderLoginScreen() {
       if (msg.includes('locked') || msg.includes('429')) {
         const seconds = parseInt(msg.match(/(\d+) second/)?.[1] || '60', 10);
         _startLockoutCountdown(seconds);
-        btnLogin.innerHTML = 'Login ➔';
+        btnLogin.innerHTML = 'Sign in ' + icon('arrow-right');
       } else {
         // Always show the same message regardless of failure reason
         errMsg.textContent = totpRequired ? 'Incorrect password or authentication code.' : 'Incorrect password.';
         errEl.style.display = 'flex';
         btnLogin.disabled = false;
-        btnLogin.innerHTML = 'Login ➔';
+        btnLogin.innerHTML = 'Sign in ' + icon('arrow-right');
       }
       // Clear password field on failure
       document.getElementById('login-password').value = '';

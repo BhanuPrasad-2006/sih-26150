@@ -21,7 +21,7 @@ async function renderAuditLogScreen(params) {
         <div class="page-title">Hash-Chained Audit Log</div>
       </div>
       <div class="error-banner">
-        <div class="error-banner-icon">⚠️</div>
+        <div class="error-banner-icon">${icon('alert')}</div>
         <div class="error-banner-body">
           <div class="error-banner-title">Failed to load audit log</div>
           <div class="error-banner-msg">${escapeHtml(err.message)}</div>
@@ -44,7 +44,7 @@ async function renderAuditLogScreen(params) {
         </div>
         <div style="text-align:right;">
           <span class="badge ${isValid ? 'badge-complete' : 'badge-error'}" style="font-size:12px; padding:6px 14px;">
-            ${isValid ? '🔒 CHAIN VALID' : '❌ TAMPERING DETECTED'}
+            ${isValid ? `${icon('shield-check')} CHAIN VALID` : `${icon('x-circle')} TAMPERING DETECTED`}
           </span>
           <div style="font-size:11px; color:var(--text-dim); margin-top:6px; max-width:220px; text-align:right; line-height:1.5;">
             ${isValid
@@ -60,7 +60,7 @@ async function renderAuditLogScreen(params) {
 
       ${auditData.entries.length === 0
         ? `<div class="empty-state">
-             <div class="empty-state-icon">🔒</div>
+             ${emptyArt()}
              <div class="empty-state-title">No audit entries yet</div>
              <div class="empty-state-subtitle">Actions performed on this case — evidence loading, scans, exports — will appear here as cryptographically chained entries.</div>
            </div>`
