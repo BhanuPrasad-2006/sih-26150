@@ -106,7 +106,7 @@ async function renderRecordingsScreen(params) {
                <thead>
                  <tr>
                    <th>Camera</th>
-                   <th>Time Range (UTC)</th>
+                   <th>Recorder time</th>
                    <th>Frames</th>
                    <th>Status</th>
                    <th>Rationale / Gaps</th>
@@ -667,7 +667,7 @@ async function loadAccuracyHistory(caseId) {
     el.innerHTML = `<div class="card-title" style="font-size:13px;"><span>Earlier measurements (${items.length}) — included in the PDF report</span></div>
       <div class="table-container"><table><thead><tr><th>When</th><th>Segment</th><th>Frames recovered</th><th>In order</th><th>Byte-identical</th><th>Original bytes recovered</th></tr></thead><tbody>
       ${items.map(r => `<tr>
-        <td>${escapeHtml((r.created_at || '').substring(0, 19).replace('T', ' '))}</td>
+        <td>${escapeHtml(formatIST(r.created_at))}</td>
         <td class="hash-font" style="font-size:11px;">${escapeHtml((r.segment_id || '').substring(0, 8))}…</td>
         <td>${r.frames ? accFmt(r.frames.frame_recall_pct) : '—'}</td>
         <td>${r.frames ? accFmt(r.frames.in_order_pct) : '—'}</td>

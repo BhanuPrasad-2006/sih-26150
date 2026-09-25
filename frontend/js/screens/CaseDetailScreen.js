@@ -54,8 +54,8 @@ async function renderCaseDetailScreen(params) {
       <div class="card-title">Case Metadata</div>
       <div class="meta-grid">
         <div>
-          <div class="meta-label">Registered</div>
-          <div class="meta-value">${new Date(caseObj.created_at).toLocaleString()}</div>
+          <div class="meta-label">Registered (IST)</div>
+          <div class="meta-value">${escapeHtml(formatIST(caseObj.created_at))}</div>
         </div>
         <div>
           <div class="meta-label">Examiner</div>
