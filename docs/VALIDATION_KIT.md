@@ -1,5 +1,7 @@
 # Validation Kit
 
+**Download page:** enable GitHub Pages for this repository (Settings → Pages → Deploy from a branch → `main` → `/docs`) and the kit is published at `https://bhanuprasad-2006.github.io/sih-26150/` with a download button, this guide in plain words, and the file's SHA-256. The package is rebuilt with `python tools/build_kit_package.py` (a test fails if the download is out of date with the code).
+
 A single command that turns real recorder disk images into a finished validation report. It exists because the tool has only been tested on disk images we generated: anyone with a real DVR/NVR can now close that gap in about an hour, without knowing how the tool works inside.
 
 ```
