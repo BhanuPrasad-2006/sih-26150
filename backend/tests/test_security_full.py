@@ -249,3 +249,50 @@ def test_security_status_reports_posture_without_leaking_keys(auth_client):
         assert kf.read_text().strip() not in r.text
     _enable_totp_get_codes(auth_client)
     assert {c["id"]: c for c in auth_client.get("/api/security/status").json()["checks"]}["2fa"]["status"] == "ok"
+
+
+# ── Lockout survives a restart ────────────────────────────────────────────────
+
+def _fresh_auth(tmp_path, monkeypatch):
+    from backend.auth import AuthManager
+    from backend.database import Database
+    monkeypatch.setenv("FORENSIC_CASE_DIR", str(tmp_path / "cases"))
+    db = Database()
+    return db, AuthManager(db)
+
+
+def test_lockout_and_failure_count_survive_a_restart(tmp_path, monkeypatch):
+    from backend.auth import AuthManager
+    db, a = _fresh_auth(tmp_path, monkeypatch)
+    for _ in range(AuthManager.MAX_FAILURES):
+        a.record_failure()
+    assert a.is_locked_out()[0] is True
+    restarted = AuthManager(db)                      # same database, new process state
+    locked, remaining = restarted.is_locked_out()
+    assert locked is True and 0 < remaining <= AuthManager.LOCKOUT_SECONDS
+
+
+def test_partial_failures_are_not_forgotten_on_restart(tmp_path, monkeypatch):
+    from backend.auth import AuthManager
+    db, a = _fresh_auth(tmp_path, monkeypatch)
+    for _ in range(AuthManager.MAX_FAILURES - 1):
+        a.record_failure()
+    restarted = AuthManager(db)
+    count, just_locked = restarted.record_failure()
+    assert just_locked is True and count == AuthManager.MAX_FAILURES
+
+
+def test_a_successful_login_clears_the_saved_lockout(tmp_path, monkeypatch):
+    from backend.auth import AuthManager
+    db, a = _fresh_auth(tmp_path, monkeypatch)
+    for _ in range(AuthManager.MAX_FAILURES):
+        a.record_failure()
+    a.record_success()
+    assert AuthManager(db).is_locked_out() == (False, 0)
+
+
+def test_a_corrupt_saved_counter_fails_closed(tmp_path, monkeypatch):
+    from backend.auth import AuthManager
+    db, _ = _fresh_auth(tmp_path, monkeypatch)
+    db.set_auth_value("lockout_until", "not-a-number")
+    assert AuthManager(db).is_locked_out()[0] is True

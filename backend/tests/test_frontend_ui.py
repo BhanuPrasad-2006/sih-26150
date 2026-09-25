@@ -76,3 +76,18 @@ def test_upload_zone_keeps_the_element_ids_the_upload_logic_depends_on():
                        "modal-ev-path", "modal-acq-area", "modal-ev-progress-box", "modal-ev-progress-bar",
                        "modal-ev-progress-pct", "modal-ev-progress-status", "modal-ev-error-msg"):
         assert f'id="{element_id}"' in text, element_id
+
+
+def test_scan_screen_no_longer_auto_redirects_and_labels_the_real_format():
+    text = (ROOT / "js" / "screens" / "EvidenceScanScreen.js").read_text(encoding="utf-8")
+    assert "}, 1200)" not in text, "the scan must not navigate away on its own"
+    assert "View recordings" in text
+    assert "Raw Binary (.dd)" not in text, "format label must come from the file, not be hard-coded"
+    assert "evidenceFormatLabel(ev.path)" in text
+
+
+def test_unverified_brands_get_a_warning_badge_not_the_verified_one():
+    text = (ROOT / "js" / "screens" / "EvidenceScanScreen.js").read_text(encoding="utf-8")
+    body = text[text.index("function brandBadge"):text.index("async function renderEvidenceScanScreen")]
+    assert "unverified" in body and "unvalidated" in body and "detection-only" in body
+    assert "badge-partial" in body and "badge-verified" in body

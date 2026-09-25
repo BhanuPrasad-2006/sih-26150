@@ -8,9 +8,9 @@ Design principles (per project brief):
     offline forensic tool).
   • Per-request session validation: every API call checks elapsed time against
     SESSION_TIMEOUT_MINUTES.  If expired → session is deleted and caller gets 401.
-  • Per-account lockout: 5 consecutive failures → 60-second lockout tracked in a
-    persistent counter dict (not per-request state), so lockout survives across
-    the full 60 seconds.
+  • Per-account lockout: 5 consecutive failures → 60-second lockout. The failure
+    count and lockout end time are stored in the database (not just in memory), so
+    restarting the server does not reset them.
   • Audit entries for login events log timestamp + attempt count ONLY.
     The attempted password is NEVER included — the audit log is cited as
     evidence-integrity proof and must not become a credential-leak vector.
@@ -90,6 +90,24 @@ class AuthManager:
         # Per-account lockout state (single-examiner → effectively global)
         self._failure_count:   int   = 0
         self._lockout_until:   float = 0.0   # epoch seconds; 0 = not locked out
+        self._load_lockout()
+
+    # ── Lockout persistence ────────────────────────────────────────────────────
+
+    def _load_lockout(self) -> None:
+        """Restore the failure counter and lockout end time saved before a restart."""
+        try:
+            self._failure_count = max(0, int(self._db.get_auth_value("lockout_failures") or 0))
+            self._lockout_until = max(0.0, float(self._db.get_auth_value("lockout_until") or 0.0))
+        except (TypeError, ValueError):
+            # Unreadable value: fail closed, as if the limit had just been reached.
+            self._failure_count = self.MAX_FAILURES
+            self._lockout_until = time.time() + self.LOCKOUT_SECONDS
+
+    def _save_lockout(self) -> None:
+        """Write the current counter to the database. Caller holds self._lock."""
+        self._db.set_auth_value("lockout_failures", str(self._failure_count))
+        self._db.set_auth_value("lockout_until", repr(self._lockout_until))
 
     # ── Password management ────────────────────────────────────────────────────
 
@@ -248,16 +266,19 @@ class AuthManager:
         """
         with self._lock:
             self._failure_count += 1
+            just_locked = False
             if self._failure_count >= self.MAX_FAILURES and self._lockout_until <= time.time():
                 self._lockout_until = time.time() + self.LOCKOUT_SECONDS
-                return self._failure_count, True
-            return self._failure_count, False
+                just_locked = True
+            self._save_lockout()
+            return self._failure_count, just_locked
 
     def record_success(self) -> None:
         """Reset failure counter on successful login."""
         with self._lock:
             self._failure_count = 0
             self._lockout_until = 0.0
+            self._save_lockout()
 
     # ── Session management ─────────────────────────────────────────────────────
 
