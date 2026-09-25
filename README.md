@@ -258,7 +258,7 @@ All routes except login/setup require the session cookie. Interactive docs at `/
 - **Model integrity**: the three ONNX models are SHA-256-pinned; a changed file is refused.
 - **Supply chain and code**: `requirements.lock.txt`; `pip-audit` (including transitive dependencies) and `bandit` clean; a GitHub Actions workflow runs tests, pip-audit and bandit on every push and weekly.
 - **Keyed audit seal** for every case log **and** the login log: the chain head and count are HMAC-sealed with a key outside the database, so truncation or a full database rewrite is detected; the head hash is printed in the report.
-- **🛡 Security self-check** on the dashboard: 2FA, HTTPS, network exposure, key files, disk encryption, seals, model integrity.
+- **Security self-check** (`GET /api/security/status`, after login): 2FA, HTTPS, network exposure, key files, disk encryption, seals, model integrity.
 - **Hash-chained audit log**: every action (including login attempts, never the password) is chained:
 
 $$\text{Hash}_n = \text{SHA-256}(\text{Timestamp}_n \parallel \text{Action}_n \parallel \text{Params}_n \parallel \text{Hash}_{n-1})$$

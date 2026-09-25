@@ -2,7 +2,7 @@
 
 What the tool protects, how, what it does not protect, and what the examiner must do. Written against the code as built.
 **No software is unhackable.** This is a hardened single-examiner forensic workstation tool, not an internet-facing service.
-The **🛡 Security** button on the dashboard runs a live self-check of the points below.
+A live self-check of the points below is available at `/api/security/status` (log in first; there is no dashboard button for it).
 
 ## 1. Threat model
 
@@ -25,7 +25,7 @@ Out of scope: an attacker with administrator rights on the workstation (memory, 
 | Cross-site | Cookie `HttpOnly` + `SameSite=Strict`; state-changing requests with a foreign `Origin`, `Origin: null` or `Sec-Fetch-Site: cross-site` are refused | `security.py` |
 | Browser hardening | CSP with `script-src 'self'` (no inline script anywhere in the UI, enforced by a test), `frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'none'`, `form-action 'self'`; `X-Frame-Options: DENY`, `nosniff`, no-referrer | `security.py` |
 | Output escaping | Every server/user string is HTML-escaped before it reaches the page; tests fail if risky fields are interpolated raw | `frontend/js`, `test_security.py` |
-| Login | bcrypt password (12+ characters), 5 failures → 60 s lock, 30-minute idle timeout **and a 12-hour absolute session lifetime** (`SESSION_MAX_HOURS`), identical error for every failure | `auth.py` |
+| Login | bcrypt password (12+ characters), 5 failures → 60 s lock (the count and lock time are saved in the database, so restarting the server does not reset them), 30-minute idle timeout **and a 12-hour absolute session lifetime** (`SESSION_MAX_HOURS`), identical error for every failure | `auth.py` |
 | **Two-factor** | Optional TOTP (RFC 6238, tested against the RFC vectors); a code works once (replay refused); wrong password and wrong code give the same reply; the code is only consumed after the password is right; secret encrypted in the database; every other session ends when it is switched on or off | `totp.py`, `auth.py` |
 | **Lost phone** | 10 one-time **recovery codes** shown once at enrolment; only salted hashes are stored (encrypted); each works once; use is audit-logged; regenerating needs password + a code and voids the old set | `auth.py` |
 | API surface | API docs and OpenAPI schema need a session; optional path allow-list `FORENSIC_EVIDENCE_ROOTS`; upload cap `SIH_MAX_UPLOAD_GB` (default 200) | `main.py`, `security.py` |
@@ -58,7 +58,7 @@ Back these up **separately from the case database**: if one place holds both the
 ## 4. What is still NOT protected
 
 1. **A compromised workstation.** Someone with admin rights, or with the key folder and the case folder, can read or change everything and forge the seal and signatures.
-2. **Evidence images, exports and PDFs are not encrypted by the application** (they are multi-gigabyte, memory-mapped and handed to FFmpeg). Use full-disk encryption (BitLocker / LUKS) on the case drive; the Security dialog tells you whether it can see it. The encrypted case package covers hand-over and archiving, not the working copy.
+2. **Evidence images, exports and PDFs are not encrypted by the application** (they are multi-gigabyte, memory-mapped and handed to FFmpeg). Use full-disk encryption (BitLocker / LUKS) on the case drive; the security self-check (`/api/security/status`) tells you whether it can see it. The encrypted case package covers hand-over and archiving, not the working copy.
 3. **Sandboxing is process-level.** The container profile is stronger but untested here. For truly hostile media use a disposable VM.
 4. **Fuzzing is bounded evidence, not proof.** Native parsers inside FFmpeg/OpenCV were not fuzzed by us.
 5. **Self-signed certificates.** The PDF signature proves integrity and origin of the file, not a person's identity, and viewers show the signer as "unknown" until the certificate is trusted. A certificate from a public or organisational CA would fix that (bring your own key/certificate).
@@ -77,7 +77,7 @@ Back these up **separately from the case database**: if one place holds both the
 - [ ] Print or store the **audit head hash** from each report
 - [ ] Set `FORENSIC_EVIDENCE_ROOTS` if anyone other than you can reach the server
 - [ ] Hardware write blocker for any drive imaging
-- [ ] Check 🛡 Security on the dashboard; resolve every amber item you can
+- [ ] Open `/api/security/status` after logging in; resolve every amber item you can
 - [ ] Keep `pip-audit` (CI runs it weekly) and FFmpeg current; run hostile media in a VM
 
 ## 6. Verifying things yourself
