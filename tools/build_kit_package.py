@@ -54,10 +54,12 @@ def _git_commit() -> str:
 
 def collect() -> dict[str, bytes]:
     files: dict[str, bytes] = {}
+    # Line endings are normalised to LF so the archive is byte-identical whether the repository was checked out
+    # on Windows (CRLF) or Linux (LF); otherwise the hash would depend on git's autocrlf setting.
     for name in BACKEND_FILES:
-        files[f"backend/{name}"] = (ROOT / "backend" / name).read_bytes()
+        files[f"backend/{name}"] = (ROOT / "backend" / name).read_bytes().replace(b"\r\n", b"\n")
     for name in PLUGIN_FILES:
-        files[f"backend/plugins/{name}"] = (ROOT / "backend" / "plugins" / name).read_bytes()
+        files[f"backend/plugins/{name}"] = (ROOT / "backend" / "plugins" / name).read_bytes().replace(b"\r\n", b"\n")
     for arc, src in EXTRA_FILES.items():
         data = src.read_bytes()
         if arc.endswith((".sh", ".txt", ".md", ".json", ".bat")):
