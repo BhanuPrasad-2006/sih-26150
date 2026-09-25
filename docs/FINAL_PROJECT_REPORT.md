@@ -10,7 +10,7 @@ Companion documents: [System Architecture](SYSTEM_ARCHITECTURE.md) · [User Manu
 
 ## Abstract
 
-Surveillance recordings are frequently the decisive evidence in an investigation, yet DVR/NVR recorders from different vendors store video in proprietary disk layouts, indexes and frame containers that general forensic tools cannot read. We built a vendor-agnostic forensic platform with a single workflow: read-only acquisition with SHA-256 and MD5 hashing, brand identification through a plugin architecture, index parsing and frame carving, timeline reconstruction, lossless export, video analytics (faces, objects, motion), a hash-chained audit log, and court-oriented reporting with a Section 63(4) BSA 2023 certificate template. Vendor parsers were implemented only where a public, checkable source exists: Dahua (DHFS 4.1 index and DHAV frames), Hikvision (HIKBTREE index and MPEG-PS/H.264 blocks) and Honeywell (record stream); a standards-based generic carver covers other recorders that store standard streams. The tool never labels a carved recording COMPLETE and never states a recovery percentage without supplied ground truth; a dedicated module measures frame recall, precision, ordering and byte placement against such ground truth. The system passes 278 automated tests on disk images generated from the published specifications around real encoded video. It has not been validated on a real recorder disk, four of the eight named vendors have no vendor-specific support because no public format documentation exists, and this report states those limits as findings rather than omissions.
+Surveillance recordings are frequently the decisive evidence in an investigation, yet DVR/NVR recorders from different vendors store video in proprietary disk layouts, indexes and frame containers that general forensic tools cannot read. We built a vendor-agnostic forensic platform with a single workflow: read-only acquisition with SHA-256 and MD5 hashing, brand identification through a plugin architecture, index parsing and frame carving, timeline reconstruction, lossless export, video analytics (faces, objects, motion), a hash-chained audit log, and court-oriented reporting with a Section 63(4) BSA 2023 certificate template. Vendor parsers were implemented only where a public, checkable source exists: Dahua (DHFS 4.1 index and DHAV frames), Hikvision (HIKBTREE index and MPEG-PS/H.264 blocks) and Honeywell (record stream); a standards-based generic carver covers other recorders that store standard streams. The tool never labels a carved recording COMPLETE and never states a recovery percentage without supplied ground truth; a dedicated module measures frame recall, precision, ordering and byte placement against such ground truth. The system passes 290 automated tests on disk images generated from the published specifications around real encoded video. It has not been validated on a real recorder disk, four of the eight named vendors have no vendor-specific support because no public format documentation exists, and this report states those limits as findings rather than omissions.
 
 ## 1. Introduction
 
@@ -81,7 +81,7 @@ Key features: single-examiner login with bcrypt, lockout and idle timeout; hash-
 | Tampering with one byte of evidence is detected | Pass |
 | Accuracy module: identical video 100 %, truncated and different videos give the expected lower values | Pass |
 | Object detection (YOLOX) on three real photos: person 0.93, cat 0.94, cup/spoon/table found; a cup missed after compression | Sanity check only |
-| Automated suite | 278 passing (270 without a live database) |
+| Automated suite | 290 passing (282 without a live database) |
 
 ### 5.2 A finding produced by the accuracy method
 
@@ -129,7 +129,7 @@ Full table: [oem_comparison.md](oem_comparison.md).
 
 The project delivers a working, tested, honestly labelled platform and the machinery (admission gate, ground-truth measurement, validation protocol) to move each vendor from "specified" to "validated". It does not yet deliver validated recovery from real recorders. Future work, in priority order:
 
-1. Run the validation protocol ([Validation Report §7](VALIDATION_REPORT.md)) on real Dahua/CP Plus and Hikvision recorders; promote or correct formats.
+1. Run the validation protocol ([Validation Report §7](VALIDATION_REPORT.md)) on real Dahua/CP Plus and Hikvision recorders using the [validation kit](VALIDATION_KIT.md); promote or correct formats.
 2. Test imaging on a physical disk behind a write blocker.
 3. Obtain samples or documentation for Uniview, TP-Link, Godrej and Matrix, and confirm or refute the CP Plus assumption.
 4. Evaluate analytics on real surveillance footage; add clock-drift estimation from on-screen time.

@@ -66,6 +66,7 @@ flowchart TB
 | `exporter.py` | ffmpeg stream-copy remux (`-f dhav`, `-f h264`, or PS auto-detect), `ffprobe` validation, file hash |
 | `face_detection.py`, `face_search.py`, `object_detection.py`, `motion.py` | Read-only analytics on the exported MP4 |
 | `accuracy.py` | Ground-truth comparison (see §7) |
+| `pipeline.py`, `validation_kit.py` | Headless recovery pipeline (same decisions as the app, asserted by a test) and the validation kit: images + clip in, validation report out ([VALIDATION_KIT.md](VALIDATION_KIT.md)) |
 | `timeline.py`, `correlation.py` | UTC normalisation with an examiner-set offset; cross-camera time-window clustering |
 | `audit.py` | Hash-chained log: `H_n = SHA-256(t_n ∥ action_n ∥ params_n ∥ H_{n-1})` |
 | `reporting.py` | ReportLab PDF: cover, hashes, segments, correlation, accuracy, object detection, method and limitations, audit dump, BSA §63(4) certificate |

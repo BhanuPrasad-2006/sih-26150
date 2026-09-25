@@ -1,0 +1,11 @@
+{
+  "data_source": "real recorder",
+  "vendor": "Hikvision",
+  "model": "DS-7204HQHI-K1",
+  "firmware": "V4.30.0",
+  "disk": "WD Purple 500 GB (or the disk actually used)",
+  "scenario": "5-minute clip deleted through the recorder menu, recorder powered off immediately",
+  "time_zone": "IST (UTC+5:30), as set on the recorder",
+  "operator": "Name of the person who ran the test",
+  "remarks": "Anything unusual: recorder kept running for a while, disk was full, motion recording only, ..."
+}

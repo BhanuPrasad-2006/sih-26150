@@ -55,7 +55,7 @@ def allowed_hosts() -> set[str]:
     extra = os.environ.get("SIH_ALLOWED_HOSTS", "")
     hosts.update(h.strip().lower() for h in extra.split(",") if h.strip())
     sih_host = os.environ.get("SIH_HOST", "").strip().lower()
-    if sih_host and sih_host not in ("0.0.0.0", "::"):   # nosec B104: comparison, not a bind
+    if sih_host and sih_host not in ("0.0.0.0", "::"):   # nosec B104  (a comparison, not a bind)
         hosts.add(sih_host)                       # the operator explicitly chose this bind address
     return hosts
 
