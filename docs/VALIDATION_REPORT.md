@@ -9,7 +9,7 @@ SIH26150 · DVR/NVR Forensic Analysis Tool · state of `main` after the last com
 | Has the tool been validated on a **real DVR/NVR disk**? | **No.** No real recorder disk was available. |
 | What was validated, then? | The software's behaviour on **disk images we built ourselves** from published format descriptions and from **real ffmpeg-encoded video**, plus the forensic bookkeeping (hashing, audit, reports, auth). |
 | Can any recovery rate or accuracy be quoted for real recorders? | **No.** Numbers from synthetic disks describe our test disks, not recorders. |
-| Automated tests | **297 passing** (289 without a live Supabase connection; the other 8 exercise the Postgres backend). 75 of them are security tests (headers, strict CSP, Host/Origin, audit seals, encryption, 2FA and recovery codes, signing, encrypted packages, HTTPS, sandbox, parser fuzzing). |
+| Automated tests | **316 passing** (308 without a live Supabase connection; the other 8 exercise the Postgres backend). 75 of them are security tests (headers, strict CSP, Host/Origin, audit seals, encryption, 2FA and recovery codes, signing, encrypted packages, HTTPS, sandbox, parser fuzzing). |
 | Trust level of every vendor format (see `format_verification.md`) | **L2 at best** (corroborated by sources and tested on synthetic data). **None is L3** (validated on a real disk). |
 
 This report therefore documents *verification* (does the code do what it is specified to do) and does **not** claim *validation* (does it work on the real thing). Section 7 gives the protocol for turning it into real validation.
@@ -76,7 +76,8 @@ Independence caveat: the disk builders and the parsers were written by the same 
 | test_security_full.py | 16 | Recovery codes, session lifetime, sealed login log, HTTPS, embedded PDF signature, encrypted packages, security status |
 | test_validation_kit.py | 12 | Validation kit: verdicts, reports, evidence untouched, exit codes, parity with the app scan |
 | test_kit_package.py | 7 | Downloadable kit: reproducible zip, minimal contents, runs with no web dependencies, page/zip/hash consistent |
-| **Total** | **297** (includes parametrised cases) | |
+| test_hikvision_real_disk.py | 19 | Values from a real 1 TB Hikvision disk's published parse: master sector, entries, 16-byte shift, page-structured index, OFNI times |
+| **Total** | **316** (includes parametrised cases) | |
 
 ## 5. Defects found by testing
 
@@ -86,13 +87,14 @@ Independence caveat: the disk builders and the parsers were written by the same 
 | Verify failed after a server restart ("Evidence image is not loaded") | Manual UI test | Verify re-opens the evidence by its stored path |
 | Hikvision carver absorbed junk after a decoy SPS; and a blanket duplicate trim truncated real slices | Decoy-stream tests | SPS/PPS size guard; duplicate trim applied to the last slice only |
 | Old Honeywell stub tests contradicted a real implementation | Test failures after the rewrite | Tests rewritten with the paper's known-answer bytes |
+| **Real 1 TB Hikvision disk (third-party parse) showed: master sector at 0x210 (file system shifted 16 bytes), a page-structured index, 7 of 852 entries with end before start.** Our code assumed 0x200, a flat index and rejected such entries, so this disk would have been reported as unknown | Reading a real disk's published analysis output (`github.com/vishwajitsarnobat/HIKVISION-DVR-Tool`) | Signature search + shift applied to all pointers; page-list read with blind-scan fallback; entries kept without a window. 19 tests from the disk's values |
 | **Tiny P-frames of static scenes were rejected (`DHAV_MIN_FRAME_BYTES = 100`), so only 21 of 40 frames were carved (byte recall 86.5 %)** | Placement/recall check against ground truth | Lowered to 40: 40 of 40 frames carved, byte recall 92.1 %, placement precision 100 % |
 | Test suite once wrote fixture rows into a live Supabase project | Reviewing the database | `DATABASE_URL=""` forced in `conftest.py`; a guard asserts the real case folder is never used |
 | Format sheet mislabelled paper-derived facts as "AI report" | Reading the paper in full | Sheet corrected; MDPI "HKVI" frame format rejected as uncorroborated |
 
 ## 6. What has not been validated
 
-1. Any parser on a real recorder disk (Dahua, Hikvision, Honeywell, CP Plus).
+1. Any parser run on a real recorder disk image (Dahua, Hikvision, Honeywell, CP Plus). Hikvision's index layout has been cross-checked against a third party's published parse of a real disk (see the format sheet §7a); our code has not read that image.
 2. Any vendor format for TP-Link, Godrej, Uniview, Matrix (not implemented; no public source).
 3. Behaviour on real deletion, overwrite, wear and fragmentation patterns.
 4. Drive imaging on a physical device (size discovery, aligned raw reads, admin rights).

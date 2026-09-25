@@ -123,7 +123,7 @@ CPPLUS_IDENTIFYING_MARKERS = (
 
 # ── HIKVISION ─────────────────────────────────────────────────────────────────
 
-HIKV_MASTER_SECTOR_OFFSET = 0x200   # 512 bytes from disk start — Verified [Han2015, MDPI2025]
+HIKV_MASTER_SECTOR_OFFSET = 0x200   # Han 2015: signature here. A REAL disk had it at 0x210 (whole file system shifted by 16 bytes), so it is searched for after 0x200 (HIKV_MASTER_SECTOR_SEARCH_BYTES)
 HIKV_MASTER_SECTOR_MAGIC  = b"HIKVISION@HANGZHOU"  # Verified [Han2015, MDPI2025]
 
 HIKV_INDEX_NAME = b"HIKBTREE"       # Han 2015 sec. 2.4 (the signature has no hyphen); entries: see HIKV_ENTRY_* below
@@ -250,6 +250,28 @@ HIKV_TIME_SENTINEL_END   = 0
 HIKV_BLOCK_SIZE_MIN = 1 * 1024 * 1024
 HIKV_BLOCK_SIZE_MAX = 16 * 1024 * 1024 * 1024
 HIKV_BTREE_MAX_BYTES = 16 * 1024 * 1024
+
+# ── Facts confirmed on a REAL 1 TB Hikvision disk (E01 image) by a third-party tool's published output:
+#    github.com/vishwajitsarnobat/HIKVISION-DVR-Tool (no licence: only these facts/values are used, no code).
+# The master sector's signature was at 0x210, not 0x200: the whole file system was shifted by 16 bytes in the image
+# ("extra offset"). Every pointer stored on the disk must have that shift added. All field offsets below are
+# relative to the SIGNATURE position and matched Han 2015 exactly.
+HIKV_MASTER_SECTOR_SEARCH_BYTES = 4096   # look for the signature this far after 0x200
+# HIKBTREE (signature at its start, offsets from the signature): header, page list, 4 KiB pages
+HIKV_BTREE_HDR_FOOTER   = 48            # u64 footer offset
+HIKV_BTREE_HDR_PAGELIST = 64            # u64 page-list offset
+HIKV_BTREE_HDR_PAGE1    = 72            # u64 first page offset
+HIKV_PAGELIST_TOTAL     = 0             # u32 number of pages (at the start of the page list)
+HIKV_PAGELIST_ENTRIES   = 80            # 48-byte records: page offset u64 at +0, then a normal entry layout
+HIKV_PAGE_SIZE          = 4096
+HIKV_PAGE_NEXT          = 16            # u64 next-page offset (all-FF on the last page)
+HIKV_PAGE_ENTRIES       = 80            # data-block entries start here; each begins with FF*8
+HIKV_ENTRY_PREFIX       = b"\xff" * 8
+# IDR table (OFNI records) sits in the last ~1 % of every data block: 56-byte records, u32 size (=56) at +4,
+# UNIX UTC time of the IDR frame (u32) at +24. Other fields unknown.
+HIKV_OFNI_SIZE_OFF = 4
+HIKV_OFNI_TIME_OFF = 24
+HIKV_OFNI_MIN_TIME = 1262304000          # 2010-01-01
 
 
 # ── DAHUA DHFS 4.1 DISK INDEX ─────────────────────────────────────────────────

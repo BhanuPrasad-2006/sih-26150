@@ -10,7 +10,7 @@ frame format is **rejected** (see §6).
 
 **Status key:** ✅ stated by Han 2015 (and read from its text/figure) · 🔵 inferred or our own choice ·
 ❓ not published / unverified · ⚠ conflict or ambiguity in the source.
-Trust level and cross-checks: `docs/format_verification.md`. **Nothing here has been validated on a real disk.**
+Trust level and cross-checks: `docs/format_verification.md`. **Our code has not been run on a real disk**, but its index layout has been cross-checked against a third party's published parse of a real 1 TB disk (see §7a), which changed the code.
 
 An earlier version of this sheet marked the `0xBA`/`0xBC` prefix, the 1 GB block size and the `OFNI` table as
 "from an unverified AI report". They are in Han 2015 itself. That error came from not having read the paper.
@@ -24,7 +24,7 @@ Sector follows the system logs; a backup HIKBTREE follows the primary one. ✅
 
 ## 2. Master sector (§2.1, Fig. 2)
 
-Starts at disk offset **0x200**, 256 bytes, little-endian. ✅ Signature `HIKVISION@HANGZHOU` at offset 0.
+Starts at disk offset **0x200** in Han's disk, but **0x210** on a real disk (the whole file system was shifted by 16 bytes, §7a); the plugin searches a 4 KiB window and adds the shift to every pointer. 256 bytes, little-endian. ✅ Signature `HIKVISION@HANGZHOU` at offset 0.
 Field offsets below are relative to the master sector and were **read from the hex-dump figure**; the paper prints
 the sample values, which are arithmetically consistent (and the implementation rejects a sector that isn't).
 
@@ -108,23 +108,50 @@ size at 8, timestamp at 12, channel at 16, payload at 20 "minus 24 bytes of head
 uncorroborated (Han and FFmpeg describe NAL/PS data, not this), internally inconsistent (payload at 20 but 24-byte
 overhead), and the paper's Dahua detection offsets contradict the Dahua spec.
 
+## 7a. Real-disk evidence (added 2026-09-26)
+
+A third party published the parse of a **real 1 TB Hikvision disk** (E01 image `dvr_test_img.E01`, 1,000,204,886,016 bytes;
+`github.com/vishwajitsarnobat/HIKVISION-DVR-Tool`, files `analysis/master_sector_analysis.json` and
+`analysis/hikbtree_analysis.json`). The repository has **no licence**, so no code or data file was copied: only the numeric
+facts below are used, and `backend/tests/test_hikvision_real_disk.py` encodes a small subset. We have **not** seen the disk
+image or run our code on it; this is agreement between our parser and an independent parser's readings, plus what it taught us.
+
+| Fact | Result on the real disk | Effect on our code |
+|---|---|---|
+| Master sector field offsets relative to the signature (0x38 capacity ... 0xE0 init time) | Identical to Han 2015 | Confirmed (was L1) |
+| Master sector position | **Signature at 0x210, not 0x200**: the whole file system is shifted by 16 bytes in the image ("extra offset"); every pointer on the disk needs +16 | **Fixed:** the signature is searched for in a 4 KiB window after 0x200 and its distance from 0x200 is added to every pointer. Before, this disk would have been reported as "unknown" |
+| Arithmetic (capacity, 931 blocks of 1 GiB, HIKBTREE1 end = HIKBTREE2 start, logs before video area) | All consistent | Our self-consistency check accepts these values |
+| HIKBTREE | Header (signature, footer, page-list and page-1 pointers) → page list (page count, one record per page) → 4 KiB pages; entries start at page +80 and each begins with `FF*8`; 17 pages held 855 entries (41-81 per page) | **Added:** structured read via header, page list and pages, with the old blind scan as fallback |
+| Entry layout (48 bytes: existence at 8, channel at 17, start at 24, end at 28, block offset at 32) | Identical to Han 2015 | Confirmed |
+| No-video entries | Channel **255**, times `0x7FFFFFFF`/`0` (or equal start and end) | Already handled (channel None, no window) |
+| Video entries with the "not set" time sentinel | Present (first entry of channels 2-4) | Already handled (camera kept, no window) |
+| Video entries whose **end is earlier than the start** | 7 of 852 | **Fixed:** the entry is kept (block and camera) but gets no window; previously it was rejected |
+| Block offsets | All 855 = video area + whole 1 GiB blocks, distinct, indexes 0-930 | Confirmed; 76 of 931 blocks had no entry (unindexed footage) |
+| Time span of one block | Median 22.6 h, maximum 45.9 h (low-bitrate recording) | Block-level windows are wide; do not read them as per-frame times |
+| IDR table (`OFNI`) | 56-byte records in the last ~1 % of each block, size field 56 at +4, **UNIX time of the key frame at +24** | **Added (informational only):** the scan note reports key-frame counts and the time span; not used to cut or assign segments until validated |
+| Time labels in that tool's output | Marked "UTC" but are the author's local time (IST): `1646919412` is 13:36:52 UTC, printed as 19:06:52 | We use only the raw epoch values |
+
+Limits of this evidence: one recorder, one disk, one firmware, output of a tool that may itself have errors, no raw bytes
+seen (the bytes at entry offsets 0x10 and 0x12-0x17 are unknown, so the structured read does not require them to be zero).
+
 ## 7. Facts still to confirm on a real disk
 
 | Fact | Expected | Confirmed? |
 |---|---|---|
-| Master sector field offsets (Fig. 2 read from image) | as §2 | — |
-| Data block entry offsets (Fig. 6B) | as §3 | — |
-| Block size 1 GB on current firmware / NVRs | 0x40000000 | — |
+| Master sector field offsets (Fig. 2 read from image) | as §2 | ✅ real disk (third-party parse), relative to the signature |
+| Data block entry offsets (Fig. 6B) | as §3 | ✅ real disk (third-party parse) |
+| Block size 1 GB on current firmware / NVRs | 0x40000000 | ✅ on one real disk (0x40000000); NVRs unknown |
 | Bytes following `00 00 01 BA` / `BC` | unknown | — |
-| `OFNI` record layout | 56 bytes, unknown fields | — |
+| `OFNI` record layout | 56 bytes, unknown fields | partly: size at +4 and key-frame time at +24 (one source); other fields unknown |
 | Behaviour on H.265 and newer firmware/filesystems | unknown | — |
 
 ## 8. Known limitations
 
-- One DVR model and firmware (2015). Newer Hikvision recorders and NVRs are unverified.
+- One 2015 DVR (Han) and one real 1 TB disk of unknown model (third-party output). Newer recorders and NVRs are unverified.
+- Our code has not read a real disk image; the real-disk facts come from another tool's published output.
 - Per-frame timestamps unavailable; time windows are per 1 GB block and may cover several recordings.
 - Ambiguity where one block has several entries; those blocks are carved without camera or window.
 - Log parsing not implemented.
 - No accuracy figures can be reported until known-answer tests pass on a real disk.
 
-*Last updated: 2026-09-24 (rewritten after reading Han 2015 in full).*
+*Last updated: 2026-09-26 (real-disk cross-check added; see §7a).*

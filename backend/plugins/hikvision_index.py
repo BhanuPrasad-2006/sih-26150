@@ -20,6 +20,9 @@ from typing import Optional
 
 from backend.plugins.constants import (
     HIKV_BLOCK_SIZE_MAX,
+    HIKV_BTREE_HDR_FOOTER,
+    HIKV_BTREE_HDR_PAGE1,
+    HIKV_BTREE_HDR_PAGELIST,
     HIKV_BLOCK_SIZE_MIN,
     HIKV_BTREE_MAX_BYTES,
     HIKV_BTREE_SIGNATURE,
@@ -27,9 +30,11 @@ from backend.plugins.constants import (
     HIKV_ENTRY_OFF_CHANNEL,
     HIKV_ENTRY_OFF_EXISTENCE,
     HIKV_ENTRY_OFF_START,
+    HIKV_ENTRY_PREFIX,
     HIKV_ENTRY_SIZE,
     HIKV_MASTER_SECTOR_MAGIC,
     HIKV_MASTER_SECTOR_OFFSET,
+    HIKV_MASTER_SECTOR_SEARCH_BYTES,
     HIKV_MS_OFF_BLOCK_COUNT,
     HIKV_MS_OFF_BLOCK_SIZE,
     HIKV_MS_OFF_BTREE1_OFFSET,
@@ -42,6 +47,13 @@ from backend.plugins.constants import (
     HIKV_MS_OFF_LOG_SIZE,
     HIKV_MS_OFF_VIDEO_AREA,
     HIKV_MS_SIZE,
+    HIKV_OFNI_MARKER,
+    HIKV_OFNI_MIN_TIME,
+    HIKV_OFNI_SIZE_OFF,
+    HIKV_OFNI_TIME_OFF,
+    HIKV_PAGE_ENTRIES,
+    HIKV_PAGE_SIZE,
+    HIKV_PAGELIST_ENTRIES,
     HIKV_TIME_SENTINEL_END,
     HIKV_TIME_SENTINEL_START,
 )
@@ -62,9 +74,11 @@ class MasterSector:
     btree2_offset: int
     btree2_size: int
     init_time: int
+    extra_offset: int = 0            # how far the file system is shifted inside the image (0x210 - 0x200 on the real disk)
 
     def block_offset(self, index: int) -> int:
-        return self.video_area_offset + index * self.block_size
+        """Disk offset of data block `index` in THIS image (the stored pointer plus the shift)."""
+        return self.video_area_offset + index * self.block_size + self.extra_offset
 
 
 @dataclass(frozen=True)
@@ -127,10 +141,31 @@ def master_sector_problems(ms: MasterSector) -> list[str]:
     return problems
 
 
-def read_master_sector(mm, image_size: int) -> Optional[MasterSector]:
+def find_master_sector(mm, image_size: int) -> Optional[MasterSector]:
+    """
+    Locate the master sector by its signature within HIKV_MASTER_SECTOR_SEARCH_BYTES after 0x200 (Han's disk had it at
+    exactly 0x200; a real disk had it at 0x210). The distance from 0x200 becomes `extra_offset`, which every pointer
+    read from the disk must be shifted by.
+    """
     if image_size < HIKV_MASTER_SECTOR_OFFSET + HIKV_MS_SIZE:
         return None
-    return parse_master_sector(bytes(mm[HIKV_MASTER_SECTOR_OFFSET : HIKV_MASTER_SECTOR_OFFSET + HIKV_MS_SIZE]))
+    end = min(image_size, HIKV_MASTER_SECTOR_OFFSET + HIKV_MASTER_SECTOR_SEARCH_BYTES + HIKV_MS_SIZE)
+    window = bytes(mm[HIKV_MASTER_SECTOR_OFFSET:end])
+    pos = window.find(HIKV_MASTER_SECTOR_MAGIC)
+    if pos < 0:
+        return None
+    start = HIKV_MASTER_SECTOR_OFFSET + pos
+    if start + HIKV_MS_SIZE > image_size:
+        return None
+    ms = parse_master_sector(bytes(mm[start : start + HIKV_MS_SIZE]))
+    if ms is None:
+        return None
+    return MasterSector(**{**ms.__dict__, "extra_offset": pos})
+
+
+def read_master_sector(mm, image_size: int) -> Optional[MasterSector]:
+    """Kept for callers that expect this name; the signature may be up to 4 KiB after 0x200."""
+    return find_master_sector(mm, image_size)
 
 
 def _ts(value: int) -> Optional[datetime]:
@@ -139,8 +174,12 @@ def _ts(value: int) -> Optional[datetime]:
     return datetime.fromtimestamp(value, tz=timezone.utc)
 
 
-def parse_entry(buf: bytes, ms: MasterSector, entry_pos: int = 0) -> Optional[BlockEntry]:
-    """Parse one 48-byte data-block entry (Fig. 6B); None if it does not fit the master sector."""
+def parse_entry(buf: bytes, ms: MasterSector, entry_pos: int = 0, strict: bool = True) -> Optional[BlockEntry]:
+    """
+    Parse one 48-byte data-block entry (Fig. 6B); None if it does not fit the master sector.
+    strict=True (blind scanning) also requires the 'always zero' bytes to be zero, to keep false hits rare;
+    entries located structurally through the page list use strict=False.
+    """
     if len(buf) < HIKV_ENTRY_SIZE:
         return None
     existence = buf[HIKV_ENTRY_OFF_EXISTENCE : HIKV_ENTRY_OFF_EXISTENCE + 8]
@@ -162,7 +201,7 @@ def parse_entry(buf: bytes, ms: MasterSector, entry_pos: int = 0) -> Optional[Bl
     ch_byte = buf[HIKV_ENTRY_OFF_CHANNEL]
     if has_video:
         # bytes 0x10 and 0x12..0x17 are zero in every published sample
-        if buf[0x10] != 0 or any(buf[0x12:0x18]):
+        if strict and (buf[0x10] != 0 or any(buf[0x12:0x18])):
             return None
         if not (1 <= ch_byte <= 128):
             return None
@@ -175,8 +214,12 @@ def parse_entry(buf: bytes, ms: MasterSector, entry_pos: int = 0) -> Optional[Bl
         start = end = None
     else:
         start, end = _ts(start_raw), _ts(end_raw)
-        if start is None or end is None or end < start:
+        if start is None or end is None:
             return None
+        if end < start:
+            # A real 1 TB disk had 7 video entries (of 852) whose end time is earlier than the start (clock change
+            # or paused recording). The block and camera are still valid, the window is not: keep the entry, drop the window.
+            start = end = None
     return BlockEntry(entry_pos, has_video, channel, start, end, block_off, index)
 
 
@@ -190,6 +233,9 @@ def scan_entries(mm, ms: MasterSector, image_size: int) -> list[BlockEntry]:
     """
     for offset, size in ((ms.btree1_offset, ms.btree1_size), (ms.btree2_offset, ms.btree2_size)):
         if size <= 0 or size > HIKV_BTREE_MAX_BYTES or offset < 0 or offset + size > image_size:
+            continue
+        offset += ms.extra_offset
+        if offset < 0 or offset + size > image_size:
             continue
         region = bytes(mm[offset : offset + size])
         if not region.startswith(HIKV_BTREE_SIGNATURE):
@@ -206,3 +252,90 @@ def scan_entries(mm, ms: MasterSector, image_size: int) -> list[BlockEntry]:
         if entries:
             return entries
     return []
+
+
+def read_paged_entries(mm, ms: MasterSector, image_size: int) -> list[BlockEntry]:
+    """
+    Read the data-block entries the way the real disk stores them: HIKBTREE header -> page list -> 4 KiB pages,
+    each page holding 48-byte entries that start with FF*8 (layout confirmed on a real 1 TB disk; see constants).
+    Defensive: every offset is bounds-checked, page offsets must lie inside the HIKBTREE region, loops are
+    impossible (each page is read once). Returns [] if the structure is not present, so the caller can fall back to
+    the blind scan.
+    """
+    for base, size in ((ms.btree1_offset, ms.btree1_size), (ms.btree2_offset, ms.btree2_size)):
+        if size <= 0 or size > HIKV_BTREE_MAX_BYTES:
+            continue
+        head_at = base + ms.extra_offset
+        if head_at < 0 or head_at + 128 > image_size:
+            continue
+        head = bytes(mm[head_at : head_at + 128])
+        if not head.startswith(HIKV_BTREE_SIGNATURE):
+            continue
+        pagelist_off = struct.unpack_from("<Q", head, HIKV_BTREE_HDR_PAGELIST)[0]
+        if not (base <= pagelist_off < base + size):
+            continue
+        pl_at = pagelist_off + ms.extra_offset
+        if pl_at + 8 > image_size:
+            continue
+        total = struct.unpack_from("<I", bytes(mm[pl_at : pl_at + 4]), 0)[0]
+        if not (0 < total <= size // HIKV_PAGE_SIZE + 1):
+            continue
+        need = min(HIKV_PAGELIST_ENTRIES + total * HIKV_ENTRY_SIZE, size, image_size - pl_at)
+        plist = bytes(mm[pl_at : pl_at + need])
+
+        entries: list[BlockEntry] = []
+        seen: set[int] = set()
+        for i in range(total):
+            rec_at = HIKV_PAGELIST_ENTRIES + i * HIKV_ENTRY_SIZE
+            if rec_at + 8 > len(plist):
+                break
+            page_off = struct.unpack_from("<Q", plist, rec_at)[0]
+            if page_off in seen or not (base <= page_off < base + size):
+                continue
+            seen.add(page_off)
+            pg_at = page_off + ms.extra_offset
+            if pg_at + HIKV_PAGE_SIZE > image_size:
+                continue
+            page = bytes(mm[pg_at : pg_at + HIKV_PAGE_SIZE])
+            pos = HIKV_PAGE_ENTRIES
+            while pos + HIKV_ENTRY_SIZE <= len(page) and page[pos : pos + 8] == HIKV_ENTRY_PREFIX:
+                e = parse_entry(page[pos : pos + HIKV_ENTRY_SIZE], ms, page_off + pos - base, strict=False)
+                if e is not None:
+                    entries.append(e)
+                pos += HIKV_ENTRY_SIZE
+        if entries:
+            return entries
+    return []
+
+
+def read_entries(mm, ms: MasterSector, image_size: int) -> tuple[list[BlockEntry], str]:
+    """Structured page-list read first, blind 48-byte scan as the fallback. Returns (entries, method)."""
+    entries = read_paged_entries(mm, ms, image_size)
+    if entries:
+        return entries, "HIKBTREE page list"
+    return scan_entries(mm, ms, image_size), "blind 48-byte scan (page list not usable)"
+
+
+def read_idr_times(mm, block_start: int, block_size: int, image_size: int) -> list[int]:
+    """
+    UNIX times of the IDR (key) frames listed in a data block's OFNI table (56-byte records in the last ~1 % of
+    the block). Only the time field is understood; records with a wrong size or an implausible time are ignored.
+    Informational: it is not used to cut or assign segments.
+    """
+    tail = max(block_size // 100, 100_000)
+    end = min(block_start + block_size, image_size)
+    start = max(block_start, end - tail)
+    if end <= start:
+        return []
+    data = bytes(mm[start:end])
+    now = int(time.time()) + 86400
+    out: list[int] = []
+    pos = data.find(HIKV_OFNI_MARKER)
+    while pos >= 0 and len(out) < 1_000_000:
+        rec = data[pos : pos + 56]
+        if len(rec) == 56 and struct.unpack_from("<I", rec, HIKV_OFNI_SIZE_OFF)[0] == 56:
+            t = struct.unpack_from("<I", rec, HIKV_OFNI_TIME_OFF)[0]
+            if HIKV_OFNI_MIN_TIME <= t <= now:
+                out.append(t)
+        pos = data.find(HIKV_OFNI_MARKER, pos + 4)
+    return out
