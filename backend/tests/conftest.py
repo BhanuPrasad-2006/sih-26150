@@ -53,6 +53,9 @@ os.environ["FORENSIC_CASE_DIR"] = _SESSION_TMPDIR
 # leave the key absent, and load_dotenv() would then repopulate it from .env.
 os.environ["DATABASE_URL"] = ""
 
+# The audit-seal key must never land in the developer's real home folder during tests.
+os.environ["SIH_KEY_DIR"] = tempfile.mkdtemp(prefix="sih_keys_")
+
 # ── Now it is safe to import backend modules ──────────────────────────────────
 import pytest
 import asyncio

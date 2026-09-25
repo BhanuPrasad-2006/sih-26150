@@ -24,6 +24,9 @@ The installer creates `.venv` and installs `requirements.txt`; the start script 
 | `FORENSIC_ALLOW_LOCAL_ACQUISITION=1` | Enables drive imaging (see §5) |
 | `OBJECT_MODEL_PATH` | Alternative YOLOX ONNX model |
 | `SESSION_TIMEOUT_MINUTES` | Idle timeout, default 30 |
+| `FORENSIC_EVIDENCE_ROOTS` | Restrict server-side paths to these folders (leave unset on your own workstation) |
+| `SIH_ALLOWED_HOSTS` | Extra host names accepted besides localhost |
+| `SIH_AUDIT_KEY`, `SIH_KEY_DIR` | Audit-seal key, or the folder for its key file (default `~/.sih_forensic/`). Back it up and keep it away from the database |
 
 ## 2. Signing in
 

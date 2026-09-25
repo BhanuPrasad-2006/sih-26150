@@ -12,7 +12,7 @@
 ![FastAPI](https://img.shields.io/badge/FastAPI-backend-009688?logo=fastapi&logoColor=white)
 ![OpenCV](https://img.shields.io/badge/OpenCV-DNN-5C3EE8?logo=opencv&logoColor=white)
 ![FFmpeg](https://img.shields.io/badge/FFmpeg-remux%20%26%20probe-007808?logo=ffmpeg&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-203%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-230%20passing-brightgreen)
 ![Real hardware](https://img.shields.io/badge/real%20recorder%20disks-not%20yet%20tested-red)
 
 </div>
@@ -139,7 +139,7 @@ Because no real recorder disk was available, the tool is tested by building disk
 | Parsers checked against **known-answer values printed in the papers/specs** | ✅ |
 | Tamper test: change one byte of evidence → verification fails | ✅ |
 | Accuracy feature on real video: identical, truncated, and different videos give the expected recall/precision/order | ✅ |
-| **Automated suite** | **203 tests passing** (195 on a fresh clone; the other 8 need a live Supabase `DATABASE_URL`) |
+| **Automated suite** | **230 tests passing** (222 on a fresh clone; the other 8 need a live Supabase `DATABASE_URL`) |
 
 **A defect the accuracy check found:** on a synthetic Dahua disk with its index wiped, the carver found only 21 of 40 frames (byte recall 86.5 %).
 The cause was a minimum frame size (100 bytes) that rejected tiny P-frames of a quiet camera; at 40 bytes it finds all 40 (byte recall 92.1 %,
@@ -199,6 +199,9 @@ Open **http://127.0.0.1:8000**. On first run you create an examiner password (12
 | `FORENSIC_ALLOW_LOCAL_ACQUISITION=1` | Enables **drive imaging** (reads drives attached to this machine; keep off on any shared server) |
 | `OBJECT_MODEL_PATH` | Use a different YOLOX ONNX model |
 | `SESSION_TIMEOUT_MINUTES` | Idle timeout (default 30) |
+| `FORENSIC_EVIDENCE_ROOTS` | Folders the server may read evidence / original-image / imaging-source paths from (path-separator list). Unset = any local path (single-user workstation) |
+| `SIH_ALLOWED_HOSTS` | Extra Host names accepted besides localhost / 127.0.0.1 |
+| `SIH_AUDIT_KEY` / `SIH_KEY_DIR` | Key for the audit seal; otherwise a key file is created in `~/.sih_forensic/` (keep it off the database machine) |
 | `SIH_HOST` | Warns if set to anything other than localhost |
 
 </details>
@@ -239,6 +242,11 @@ All routes except login/setup require the session cookie. Interactive docs at `/
 - **Brute-force lockout**: 5 failures → 60 s lock with live countdown; messages never reveal more than "Incorrect password."
 - **Read-only evidence**: images are memory-mapped read-only; the evidence hash is re-checked after every scan and on demand.
 - **Imaging** is off by default, requires a write-blocker attestation (recorded, not enforceable by software), refuses to overwrite, and removes a partial image on failure.
+- **Request hardening**: security headers on every response (CSP, `X-Frame-Options: DENY`, `nosniff`, no-referrer); Host header must be a local name (DNS-rebinding defence); state-changing requests with a foreign `Origin` / `Sec-Fetch-Site: cross-site` are refused; API docs and the OpenAPI schema need a session.
+- **Output escaping**: every server- or user-supplied string is HTML-escaped before it reaches the page. Known limit: the UI uses inline event handlers, so the CSP allows inline script; removing them is the step to a strict CSP.
+- **Model integrity**: the three ONNX models are SHA-256-pinned; a changed file is refused.
+- **Dependencies**: `requirements.lock.txt` pins tested versions; `pip-audit` reports no known vulnerabilities (it found and we fixed issues in `starlette` and `python-multipart`).
+- **Keyed audit seal**: after every entry the chain head and count are HMAC-sealed with a key that is *not* in the database, so deleting the last entries or rewriting the whole chain in the database is detected; the head hash is printed in the report. An attacker holding both the key and the case folder can still forge it.
 - **Hash-chained audit log**: every action (including login attempts, never the password) is chained:
 
 $$\text{Hash}_n = \text{SHA-256}(\text{Timestamp}_n \parallel \text{Action}_n \parallel \text{Params}_n \parallel \text{Hash}_{n-1})$$
@@ -276,7 +284,7 @@ sih-26150/
 │   ├── cv_models/            YuNet, SFace, YOLOX (ONNX)
 │   ├── plugins/              dahua · dahua_dhfs · hikvision · hikvision_index · honeywell · cpplus
 │   │                         tplink · godrej · uniview · matrix · unknown · generic · stream_carver · registry
-│   └── tests/                203 automated tests (+ manual real-video end-to-end scripts)
+│   └── tests/                230 automated tests (+ manual real-video end-to-end scripts)
 ├── docs/                     SOP · format_verification · oem_comparison · accuracy_measurement · format_sheets/
 ├── frontend/                 vanilla HTML/CSS/JS single-page app (no build step)
 ├── install.* / run.*         one-click setup and launch

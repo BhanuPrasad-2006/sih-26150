@@ -63,7 +63,7 @@ async function renderRecordingsScreen(params) {
         <div class="error-banner-icon">⚠️</div>
         <div class="error-banner-body">
           <div class="error-banner-title">Failed to load segments</div>
-          <div class="error-banner-msg">${err.message}</div>
+          <div class="error-banner-msg">${escapeHtml(err.message)}</div>
         </div>
       </div>`;
     return;
@@ -176,9 +176,9 @@ async function renderRecordingsScreen(params) {
                        <td style="font-size:12px; font-family:var(--font-mono); color:var(--text-muted);">${startStr}<br>${endStr}</td>
                        <td>${s.frame_count}</td>
                        <td>
-                         <span class="badge ${badgeClass}" data-tooltip="${tooltip}">${s.status}</span>
+                         <span class="badge ${badgeClass}" data-tooltip="${escapeHtml(tooltip)}">${escapeHtml(s.status)}</span>
                        </td>
-                       <td style="font-size:12px; max-width:180px; color:var(--text-muted); line-height:1.5;">${s.notes || s.status_rationale || '—'}</td>
+                       <td style="font-size:12px; max-width:180px; color:var(--text-muted); line-height:1.5;">${escapeHtml(s.notes || s.status_rationale || '—')}</td>
                        <td class="hash-font">${hashDisplay}</td>
                        <td>
                          ${isExported

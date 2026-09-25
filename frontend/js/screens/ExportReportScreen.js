@@ -24,7 +24,7 @@ async function renderExportReportScreen(params) {
         <div class="error-banner-icon">⚠️</div>
         <div class="error-banner-body">
           <div class="error-banner-title">Failed to load reporting options</div>
-          <div class="error-banner-msg">${err.message}</div>
+          <div class="error-banner-msg">${escapeHtml(err.message)}</div>
         </div>
       </div>`;
     return;
@@ -35,7 +35,7 @@ async function renderExportReportScreen(params) {
       <div class="page-header-row">
         <div>
           <div class="page-title">Forensic Report &amp; Legal Certificate</div>
-          <div class="page-subtitle">Generate verified PDF documentation for evidence <strong>${ev.evidence_label || ev.path?.split(/[\\/]/).pop() || ev.evidence_id}</strong>.</div>
+          <div class="page-subtitle">Generate verified PDF documentation for evidence <strong>${escapeHtml(ev.evidence_label || ev.path?.split(/[\\/]/).pop() || ev.evidence_id)}</strong>.</div>
         </div>
         <button id="btn-generate-pdf" class="btn btn-primary">📄 Generate PDF Report</button>
       </div>
@@ -103,7 +103,7 @@ async function renderExportReportScreen(params) {
             </div>
             <div>
               <div class="meta-label">Filename</div>
-              <div style="font-family:var(--font-mono); font-size:12px; color:var(--text-main); word-break:break-all; margin-top:4px;">${res.filename}</div>
+              <div style="font-family:var(--font-mono); font-size:12px; color:var(--text-main); word-break:break-all; margin-top:4px;">${escapeHtml(res.filename)}</div>
             </div>
             <div>
               <div class="meta-label">File Size</div>
@@ -123,7 +123,7 @@ async function renderExportReportScreen(params) {
           <div class="error-banner-icon">⚠️</div>
           <div class="error-banner-body">
             <div class="error-banner-title">Report generation failed</div>
-            <div class="error-banner-msg">${err.message}</div>
+            <div class="error-banner-msg">${escapeHtml(err.message)}</div>
           </div>
         </div>`;
       errCard.style.display = 'block';

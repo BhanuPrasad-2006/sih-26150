@@ -24,7 +24,7 @@ async function renderEvidenceScanScreen(params) {
         <div class="error-banner-icon">⚠️</div>
         <div class="error-banner-body">
           <div class="error-banner-title">Failed to load evidence</div>
-          <div class="error-banner-msg">${err.message}</div>
+          <div class="error-banner-msg">${escapeHtml(err.message)}</div>
         </div>
       </div>`;
     return;
@@ -163,7 +163,7 @@ async function renderEvidenceScanScreen(params) {
           <div class="error-banner-icon">⚠️</div>
           <div class="error-banner-body">
             <div class="error-banner-title">Verification failed</div>
-            <div class="error-banner-msg">${err.message}</div>
+            <div class="error-banner-msg">${escapeHtml(err.message)}</div>
           </div>
         </div>`);
     }
