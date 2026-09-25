@@ -21,7 +21,7 @@ async function renderExportReportScreen(params) {
         <div class="page-title">Forensic Report &amp; Legal Certificate</div>
       </div>
       <div class="error-banner">
-        <div class="error-banner-icon">⚠️</div>
+        <div class="error-banner-icon">${icon('alert')}</div>
         <div class="error-banner-body">
           <div class="error-banner-title">Failed to load reporting options</div>
           <div class="error-banner-msg">${escapeHtml(err.message)}</div>
@@ -37,12 +37,12 @@ async function renderExportReportScreen(params) {
           <div class="page-title">Forensic Report &amp; Legal Certificate</div>
           <div class="page-subtitle">Generate verified PDF documentation for evidence <strong>${escapeHtml(ev.evidence_label || ev.path?.split(/[\\/]/).pop() || ev.evidence_id)}</strong>.</div>
         </div>
-        <button id="btn-generate-pdf" class="btn btn-primary">📄 Generate PDF Report</button>
+        <button id="btn-generate-pdf" class="btn btn-primary">${icon('file-text')} Generate PDF Report</button>
       </div>
     </div>
 
     <div class="notice-card">
-      <h3>⚠️ Draft Certificate Notice</h3>
+      <h3>${icon('alert')} Draft Certificate Notice</h3>
       <p>The Section 63(4) legal certificate pages carry a <strong>"DRAFT — NOT LEGAL ADVICE"</strong> watermark until reviewed and signed by a qualified expert.</p>
     </div>
 
@@ -66,7 +66,7 @@ async function renderExportReportScreen(params) {
         <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px; line-height:1.6;">
           Under Bharatiya Sakshya Adhiniyam 2023 Section 63(4) (formerly Indian Evidence Act Section 65B):
         </p>
-        <div style="background: rgba(0,0,0,0.3); padding: 14px 16px; border-radius: 8px; font-size: 12px; font-family: var(--font-mono); color: var(--text-muted); line-height:1.8; border-left:3px solid var(--border-glow);">
+        <div style="background: var(--bg-surface-3); padding: 14px 16px; border-radius: 8px; font-size: 12px; font-family: var(--font-mono); color: var(--text-muted); line-height:1.8; border-left:3px solid var(--border-glow);">
           • <strong>Part A</strong> (Tool Automated): Hashes, software version, algorithm details.<br>
           • <strong>Part B</strong> (Investigator): Physical seizure, custody dates, signature line.
         </div>
@@ -82,7 +82,7 @@ async function renderExportReportScreen(params) {
       </p>
       <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
         <input type="password" id="pkg-pass" class="form-control" style="max-width:320px;" placeholder="Passphrase (12+ characters)" autocomplete="new-password">
-        <button id="btn-package" class="btn btn-secondary">🔒 Create encrypted package</button>
+        <button id="btn-package" class="btn btn-secondary">${icon('lock')} Create encrypted package</button>
         <span id="pkg-msg" style="font-size:12px; color:var(--text-muted);"></span>
       </div>
     </div>
@@ -121,10 +121,10 @@ async function renderExportReportScreen(params) {
       // Success — show inline result card
       const resultCard = document.getElementById('report-result-card');
       resultCard.innerHTML = `
-        <div class="card" style="border-color:rgba(16,185,129,0.35);">
-          <div class="card-title" style="color:var(--status-complete);">✅ PDF Report Generated &amp; Downloaded</div>
+        <div class="card" style="border-color:var(--status-complete);">
+          <div class="card-title" style="color:var(--status-complete);">${icon('check-circle')} PDF Report Generated &amp; Downloaded</div>
           <div style="font-size:13px; display:flex; flex-direction:column; gap:10px;">
-            <div class="success-inline" style="border-radius:6px; border-left:none; border:1px solid rgba(16,185,129,0.4);">
+            <div class="success-inline" style="border-radius:6px; border-left:none; border:1px solid var(--status-complete);">
               Your browser has been triggered to download the PDF report.
             </div>
             <div>
@@ -140,13 +140,13 @@ async function renderExportReportScreen(params) {
       resultCard.style.display = 'block';
 
       genBtn.disabled = false;
-      genBtn.innerHTML = '📄 Regenerate PDF Report';
+      genBtn.innerHTML = icon('file-text') + ' Regenerate PDF Report';
 
     } catch (err) {
       const errCard = document.getElementById('report-error-card');
       errCard.innerHTML = `
         <div class="error-banner">
-          <div class="error-banner-icon">⚠️</div>
+          <div class="error-banner-icon">${icon('alert')}</div>
           <div class="error-banner-body">
             <div class="error-banner-title">Report generation failed</div>
             <div class="error-banner-msg">${escapeHtml(err.message)}</div>
@@ -155,7 +155,7 @@ async function renderExportReportScreen(params) {
       errCard.style.display = 'block';
 
       genBtn.disabled = false;
-      genBtn.innerHTML = '📄 Retry PDF Generation';
+      genBtn.innerHTML = icon('file-text') + ' Retry PDF Generation';
     }
   };
 }

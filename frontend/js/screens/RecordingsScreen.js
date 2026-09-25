@@ -60,7 +60,7 @@ async function renderRecordingsScreen(params) {
         <div class="page-title">Carved Video Segments</div>
       </div>
       <div class="error-banner">
-        <div class="error-banner-icon">⚠️</div>
+        <div class="error-banner-icon">${icon('alert')}</div>
         <div class="error-banner-body">
           <div class="error-banner-title">Failed to load segments</div>
           <div class="error-banner-msg">${escapeHtml(err.message)}</div>
@@ -76,7 +76,7 @@ async function renderRecordingsScreen(params) {
           <div class="page-title">Carved Video Segments</div>
           <div class="page-subtitle">${segments.length} segment${segments.length !== 1 ? 's' : ''} reconstructed from disk image</div>
         </div>
-        <button class="btn btn-secondary" ${navAttrs('export-report', { caseId: caseId, evidenceId: evidenceId })}>📄 Export PDF Forensic Report ➔</button>
+        <button class="btn btn-secondary" ${navAttrs('export-report', { caseId: caseId, evidenceId: evidenceId })}>${icon('file-text')} Export PDF forensic report ${icon('arrow-right')}</button>
       </div>
     </div>
 
@@ -94,11 +94,11 @@ async function renderRecordingsScreen(params) {
 
       ${segments.length === 0
         ? `<div class="empty-state">
-             <div class="empty-state-icon">🎞️</div>
+             ${emptyArt()}
              <div class="empty-state-title">No segments carved yet</div>
              <div class="empty-state-subtitle">Run a disk scan first on the Acquisition &amp; Scan screen to extract video segments from this image.</div>
              <button class="btn btn-primary" ${navAttrs('evidence-scan', { caseId: caseId, evidenceId: evidenceId })}>
-               Go to Acquisition &amp; Scan ➔
+               Go to Acquisition &amp; Scan ${icon('arrow-right')}
              </button>
            </div>`
         : `<div class="table-container">
@@ -213,7 +213,7 @@ async function renderRecordingsScreen(params) {
       </p>
       <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
         <input type="file" id="face-search-input" accept="image/*" class="form-control" style="max-width:320px;">
-        <button id="face-search-btn" class="btn btn-primary btn-sm">🔎 Search</button>
+        <button id="face-search-btn" class="btn btn-primary btn-sm">${icon('search')} Search</button>
       </div>
       <div id="face-search-results" style="margin-top:14px;"></div>
     </div>
@@ -263,7 +263,7 @@ async function renderRecordingsScreen(params) {
       <p style="font-size:11px; color:var(--text-dim); margin:0 0 12px;">
         Log format: <code>{"recordings":[{"name":"front door","camera":1,"start":"2026-03-01T10:00:00Z","end":"2026-03-01T11:00:00Z"}]}</code>
       </p>
-      <button id="acc-run" class="btn btn-primary btn-sm">📏 Measure</button>
+      <button id="acc-run" class="btn btn-primary btn-sm">${icon('ruler')} Measure</button>
       <div id="acc-results" style="margin-top:14px;"></div>
       <div id="acc-history" style="margin-top:14px;"></div>
     </div>` : ''}
@@ -283,7 +283,7 @@ async function runFaceSearch(caseId) {
   const file = fileInput.files && fileInput.files[0];
 
   if (!file) {
-    resultsEl.innerHTML = `<div class="error-inline"><span>⚠️</span><span>Choose a reference photo first.</span></div>`;
+    resultsEl.innerHTML = `<div class="error-inline"><span>${icon('alert')}</span><span>Choose a reference photo first.</span></div>`;
     return;
   }
 
@@ -326,7 +326,7 @@ async function runFaceSearch(caseId) {
   } catch (err) {
     resultsEl.innerHTML = `
       <div class="error-banner" style="margin-top:0;">
-        <div class="error-banner-icon">⚠️</div>
+        <div class="error-banner-icon">${icon('alert')}</div>
         <div class="error-banner-body">
           <div class="error-banner-title">Face search failed</div>
           <div class="error-banner-msg">${escapeHtml(err.message)}</div>
@@ -334,7 +334,7 @@ async function runFaceSearch(caseId) {
       </div>`;
   } finally {
     btn.disabled = false;
-    btn.innerHTML = '🔎 Search';
+    btn.innerHTML = icon('search') + ' Search';
   }
 }
 
@@ -356,7 +356,7 @@ async function exportSegment(caseId, evidenceId, segmentId, btnEl) {
       showModal(
         'Export Unavailable',
         `<div class="error-banner" style="margin-top:0;">
-           <div class="error-banner-icon">⚠️</div>
+           <div class="error-banner-icon">${icon('alert')}</div>
            <div class="error-banner-body">
              <div class="error-banner-title">This segment could not be exported</div>
              <div class="error-banner-msg">${escapeHtml(detail.error)}</div>
@@ -370,8 +370,8 @@ async function exportSegment(caseId, evidenceId, segmentId, btnEl) {
     showModal(
       'Export Successful',
       `
-        <div class="success-inline" style="border-radius:6px; border-left:none; border:1px solid rgba(16,185,129,0.4); margin-bottom:12px;">
-          ✅ Segment exported successfully!
+        <div class="success-inline" style="border-radius:6px; border-left:none; border:1px solid var(--status-complete); margin-bottom:12px;">
+          ${icon('check-circle')} Segment exported successfully!
         </div>
         <div style="font-size:13px; display:flex; flex-direction:column; gap:10px;">
           <div>
@@ -385,13 +385,13 @@ async function exportSegment(caseId, evidenceId, segmentId, btnEl) {
           <div>
             <div class="meta-label">ffprobe Validation</div>
             <div class="meta-value" style="margin-top:4px; color:${detail.ffprobe_valid ? 'var(--status-complete)' : 'var(--status-error)'};">
-              ${detail.ffprobe_valid ? '✅ Valid MP4 container' : '⚠️ Warning: stream structure invalid'}
+              ${detail.ffprobe_valid ? `${icon('check-circle')} Valid MP4 container` : `${icon('alert')} Warning: stream structure invalid`}
             </div>
           </div>
           ${detail.ffmpeg_warning ? `
           <div>
             <div class="meta-label">FFmpeg Notice</div>
-            <div class="meta-value" style="margin-top:4px; color:var(--status-partial);">⚠️ ${escapeHtml(detail.ffmpeg_warning)}</div>
+            <div class="meta-value" style="margin-top:4px; color:var(--status-partial);">${icon('alert')} ${escapeHtml(detail.ffmpeg_warning)}</div>
           </div>` : ''}
         </div>`,
       [{ label: 'OK', class: 'btn-primary', onClick: () => renderRecordingsScreen({ caseId, evidenceId }) }]
@@ -399,7 +399,7 @@ async function exportSegment(caseId, evidenceId, segmentId, btnEl) {
   } catch (err) {
     showModal('Export Failed',
       `<div class="error-banner" style="margin-top:0;">
-         <div class="error-banner-icon">⚠️</div>
+         <div class="error-banner-icon">${icon('alert')}</div>
          <div class="error-banner-body">
            <div class="error-banner-title">Export failed</div>
            <div class="error-banner-msg">${escapeHtml(err.message)}</div>
@@ -440,7 +440,7 @@ async function runMotionDetection(caseId, evidenceId, segmentId, btnEl) {
     showModal(
       'Basic Motion Detection Error',
       `<div class="error-banner" style="margin-top:0;">
-         <div class="error-banner-icon">⚠️</div>
+         <div class="error-banner-icon">${icon('alert')}</div>
          <div class="error-banner-body">
            <div class="error-banner-title">Motion detection failed</div>
            <div class="error-banner-msg">${escapeHtml(err.message)}</div>
@@ -490,7 +490,7 @@ async function runObjectDetection(caseId, evidenceId, segmentId, btnEl) {
     showModal(
       'Object Detection Error',
       `<div class="error-banner" style="margin-top:0;">
-         <div class="error-banner-icon">⚠️</div>
+         <div class="error-banner-icon">${icon('alert')}</div>
          <div class="error-banner-body">
            <div class="error-banner-title">Object detection failed</div>
            <div class="error-banner-msg">${escapeHtml(err.message)}</div>
@@ -534,7 +534,7 @@ async function runFaceDetection(caseId, evidenceId, segmentId, btnEl) {
     showModal(
       'Face Detection Error',
       `<div class="error-banner" style="margin-top:0;">
-         <div class="error-banner-icon">⚠️</div>
+         <div class="error-banner-icon">${icon('alert')}</div>
          <div class="error-banner-body">
            <div class="error-banner-title">Face detection failed</div>
            <div class="error-banner-msg">${escapeHtml(err.message)}</div>
@@ -631,7 +631,7 @@ async function runAccuracyCheck(caseId) {
   const original = document.getElementById('acc-original').value.trim();
 
   if (!video && !log && !original) {
-    resultsEl.innerHTML = `<div class="error-inline"><span>⚠️</span><span>Supply at least one ground truth: a video, a recording log, or the original disk image path.</span></div>`;
+    resultsEl.innerHTML = `<div class="error-inline"><span>${icon('alert')}</span><span>Supply at least one ground truth: a video, a recording log, or the original disk image path.</span></div>`;
     return;
   }
   const fd = new FormData();
@@ -650,11 +650,11 @@ async function runAccuracyCheck(caseId) {
     resultsEl.innerHTML = renderAccuracyResult(res);
     loadAccuracyHistory(caseId);
   } catch (err) {
-    resultsEl.innerHTML = `<div class="error-banner" style="margin-top:0;"><div class="error-banner-icon">⚠️</div><div class="error-banner-body">
+    resultsEl.innerHTML = `<div class="error-banner" style="margin-top:0;"><div class="error-banner-icon">${icon('alert')}</div><div class="error-banner-body">
       <div class="error-banner-title">Measurement failed</div><div class="error-banner-msg">${escapeHtml(err.message)}</div></div></div>`;
   } finally {
     btn.disabled = false;
-    btn.innerHTML = '📏 Measure';
+    btn.innerHTML = icon('ruler') + ' Measure';
   }
 }
 
