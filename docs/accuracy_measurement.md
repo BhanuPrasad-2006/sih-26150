@@ -41,6 +41,6 @@ Log format: `{"recordings":[{"name":"front door","camera":1,"start":"2026-03-01T
 
 ## Example finding
 
-Running the placement check on a synthetic fragmented Dahua disk after wiping its index showed that only 1 of about 20
-frames of a static-scene recording was recovered. The cause was `DHAV_MIN_FRAME_BYTES = 100`, which rejected the
-tiny P-frames of a quiet camera. It is now 40. This is the kind of loss only a ground-truth comparison reveals.
+Running the placement check on a synthetic fragmented Dahua disk after wiping its index showed that only 21 of 40
+frames were carved (byte recall 86.5 %). The cause was `DHAV_MIN_FRAME_BYTES = 100`, which rejected the
+tiny P-frames of a quiet camera. At 40 all 40 frames are carved (byte recall 92.1 %, placement precision 100 %). This is the kind of loss only a ground-truth comparison reveals.

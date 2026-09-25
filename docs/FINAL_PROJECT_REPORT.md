@@ -85,7 +85,7 @@ Key features: single-examiner login with bcrypt, lockout and idle timeout; hash-
 
 ### 5.2 A finding produced by the accuracy method
 
-On a fragmented Dahua disk with its index wiped, only about 1 in 20 frames of a static scene was recovered. Ground-truth comparison traced this to a minimum-frame-size filter (100 bytes) that rejected the tiny P-frames of a quiet camera; lowering it to 40 restored recall. This shows the value of measuring against ground truth and also that carving heuristics tuned without it can silently lose evidence.
+On a fragmented Dahua disk with its index wiped, the carver found only 21 of the 40 frames (byte recall 86.5 %). Ground-truth comparison traced this to a minimum-frame-size filter (100 bytes) that rejected the tiny P-frames of a quiet camera; lowering it to 40 recovered all 40 frames (byte recall 92.1 %, placement precision 100 %). This shows the value of measuring against ground truth and also that carving heuristics tuned without it can silently lose evidence.
 
 ### 5.3 Performance
 

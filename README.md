@@ -141,9 +141,9 @@ Because no real recorder disk was available, the tool is tested by building disk
 | Accuracy feature on real video: identical, truncated, and different videos give the expected recall/precision/order | ✅ |
 | **Automated suite** | **203 tests passing** (195 on a fresh clone; the other 8 need a live Supabase `DATABASE_URL`) |
 
-**A defect the accuracy check found:** on a fragmented Dahua disk with its index wiped, only ~1 of 20 frames of a static scene came back.
-The cause was a minimum frame size (100 bytes) that rejected tiny P-frames of a quiet camera; it is now 40. This is exactly the kind
-of loss that only comparison against ground truth exposes.
+**A defect the accuracy check found:** on a synthetic Dahua disk with its index wiped, the carver found only 21 of 40 frames (byte recall 86.5 %).
+The cause was a minimum frame size (100 bytes) that rejected tiny P-frames of a quiet camera; at 40 bytes it finds all 40 (byte recall 92.1 %,
+placement precision 100 %). This is exactly the kind of loss that only comparison against ground truth exposes.
 
 ### 📏 Where does "93 % recovered" come from?
 

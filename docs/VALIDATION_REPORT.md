@@ -79,7 +79,7 @@ Independence caveat: the disk builders and the parsers were written by the same 
 | Verify failed after a server restart ("Evidence image is not loaded") | Manual UI test | Verify re-opens the evidence by its stored path |
 | Hikvision carver absorbed junk after a decoy SPS; and a blanket duplicate trim truncated real slices | Decoy-stream tests | SPS/PPS size guard; duplicate trim applied to the last slice only |
 | Old Honeywell stub tests contradicted a real implementation | Test failures after the rewrite | Tests rewritten with the paper's known-answer bytes |
-| **Tiny P-frames of static scenes were rejected (`DHAV_MIN_FRAME_BYTES = 100`), so only ~1 of 20 frames came back** | Placement/recall check against ground truth | Lowered to 40; contiguous placement recall now above the 90 % test bound |
+| **Tiny P-frames of static scenes were rejected (`DHAV_MIN_FRAME_BYTES = 100`), so only 21 of 40 frames were carved (byte recall 86.5 %)** | Placement/recall check against ground truth | Lowered to 40: 40 of 40 frames carved, byte recall 92.1 %, placement precision 100 % |
 | Test suite once wrote fixture rows into a live Supabase project | Reviewing the database | `DATABASE_URL=""` forced in `conftest.py`; a guard asserts the real case folder is never used |
 | Format sheet mislabelled paper-derived facts as "AI report" | Reading the paper in full | Sheet corrected; MDPI "HKVI" frame format rejected as uncorroborated |
 
