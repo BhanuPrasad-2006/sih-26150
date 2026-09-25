@@ -24,7 +24,7 @@ async function renderAuditLogScreen(params) {
         <div class="error-banner-icon">⚠️</div>
         <div class="error-banner-body">
           <div class="error-banner-title">Failed to load audit log</div>
-          <div class="error-banner-msg">${err.message}</div>
+          <div class="error-banner-msg">${escapeHtml(err.message)}</div>
         </div>
       </div>`;
     return;
@@ -48,8 +48,8 @@ async function renderAuditLogScreen(params) {
           </span>
           <div style="font-size:11px; color:var(--text-dim); margin-top:6px; max-width:220px; text-align:right; line-height:1.5;">
             ${isValid
-              ? 'Every audit entry\'s hash matches the expected value — the chain has not been modified since creation.'
-              : `One or more entries do not match their expected hash. ${chainError ? '<br><span style="font-family:var(--font-mono); font-size:10px;">' + chainError + '</span>' : 'The log may have been tampered with.'}`}
+              ? 'Every audit entry\'s hash matches the expected value — the chain has not been modified since creation.' + (auditData.seal ? '<br>Seal: ' + escapeHtml(auditData.seal.message) : '')
+              : `One or more entries do not match their expected hash. ${chainError ? '<br><span style="font-family:var(--font-mono); font-size:10px;">' + escapeHtml(chainError) + '</span>' : 'The log may have been tampered with.'}`}
           </div>
         </div>
       </div>
@@ -80,9 +80,9 @@ async function renderAuditLogScreen(params) {
                    <tr>
                      <td><strong style="color:var(--text-muted);">#${idx + 1}</strong></td>
                      <td style="font-size:12px; color:var(--text-muted); font-family:var(--font-mono);">${e.created_at}</td>
-                     <td><span style="color:var(--accent-cyan); font-weight:600; font-size:13px;">${e.action}</span></td>
-                     <td style="font-size:11px; max-width:220px; color:var(--text-muted); font-family:var(--font-mono); word-break:break-all;">${e.details || '—'}</td>
-                     <td class="hash-font">${e.entry_hash}</td>
+                     <td><span style="color:var(--accent-cyan); font-weight:600; font-size:13px;">${escapeHtml(e.action)}</span></td>
+                     <td style="font-size:11px; max-width:220px; color:var(--text-muted); font-family:var(--font-mono); word-break:break-all;">${escapeHtml(e.details || '—')}</td>
+                     <td class="hash-font">${escapeHtml(e.entry_hash)}</td>
                    </tr>`).join('')}
                </tbody>
              </table>

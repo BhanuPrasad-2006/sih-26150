@@ -73,7 +73,7 @@ async function renderDashboardScreen() {
 
     tbody.innerHTML = cases.map(c => `
       <tr>
-        <td><strong style="color: var(--accent-cyan); font-family: var(--font-mono); font-size:13px;">${c.case_number}</strong></td>
+        <td><strong style="color: var(--accent-cyan); font-family: var(--font-mono); font-size:13px;">${escapeHtml(c.case_number)}</strong></td>
         <td>${escapeHtml(c.examiner)}</td>
         <td style="color:var(--text-muted); font-size:12px;">${c.notes ? escapeHtml(c.notes) : '—'}</td>
         <td style="color:var(--text-dim); font-size:12px;">${new Date(c.created_at).toLocaleString()}</td>
@@ -92,7 +92,7 @@ async function renderDashboardScreen() {
             <div class="error-banner-icon">⚠️</div>
             <div class="error-banner-body">
               <div class="error-banner-title">Failed to load cases</div>
-              <div class="error-banner-msg">${err.message}</div>
+              <div class="error-banner-msg">${escapeHtml(err.message)}</div>
             </div>
           </div>
         </td>

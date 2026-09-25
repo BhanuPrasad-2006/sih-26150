@@ -41,6 +41,8 @@ from typing import Optional
 import cv2
 import numpy as np
 
+from backend.model_integrity import verify_model
+
 log = logging.getLogger(__name__)
 
 FACE_DETECTION_LABEL = "AI-Based Face Detection (OpenCV YuNet)"
@@ -123,6 +125,14 @@ def detect_faces_in_video(
                 f"({_MODEL_PATH.name}) — face detection is unavailable."
             ),
             error=f"Model file not found: {_MODEL_PATH}",
+        )
+
+    ok_model, model_msg = verify_model(_MODEL_PATH)
+    if not ok_model:
+        return FaceDetectionResult(
+            faces_detected=False, frames_with_faces=0, frames_sampled=0, total_frames=0,
+            max_faces_in_single_frame=0,
+            summary=f"{FACE_DETECTION_LABEL}: {model_msg}", error=model_msg,
         )
 
     cap = cv2.VideoCapture(str(path))

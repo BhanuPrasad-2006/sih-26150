@@ -35,6 +35,8 @@ from typing import Optional
 import cv2
 import numpy as np
 
+from backend.model_integrity import verify_model
+
 log = logging.getLogger(__name__)
 
 YOLOX_LABEL = "AI-Based Object Detection (YOLOX, COCO classes)"
@@ -213,6 +215,11 @@ def detect_objects_in_video(
     if use_yolox and not model_available():
         return _empty(engine, label, f"{label}: model file missing ({model_path().name})",
                       f"Model file not found: {model_path()}")
+
+    if use_yolox:
+        ok_model, model_msg = verify_model(model_path())
+        if not ok_model:
+            return _empty(engine, label, f"{label}: {model_msg}", model_msg)
 
     cap = cv2.VideoCapture(str(path))
     if not cap.isOpened():

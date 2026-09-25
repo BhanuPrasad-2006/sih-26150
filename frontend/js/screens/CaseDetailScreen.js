@@ -27,7 +27,7 @@ async function renderCaseDetailScreen(params) {
         <div class="error-banner-icon">⚠️</div>
         <div class="error-banner-body">
           <div class="error-banner-title">Failed to load case — GET /api/cases/${caseId}</div>
-          <div class="error-banner-msg">${err.message}</div>
+          <div class="error-banner-msg">${escapeHtml(err.message)}</div>
         </div>
       </div>`;
     return;

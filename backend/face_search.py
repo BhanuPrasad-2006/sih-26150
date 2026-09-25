@@ -40,6 +40,7 @@ import cv2
 import numpy as np
 
 from backend.face_detection import DEFAULT_FRAME_STRIDE
+from backend.model_integrity import verify_model
 
 log = logging.getLogger(__name__)
 
@@ -80,7 +81,15 @@ class FaceSearchMatch:
 
 
 def models_available() -> bool:
-    return _DETECTOR_MODEL_PATH.is_file() and _RECOGNIZER_MODEL_PATH.is_file()
+    """Both model files exist AND match their pinned SHA-256 (a tampered model counts as unavailable)."""
+    if not (_DETECTOR_MODEL_PATH.is_file() and _RECOGNIZER_MODEL_PATH.is_file()):
+        return False
+    for p in (_DETECTOR_MODEL_PATH, _RECOGNIZER_MODEL_PATH):
+        ok, msg = verify_model(p)
+        if not ok:
+            log.error("Face search disabled: %s", msg)
+            return False
+    return True
 
 
 def _create_models(input_size: tuple[int, int]):

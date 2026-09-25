@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import threading
 import logging
 import os
 import re
@@ -93,6 +94,8 @@ from backend.face_detection import FACE_DETECTION_LABEL, detect_faces_in_video
 from backend.face_search import FaceEmbeddingRecord, index_faces_for_search
 from backend import accuracy as accuracy_mod
 from backend import imaging
+from backend import audit_seal
+from backend.security import HostOriginMiddleware, SecurityHeadersMiddleware, ensure_path_allowed
 from backend import object_detection
 from backend.reconstructor import label_all
 from backend.reporting import generate_report
@@ -115,9 +118,7 @@ _AUTH_EXEMPT_PATHS = {
     "/api/auth/status-with-session",
     "/api/auth/login",
     "/api/auth/setup",
-    "/api/docs",
-    "/api/openapi.json",
-}
+}   # API docs / openapi.json are deliberately NOT exempt: they need a session like everything else
 
 # ── Global state ──────────────────────────────────────────────────────────────
 
@@ -225,10 +226,14 @@ app = FastAPI(
     title="SIH26150 DVR/NVR Forensic Tool",
     version="1.0.0-dev",
     docs_url="/api/docs",
+    openapi_url="/api/openapi.json",   # under /api/ so the auth middleware protects it (default /openapi.json was open)
+    redoc_url=None,
     lifespan=lifespan,
 )
 
 app.add_middleware(AuthMiddleware)
+app.add_middleware(HostOriginMiddleware)        # outside auth: reject bad Host / cross-origin first
+app.add_middleware(SecurityHeadersMiddleware)   # outermost: headers on every response, including errors
 
 # ── Plugin registry ───────────────────────────────────────────────────────────
 # Lives in backend/plugins/registry.py so analysis code can use it without importing the web app.
@@ -250,13 +255,32 @@ def _get_case_audit_log(case_id: str) -> AuditLog:
     return audit
 
 
+_audit_write_lock = threading.Lock()   # append + persist + seal must be one step, or seals can land out of order
+
+
+def _case_dir_for(case_id: str) -> Path:
+    return get_case_analysis_dir(case_id).parent
+
+
 def _audit(case_id: str, action: str, details: str = "") -> None:
-    audit = _get_case_audit_log(case_id)
-    entry = audit.append(action, details)
+    with _audit_write_lock:
+        audit = _get_case_audit_log(case_id)
+        entry = audit.append(action, details)
+        try:
+            db.save_audit_entry(entry, case_id=case_id)
+        except Exception:
+            log.exception("Could not persist audit entry for case %s", case_id)
+        try:
+            audit_seal.write_seal(_case_dir_for(case_id), case_id, len(audit), audit.last_hash())
+        except Exception:
+            log.exception("Could not write audit seal for case %s", case_id)
+
+
+def _audit_seal_status(case_id: str, audit: AuditLog) -> tuple[str, str]:
     try:
-        db.save_audit_entry(entry, case_id=case_id)
-    except Exception:
-        pass
+        return audit_seal.check_seal(_case_dir_for(case_id), case_id, len(audit), audit.last_hash())
+    except Exception as exc:
+        return "tampered", f"Audit seal could not be verified: {exc}"
 
 
 async def _push_progress(case_id: str, prog: ScanProgress) -> None:
@@ -761,6 +785,7 @@ async def load_evidence(case_id: str, req: LoadEvidenceRequest, bg: BackgroundTa
         raise HTTPException(404, "Case not found")
 
     path = Path(req.path)
+    ensure_path_allowed(path, [_case_dir_for(case_id)])
     if not path.is_file():
         raise HTTPException(400, f"File not found or not a regular file: {req.path}")
 
@@ -1196,6 +1221,7 @@ async def run_accuracy(
     if has_log:
         log_entries = _parse_truth_log(await truth_log.read())
     if has_orig:
+        ensure_path_allowed(original_image_path.strip(), [_case_dir_for(case_id)])
         if not Path(original_image_path.strip()).is_file():
             raise HTTPException(400, f"Original image not found or not a regular file: {original_image_path}")
 
@@ -1346,6 +1372,8 @@ async def start_acquisition(case_id: str, req: AcquireRequest):
     if _acquisition_jobs.get(case_id, {}).get("state") == "running":
         raise HTTPException(409, "An acquisition is already running for this case.")
 
+    if not imaging.is_device_path(req.source_path):
+        ensure_path_allowed(req.source_path, [_case_dir_for(case_id)])
     evidence_dir = get_case_evidence_dir(case_id)
     evidence_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
@@ -1409,6 +1437,9 @@ async def get_report(case_id: str):
     log_evts  = await asyncio.to_thread(db.list_log_events, ev.evidence_id)
     audit_log = _get_case_audit_log(case_id)
     chain_ok, _ = audit_log.verify_chain()
+    seal_status, seal_msg = _audit_seal_status(case_id, audit_log)
+    if seal_status == "tampered":
+        chain_ok = False
     entries   = audit_log.export_entries()
     from backend.models import AuditEntry
     audit_entries = [AuditEntry(**e) for e in entries]
@@ -1423,6 +1454,7 @@ async def get_report(case_id: str):
     await asyncio.to_thread(
         generate_report, pdf, case, ev, segments, log_evts, audit_entries, chain_ok,
         correlated_events, _load_accuracy_results(case_id), _load_object_results(case_id),
+        {"status": seal_status, "message": seal_msg, "head": audit_log.last_hash(), "count": len(audit_log)},
     )
     _audit(case_id, "report_generated", str(pdf))
     return FileResponse(str(pdf), media_type="application/pdf",
@@ -1433,7 +1465,12 @@ async def get_report(case_id: str):
 async def get_audit(case_id: str):
     audit_log = _get_case_audit_log(case_id)
     chain_ok, error = audit_log.verify_chain()
-    return {"chain_intact": chain_ok, "error": error, "entries": audit_log.export_entries()}
+    seal_status, seal_msg = _audit_seal_status(case_id, audit_log)
+    if seal_status == "tampered":
+        chain_ok, error = False, (error + " | " if error else "") + seal_msg
+    return {"chain_intact": chain_ok, "error": error, "entries": audit_log.export_entries(),
+            "seal": {"status": seal_status, "message": seal_msg, "head": audit_log.last_hash(),
+                     "count": len(audit_log)}}
 
 
 # ── Serve frontend static files ───────────────────────────────────────────────

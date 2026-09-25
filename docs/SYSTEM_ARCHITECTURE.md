@@ -148,12 +148,16 @@ Analytics read the exported MP4 only: YuNet (faces), SFace (embeddings, similari
 | Sessions | `HttpOnly`, `SameSite=Strict` cookie; idle timeout 30 min (`SESSION_TIMEOUT_MINUTES`) |
 | Brute force | 5 failures → 60 s lock (HTTP 429 with `retry_after`) |
 | Evidence integrity | Read-only mmap; hash on open, re-hash at end of scan and on `/verify` |
-| Path handling | Upload names sanitised; physical-device paths refused for scanning; imaging refuses device destinations and existing files |
+| Path handling | Upload names sanitised; physical-device paths refused for scanning; imaging refuses device destinations and existing files; optional server-side allow-list (`FORENSIC_EVIDENCE_ROOTS`) for evidence, original-image and imaging-source paths, resolved through `..` and symlinks |
+| Web hardening | `security.py`: CSP, `X-Frame-Options: DENY`, `nosniff`, no-referrer on every response; Host must be a local name; foreign `Origin` / cross-site fetches refused on POST/PUT/PATCH/DELETE; API docs and OpenAPI schema require a session |
+| Output escaping | All server/user strings pass `escapeHtml()` before `innerHTML`; a test fails if known risky fields are interpolated raw |
+| Model integrity | `model_integrity.py`: the three ONNX models are SHA-256 pinned; a mismatch disables the analytic |
+| Supply chain | `requirements.lock.txt` (exact versions) and `pip-audit`; `starlette` and `python-multipart` were upgraded after audit findings |
 | Drive imaging | Off unless `FORENSIC_ALLOW_LOCAL_ACQUISITION=1`; write-blocker attestation mandatory and logged |
-| Repudiation | Hash-chained audit log for logins, evidence, scans, exports, analytics, accuracy checks, imaging, reports |
+| Repudiation | Hash-chained audit log for logins, evidence, scans, exports, analytics, accuracy checks, imaging, reports; `audit_seal.py` HMAC-seals the chain head and count with a key kept outside the database, so truncation or a full rewrite of the stored chain is detected, and the head hash is printed in the report |
 | Secrets | `.env` git-ignored; tests force `DATABASE_URL=""` so they cannot touch a real database |
 
-Residual risks: software cannot enforce write-blocking; the tool is not designed for multi-user or internet exposure; the audit log is tamper-evident, not tamper-proof (an attacker who rewrites every entry and the database can recompute the chain).
+Residual risks: software cannot enforce write-blocking; the tool is not designed for multi-user or internet exposure; the audit log is tamper-evident, not tamper-proof (an attacker who holds the seal key and the case folder can forge the seal; a printed copy of the head hash in the report detects even that); the CSP still allows inline script because the UI uses inline handlers; reports are not digitally signed; case data and face embeddings are not encrypted at rest (use disk encryption); parsers have not been fuzz-tested and ffmpeg is not sandboxed.
 
 ## 9. Extension points
 

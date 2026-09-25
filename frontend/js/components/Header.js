@@ -51,9 +51,9 @@ function renderHeader(breadcrumbs = []) {
     const isLast = idx === allCrumbs.length - 1;
     const sep = idx > 0 ? '<span class="crumb-sep"> / </span>' : '';
     if (isLast) {
-      return `${sep}<span class="crumb-current">${crumb.label}</span>`;
+      return `${sep}<span class="crumb-current">${escapeHtml(crumb.label)}</span>`;
     }
-    return `${sep}<span class="crumb-link" data-screen="${crumb.screen}" data-params='${JSON.stringify(crumb.params || {})}'>${crumb.label}</span>`;
+    return `${sep}<span class="crumb-link" data-screen="${escapeHtml(crumb.screen)}" data-params="${escapeHtml(JSON.stringify(crumb.params || {}))}">${escapeHtml(crumb.label)}</span>`;
   }).join('');
 
   // Wire up clicks on crumb links

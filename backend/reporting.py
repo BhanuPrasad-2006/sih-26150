@@ -226,6 +226,7 @@ def generate_report(
     correlated_events: Optional[list] = None,
     accuracy_results: Optional[list] = None,
     object_results: Optional[list] = None,
+    audit_seal: Optional[dict] = None,
 ) -> None:
     """
     Generate a PDF forensic report at *output_path*.
@@ -296,7 +297,13 @@ def generate_report(
             ["SHA-256 (after)",   evidence.sha256_after or "—"],
             ["Hash comparison",   ok_text if hash_ok else fail_text],
             ["Audit chain",       "INTACT" if chain_ok else "BROKEN — see audit log"],
-        ]
+        ] + ([
+            ["Audit seal (keyed)", {"ok": "MATCHES (log not truncated or rewritten)",
+                                    "missing": "not present (case predates sealing)",
+                                    "tampered": "MISMATCH — " + audit_seal.get("message", "")}.get(audit_seal.get("status"), "?")],
+            ["Audit head / count", f"{audit_seal.get('head', '')[:32]}…  /  {audit_seal.get('count', 0)} entries "
+                                   f"(keep a printed copy to detect later rewrites)"],
+        ] if audit_seal else [])
         elements.append(Table(integrity_data, colWidths=[5 * cm, 12 * cm], style=_TBL_HDR))
         elements.append(Spacer(1, 0.4 * cm))
 
