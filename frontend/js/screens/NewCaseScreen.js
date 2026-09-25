@@ -52,7 +52,7 @@ function renderNewCaseScreen() {
         </div>
 
         <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px;">
-          <button type="button" class="btn btn-secondary" onclick="navigateTo('dashboard')">← Cancel</button>
+          <button type="button" class="btn btn-secondary" ${navAttrs('dashboard')}>← Cancel</button>
           <button type="submit" id="btn-submit-case" class="btn btn-primary">Create Case &amp; Add Evidence ➔</button>
         </div>
       </form>

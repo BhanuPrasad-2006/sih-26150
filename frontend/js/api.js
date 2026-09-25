@@ -18,6 +18,19 @@
  * notes, evidence file paths, etc.) must be passed through this before being
  * placed inside a template literal that gets assigned to .innerHTML.
  */
+/**
+ * Attributes for a navigation control. Rendered pages must not use inline event handlers (the CSP forbids
+ * inline script), so clicks on [data-nav] are handled by one delegated listener in app.js.
+ */
+function navAttrs(screen, params) {
+  return `data-nav="${escapeHtml(screen)}" data-params="${escapeHtml(JSON.stringify(params || {}))}"`;
+}
+
+/** Attributes for a per-segment action button, handled by the same delegated listener. */
+function actAttrs(action, caseId, evidenceId, segmentId) {
+  return `data-act="${escapeHtml(action)}" data-case="${escapeHtml(caseId)}" data-evidence="${escapeHtml(evidenceId)}" data-segment="${escapeHtml(segmentId)}"`;
+}
+
 function escapeHtml(value) {
   if (value === null || value === undefined) return '';
   return String(value)
@@ -89,12 +102,12 @@ const API = {
    * Returns {ok: true} on success, or {locked: true, retry_after: N} on lockout.
    * On wrong password the server returns 401; this method throws with "Incorrect password."
    */
-  async login(password) {
+  async login(password, totpCode) {
     const url = '/api/auth/login';
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password }),
+      body: JSON.stringify({ password, totp_code: totpCode || null }),
     });
 
     if (res.status === 429) {
@@ -104,7 +117,9 @@ const API = {
     }
 
     if (res.status === 401) {
-      throw new Error('Incorrect password.');
+      let m = 'Incorrect password.';
+      try { m = (await res.json()).detail || m; } catch (_) {}
+      throw new Error(m);
     }
 
     if (!res.ok) {
@@ -113,6 +128,32 @@ const API = {
       throw new Error(msg);
     }
 
+    return res.json();
+  },
+
+  // ── Two-factor authentication (TOTP) ───────────────────────────────────────
+  async totpStatus() {
+    const res = await fetch('/api/auth/totp');
+    await this._checkOk(res, '/api/auth/totp');
+    return res.json();
+  },
+  async totpEnroll() {
+    const res = await fetch('/api/auth/totp/enroll', { method: 'POST' });
+    await this._checkOk(res, '/api/auth/totp/enroll');
+    return res.json();
+  },
+  async totpConfirm(code) {
+    const res = await fetch('/api/auth/totp/confirm', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }),
+    });
+    await this._checkOk(res, '/api/auth/totp/confirm');
+    return res.json();
+  },
+  async totpDisable(password, code) {
+    const res = await fetch('/api/auth/totp/disable', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password, code }),
+    });
+    await this._checkOk(res, '/api/auth/totp/disable');
     return res.json();
   },
 

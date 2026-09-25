@@ -30,6 +30,7 @@ import psycopg2.extras
 import psycopg2.pool
 
 from backend.database import DuplicateCaseNumberError
+from backend.secure_store import decrypt_text, encrypt_text
 from backend.models import (
     AuditEntry,
     Case,
@@ -345,7 +346,7 @@ class PostgresDatabase:
                         segment_id,
                         r.frame_offset_seconds,
                         json.dumps(r.bbox),
-                        json.dumps(r.embedding),
+                        encrypt_text(json.dumps(r.embedding)),   # biometric template: encrypted at rest
                     )
                     for r in records
                 ],
@@ -369,7 +370,7 @@ class PostgresDatabase:
                 "segment_id": r["segment_id"],
                 "frame_offset_seconds": r["frame_offset_seconds"],
                 "bbox": json.loads(r["bbox_json"] or "[]"),
-                "embedding": json.loads(r["embedding_json"]),
+                "embedding": json.loads(decrypt_text(r["embedding_json"])),
             }
             for r in rows
         ]

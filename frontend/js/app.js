@@ -100,6 +100,29 @@ function navigateTo(screen, params = {}) {
   }
 }
 
+// ── Delegated click handling ──────────────────────────────────────────────────
+// Pages are built as HTML strings without inline event handlers (the Content-Security-Policy forbids inline
+// script). Controls carry data-nav / data-act attributes (see navAttrs / actAttrs in api.js) instead.
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-nav],[data-act]');
+  if (!el) return;
+  if (el.dataset.nav) {
+    e.preventDefault();
+    let params = {};
+    try { params = JSON.parse(el.dataset.params || '{}'); } catch (_) { /* malformed params: navigate without */ }
+    navigateTo(el.dataset.nav, params);
+    return;
+  }
+  const actions = {
+    motion: runMotionDetection,
+    face: runFaceDetection,
+    object: runObjectDetection,
+    export: exportSegment,
+  };
+  const fn = actions[el.dataset.act];
+  if (fn) fn(el.dataset.case, el.dataset.evidence, el.dataset.segment, el);
+});
+
 // ── Global 401 handler ────────────────────────────────────────────────────────
 // Any API call returning 401 dispatches this event.
 // This catches session expiry mid-use and redirects to login automatically.

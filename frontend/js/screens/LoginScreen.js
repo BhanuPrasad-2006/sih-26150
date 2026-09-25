@@ -140,7 +140,7 @@ function renderSetupScreen() {
     } catch (err) {
       const isAlreadySet = err.message && err.message.toLowerCase().includes('already set');
       if (isAlreadySet) {
-        errMsg.innerHTML = 'Password is already set. <a href="javascript:void(0)" onclick="navigateTo(\'login\')" style="color:var(--accent-cyan); text-decoration:underline; font-weight:600; margin-left:6px;">Click here to Login ➔</a>';
+        errMsg.innerHTML = 'Password is already set. <a href="#" data-nav="login" style="color:var(--accent-cyan); text-decoration:underline; font-weight:600; margin-left:6px;">Click here to Login ➔</a>';
       } else {
         errMsg.textContent = err.message || 'Setup failed. Please try again.';
       }
@@ -188,6 +188,12 @@ function renderLoginScreen() {
             />
           </div>
 
+          <div class="form-group" id="totp-group" style="display:none;">
+            <label for="login-totp">Authentication code</label>
+            <input type="text" id="login-totp" class="form-control" inputmode="numeric" maxlength="6"
+                   placeholder="6-digit code from your authenticator app" autocomplete="one-time-code" />
+          </div>
+
           <div id="login-error" style="display:none;" class="error-inline">
             ${_ICON_WARN}
             <span id="login-error-msg"></span>
@@ -228,6 +234,13 @@ function renderLoginScreen() {
     }, 1000);
   }
 
+  // Show the code field only when two-factor authentication is switched on.
+  let totpRequired = false;
+  API.authStatus().then((st) => {
+    totpRequired = !!st.totp_enabled;
+    if (totpRequired) document.getElementById('totp-group').style.display = 'block';
+  }).catch(() => {});
+
   form.onsubmit = async (e) => {
     e.preventDefault();
     errEl.style.display = 'none';
@@ -238,12 +251,18 @@ function renderLoginScreen() {
       errEl.style.display = 'flex';
       return;
     }
+    const totpCode = document.getElementById('login-totp').value.trim();
+    if (totpRequired && !/^\d{6}$/.test(totpCode)) {
+      errMsg.textContent = 'Enter the 6-digit authentication code.';
+      errEl.style.display = 'flex';
+      return;
+    }
 
     btnLogin.disabled = true;
     btnLogin.innerHTML = '<span class="btn-spinner"></span> Verifying…';
 
     try {
-      const result = await API.login(pw);
+      const result = await API.login(pw, totpCode);
 
       if (result.locked) {
         _startLockoutCountdown(result.retry_after || 60);
@@ -263,7 +282,7 @@ function renderLoginScreen() {
         btnLogin.innerHTML = 'Login ➔';
       } else {
         // Always show the same message regardless of failure reason
-        errMsg.textContent = 'Incorrect password.';
+        errMsg.textContent = totpRequired ? 'Incorrect password or authentication code.' : 'Incorrect password.';
         errEl.style.display = 'flex';
         btnLogin.disabled = false;
         btnLogin.innerHTML = 'Login ➔';

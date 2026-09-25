@@ -122,7 +122,7 @@ async function renderEvidenceScanScreen(params) {
     <div class="card" style="margin-top:20px;">
       <div class="card-title">
         <span>Scan Results &amp; Segments</span>
-        ${isCompleted ? `<button class="btn btn-secondary btn-sm" onclick="navigateTo('recordings', { caseId: '${caseId}', evidenceId: '${evidenceId}' })">View Recordings ➔</button>` : ''}
+        ${isCompleted ? `<button class="btn btn-secondary btn-sm" ${navAttrs('recordings', { caseId: caseId, evidenceId: evidenceId })}>View Recordings ➔</button>` : ''}
       </div>
       <div style="display:flex; align-items:center; gap:12px; font-size:14px;">
         <span style="color:var(--text-muted);">Current status:</span>

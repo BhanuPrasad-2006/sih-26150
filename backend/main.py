@@ -95,6 +95,8 @@ from backend.face_search import FaceEmbeddingRecord, index_faces_for_search
 from backend import accuracy as accuracy_mod
 from backend import imaging
 from backend import audit_seal
+from backend import report_signing
+from backend import totp as totp_mod
 from backend.security import HostOriginMiddleware, SecurityHeadersMiddleware, ensure_path_allowed
 from backend import object_detection
 from backend.reconstructor import label_all
@@ -469,6 +471,16 @@ async def _run_scan(case_id: str, evidence_id: str) -> None:
 
 class LoginRequest(BaseModel):
     password: str
+    totp_code: Optional[str] = None
+
+
+class TotpConfirmRequest(BaseModel):
+    code: str
+
+
+class TotpDisableRequest(BaseModel):
+    password: str
+    code: str
 
 
 class SetupRequest(BaseModel):
@@ -493,6 +505,7 @@ async def auth_status():
     # to match middleware expectation.  This route is exempt from middleware auth.
     return {
         "password_set": auth.is_password_set(),
+        "totp_enabled": auth.totp_enabled(),
         "authenticated": False,  # client-side always checks cookie via middleware
     }
 
@@ -507,6 +520,7 @@ async def auth_status_with_session(request: Request):
     token = request.cookies.get(SESSION_COOKIE_NAME)
     return {
         "password_set": auth.is_password_set(),
+        "totp_enabled": auth.totp_enabled(),
         "authenticated": auth.validate_session(token),
     }
 
@@ -563,6 +577,11 @@ async def login(req: LoginRequest, response: Response):
 
     # Verify password (constant-time bcrypt comparison)
     ok = await asyncio.to_thread(auth.verify_password, req.password)
+    # Second factor: checked whenever it is enabled; a wrong password OR a wrong code gets the same reply.
+    # The code is only checked (and so consumed) once the password is right, so a typo in the password does not
+    # burn a valid code.
+    if ok and auth.totp_enabled():
+        ok = await asyncio.to_thread(auth.verify_totp, req.totp_code or "")
 
     if not ok:
         failure_count, just_locked = auth.record_failure()
@@ -578,7 +597,8 @@ async def login(req: LoginRequest, response: Response):
                 status_code=429,
             )
         return JSONResponse(
-            {"ok": False, "detail": "Incorrect password."},
+            {"ok": False, "detail": ("Incorrect password or authentication code." if auth.totp_enabled()
+                                     else "Incorrect password.")},
             status_code=401,
         )
 
@@ -599,6 +619,39 @@ async def login(req: LoginRequest, response: Response):
         max_age=None,           # Session cookie
     )
     return {"ok": True}
+
+
+@app.get("/api/auth/totp")
+async def totp_status():
+    return {"enabled": auth.totp_enabled()}
+
+
+@app.post("/api/auth/totp/enroll")
+async def totp_enroll():
+    try:
+        secret = await asyncio.to_thread(auth.begin_totp_enrollment)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc))
+    return {"secret": secret, "otpauth_uri": totp_mod.otpauth_uri(secret),
+            "note": "Add this key to an authenticator app (manual entry), then confirm with a current code."}
+
+
+@app.post("/api/auth/totp/confirm")
+async def totp_confirm(req: TotpConfirmRequest):
+    if not await asyncio.to_thread(auth.confirm_totp, req.code):
+        raise HTTPException(400, "That code is not valid. Check the app's clock and try the current code.")
+    _global_audit_event("totp_enabled", "Two-factor authentication enabled")
+    return {"enabled": True}
+
+
+@app.post("/api/auth/totp/disable")
+async def totp_disable(req: TotpDisableRequest):
+    if not (await asyncio.to_thread(auth.verify_password, req.password)
+            and await asyncio.to_thread(auth.verify_totp, req.code)):
+        raise HTTPException(401, "Password or authentication code is incorrect.")
+    await asyncio.to_thread(auth.disable_totp)
+    _global_audit_event("totp_disabled", "Two-factor authentication disabled")
+    return {"enabled": False}
 
 
 @app.post("/api/auth/logout")
@@ -832,8 +885,19 @@ async def upload_evidence(
         timestamp_str = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         target_path = evidence_dir / f"{stem}_{timestamp_str}{suffix}"
 
+    max_bytes = int(float(os.environ.get("SIH_MAX_UPLOAD_GB", "200")) * 1024 ** 3)
+    written = 0
     async with aiofiles.open(target_path, "wb") as out_file:
         while chunk := await file.read(1024 * 1024):
+            written += len(chunk)
+            if written > max_bytes:
+                await out_file.close()
+                try:
+                    target_path.unlink()
+                except OSError:
+                    pass
+                raise HTTPException(413, f"Upload exceeds the {max_bytes / 1024 ** 3:g} GB limit (SIH_MAX_UPLOAD_GB). "
+                                         f"Use a server-side path for very large images.")
             await out_file.write(chunk)
 
     ev = Evidence(
@@ -1456,9 +1520,33 @@ async def get_report(case_id: str):
         correlated_events, _load_accuracy_results(case_id), _load_object_results(case_id),
         {"status": seal_status, "message": seal_msg, "head": audit_log.last_hash(), "count": len(audit_log)},
     )
-    _audit(case_id, "report_generated", str(pdf))
+    signature = await asyncio.to_thread(report_signing.sign_report, pdf, case_id)
+    _audit(case_id, "report_generated",
+           f"{pdf} sha256={signature['sha256']} signed_with_key={signature['key_id']}")
     return FileResponse(str(pdf), media_type="application/pdf",
                         filename=f"report_case_{case.case_number}_{ts}.pdf")
+
+
+@app.get("/api/report-signing-key")
+async def report_signing_key():
+    pub = await asyncio.to_thread(report_signing.public_key_hex)
+    return {"algorithm": report_signing.ALGORITHM, "public_key": pub, "key_id": report_signing.key_id(pub)}
+
+
+@app.get("/api/cases/{case_id}/report/verify")
+async def verify_report_file(case_id: str, name: str):
+    """Verify a generated report against its signature and the audit log's record of its hash."""
+    if not re.fullmatch(r"report_[0-9_]+\.pdf", name):
+        raise HTTPException(400, "Not a report file name.")
+    pdf = get_case_report_dir(case_id) / name
+    if not pdf.is_file():
+        raise HTTPException(404, "Report not found")
+    status, message = await asyncio.to_thread(report_signing.verify_report, pdf)
+    digest = await asyncio.to_thread(report_signing.sha256_file, pdf)
+    in_audit = any(e["action"] == "report_generated" and f"sha256={digest}" in e["details"]
+                   for e in _get_case_audit_log(case_id).export_entries())
+    return {"name": name, "sha256": digest, "signature": status, "message": message,
+            "recorded_in_audit_log": in_audit}
 
 
 @app.get("/api/cases/{case_id}/audit")

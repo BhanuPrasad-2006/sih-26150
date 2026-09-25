@@ -436,7 +436,7 @@ function renderEvidenceTable(evidence, caseId) {
                 <td><span class="badge ${badgeClass}">${scanStatus}</span></td>
                 <td>
                   <button class="btn btn-secondary btn-sm" title="${scanTitle}"
-                    onclick="navigateTo('evidence-scan', { caseId: '${caseId}', evidenceId: '${ev.evidence_id}' })">
+                    ${navAttrs('evidence-scan', { caseId: caseId, evidenceId: ev.evidence_id })}>
                     ${scanLabel}
                   </button>
                 </td>

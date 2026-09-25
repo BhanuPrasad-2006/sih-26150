@@ -9,7 +9,7 @@ SIH26150 · DVR/NVR Forensic Analysis Tool · state of `main` after the last com
 | Has the tool been validated on a **real DVR/NVR disk**? | **No.** No real recorder disk was available. |
 | What was validated, then? | The software's behaviour on **disk images we built ourselves** from published format descriptions and from **real ffmpeg-encoded video**, plus the forensic bookkeeping (hashing, audit, reports, auth). |
 | Can any recovery rate or accuracy be quoted for real recorders? | **No.** Numbers from synthetic disks describe our test disks, not recorders. |
-| Automated tests | **230 passing** (222 without a live Supabase connection; the other 8 exercise the Postgres backend). 27 of them are security tests (`test_security.py`). |
+| Automated tests | **262 passing** (254 without a live Supabase connection; the other 8 exercise the Postgres backend). 59 of them are security tests (headers, Host/Origin, audit seal, encryption, 2FA, signing, sandbox, parser fuzzing). |
 | Trust level of every vendor format (see `format_verification.md`) | **L2 at best** (corroborated by sources and tested on synthetic data). **None is L3** (validated on a real disk). |
 
 This report therefore documents *verification* (does the code do what it is specified to do) and does **not** claim *validation* (does it work on the real thing). Section 7 gives the protocol for turning it into real validation.
@@ -69,8 +69,11 @@ Independence caveat: the disk builders and the parsers were written by the same 
 | test_dahua.py, test_timeline.py | 4 each | DHAV validation, timeline |
 | test_database.py, test_hikvision.py, test_matrix.py, test_uniview.py | 3 each | Storage, plugin detection |
 | test_reconstructor.py | 1 | Reconstruction |
-| test_security.py | 27 | Headers, Host/Origin, docs auth, path allow-list, audit seal, model integrity, escaping |
-| **Total** | **230** (includes parametrised cases) | |
+| test_security.py | 28 | Headers, strict CSP, Host/Origin, docs auth, path allow-list, audit seal, model integrity, escaping |
+| test_security_level2.py | 18 | Encryption at rest, TOTP (RFC vectors, replay), signed reports, upload cap |
+| test_sandbox.py | 8 | ffmpeg limits, scrubbed environment, protocol whitelist |
+| test_fuzz_parsers.py | 5 | Mutation fuzzing of all parsers, oracle self-tests |
+| **Total** | **262** (includes parametrised cases) | |
 
 ## 5. Defects found by testing
 

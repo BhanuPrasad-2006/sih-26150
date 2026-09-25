@@ -76,7 +76,7 @@ async function renderRecordingsScreen(params) {
           <div class="page-title">Carved Video Segments</div>
           <div class="page-subtitle">${segments.length} segment${segments.length !== 1 ? 's' : ''} reconstructed from disk image</div>
         </div>
-        <button class="btn btn-secondary" onclick="navigateTo('export-report', { caseId: '${caseId}', evidenceId: '${evidenceId}' })">📄 Export PDF Forensic Report ➔</button>
+        <button class="btn btn-secondary" ${navAttrs('export-report', { caseId: caseId, evidenceId: evidenceId })}>📄 Export PDF Forensic Report ➔</button>
       </div>
     </div>
 
@@ -97,7 +97,7 @@ async function renderRecordingsScreen(params) {
              <div class="empty-state-icon">🎞️</div>
              <div class="empty-state-title">No segments carved yet</div>
              <div class="empty-state-subtitle">Run a disk scan first on the Acquisition &amp; Scan screen to extract video segments from this image.</div>
-             <button class="btn btn-primary" onclick="navigateTo('evidence-scan', { caseId: '${caseId}', evidenceId: '${evidenceId}' })">
+             <button class="btn btn-primary" ${navAttrs('evidence-scan', { caseId: caseId, evidenceId: evidenceId })}>
                Go to Acquisition &amp; Scan ➔
              </button>
            </div>`
@@ -134,7 +134,7 @@ async function renderRecordingsScreen(params) {
                        motionCell = `<span class="badge badge-pending" data-tooltip="${escapeHtml(s.motion_details || 'Basic Motion Detection: No significant motion detected')}">No Motion</span>`;
                      } else {
                        motionCell = `<button id="motion-btn-${s.segment_id}" class="btn btn-secondary btn-sm" style="font-size:11px; padding:3px 8px;"
-                         onclick="runMotionDetection('${caseId}', '${evidenceId}', '${s.segment_id}', this)">
+                         ${actAttrs('motion', caseId, evidenceId, s.segment_id)}>
                          Check Motion
                        </button>`;
                      }
@@ -148,7 +148,7 @@ async function renderRecordingsScreen(params) {
                        faceCell = `<span class="badge badge-pending" data-tooltip="${escapeHtml(s.face_detection_details || 'AI-Based Face Detection: No faces detected')}">No Faces</span>`;
                      } else {
                        faceCell = `<button id="face-btn-${s.segment_id}" class="btn btn-secondary btn-sm" style="font-size:11px; padding:3px 8px;"
-                         onclick="runFaceDetection('${caseId}', '${evidenceId}', '${s.segment_id}', this)">
+                         ${actAttrs('face', caseId, evidenceId, s.segment_id)}>
                          Check Faces
                        </button>`;
                      }
@@ -164,7 +164,7 @@ async function renderRecordingsScreen(params) {
                          : `<span class="badge badge-pending" data-tooltip="${escapeHtml(o.summary || '')}">None found</span>`;
                      } else {
                        objectCell = `<button id="obj-btn-${s.segment_id}" class="btn btn-secondary btn-sm" style="font-size:11px; padding:3px 8px;"
-                         onclick="runObjectDetection('${caseId}', '${evidenceId}', '${s.segment_id}', this)">
+                         ${actAttrs('object', caseId, evidenceId, s.segment_id)}>
                          Check Objects
                        </button>`;
                      }
@@ -190,7 +190,7 @@ async function renderRecordingsScreen(params) {
                        <td>${objectCell}</td>
                        <td>
                          <button id="export-btn-${s.segment_id}" class="btn btn-secondary btn-sm"
-                           onclick="exportSegment('${caseId}', '${evidenceId}', '${s.segment_id}', this)">
+                           ${actAttrs('export', caseId, evidenceId, s.segment_id)}>
                            ${isExported ? 'Re-Export MP4' : 'Export MP4'}
                          </button>
                        </td>
