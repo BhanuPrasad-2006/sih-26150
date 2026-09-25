@@ -56,6 +56,13 @@ from someone else's reverse engineering; the gate exists to decide how far each 
 | IDR table at the end of each block: `OFNI`, 56-byte records, filled backwards | Han §2.3 + Fig. 4 | **L1** | Record layout not published. **Earlier sheet wrongly marked this unverified** |
 | Frame magic `0x484B5649` ("HKVI"), type at 4, size at 8, timestamp at 12, channel at 16, payload at 20 "minus 24 bytes overhead" | MDPI 2025 §3.2 only | **REJECTED (L0)** | Uncorroborated; contradicts Han (which describes NAL/PS data, not this header); internally inconsistent (payload at 20 but 24-byte overhead); the same paper's Dahua detection offsets (512/1024/2048) conflict with the Dahua spec (offset 0). Not implemented |
 
+**Real-disk cross-check (2026-09-26).** A third party's published parse of a real 1 TB Hikvision disk (unlicensed; facts only) agrees with
+our master-sector field offsets (relative to the signature), the 48-byte entry layout, the sentinel and no-video encodings, and the
+block arithmetic, which lifts those rows to **L2 (single real-disk source, our code not run on the image)**. It also contradicted
+three assumptions, all fixed: the master sector was at **0x210** (a 16-byte shift of the whole file system), the index is
+**page-structured** (header, page list, 4 KiB pages), and **7 of 852 video entries end before they start**. Details:
+`docs/format_sheets/hikvision.md` §7a. Nothing is L3 until our code is run on a real image.
+
 ### Honeywell
 | Claim | Sources | Level | Notes |
 |---|---|---|---|

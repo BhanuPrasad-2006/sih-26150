@@ -12,7 +12,7 @@
 ![FastAPI](https://img.shields.io/badge/FastAPI-backend-009688?logo=fastapi&logoColor=white)
 ![OpenCV](https://img.shields.io/badge/OpenCV-DNN-5C3EE8?logo=opencv&logoColor=white)
 ![FFmpeg](https://img.shields.io/badge/FFmpeg-remux%20%26%20probe-007808?logo=ffmpeg&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-297%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-316%20passing-brightgreen)
 ![Real hardware](https://img.shields.io/badge/real%20recorder%20disks-not%20yet%20tested-red)
 
 </div>
@@ -106,7 +106,7 @@ flowchart LR
 | OEM | What exists | Source of the format | Validated on real hardware |
 |---|---|---|---|
 | **Dahua** | DHFS 4.1 index (partition table, descriptors, cluster chains) + DHAV frame carving | Wullen 2025 spec, independent Batista extractor, FFmpeg `dhav.c` | ❌ |
-| **Hikvision** | Master sector, HIKBTREE index (camera + time window per 1 GB block), H.264/PS carving, unindexed-block carving | Han, Jeong & Lee 2015 (ICDF2C) | ❌ |
+| **Hikvision** | Master sector (found even when the file system is shifted), HIKBTREE index read through its page list (camera + time window per 1 GB block), H.264/PS carving, unindexed-block carving | Han, Jeong & Lee 2015 (ICDF2C), **cross-checked against a third party's published parse of a real 1 TB disk** | ❌ our code has not read a real image |
 | **Honeywell** | GPT + 20-byte record headers + Annex B carving with real timestamps | Yoon & Hwang, arXiv:2605.07430 (one model) | ❌ |
 | **CP Plus** | Detection, then carves through the Dahua engine, tagged as unverified | Dahua-compatibility *assumption* only | ❌ |
 | **TP-Link · Godrej · Uniview · Matrix** | Weak name-hint detection; **no parser**. Disks go to generic carving | No public documentation found (searched Sep 2026) | ❌ |
@@ -140,7 +140,7 @@ Because no real recorder disk was available, the tool is tested by building disk
 | Parsers checked against **known-answer values printed in the papers/specs** | ✅ |
 | Tamper test: change one byte of evidence → verification fails | ✅ |
 | Accuracy feature on real video: identical, truncated, and different videos give the expected recall/precision/order | ✅ |
-| **Automated suite** | **297 tests passing** (289 on a fresh clone; the other 8 need a live Supabase `DATABASE_URL`) |
+| **Automated suite** | **316 tests passing** (308 on a fresh clone; the other 8 need a live Supabase `DATABASE_URL`) |
 
 **A defect the accuracy check found:** on a synthetic Dahua disk with its index wiped, the carver found only 21 of 40 frames (byte recall 86.5 %).
 The cause was a minimum frame size (100 bytes) that rejected tiny P-frames of a quiet camera; at 40 bytes it finds all 40 (byte recall 92.1 %,
@@ -299,7 +299,7 @@ sih-26150/
 │   ├── cv_models/            YuNet, SFace, YOLOX (ONNX)
 │   ├── plugins/              dahua · dahua_dhfs · hikvision · hikvision_index · honeywell · cpplus
 │   │                         tplink · godrej · uniview · matrix · unknown · generic · stream_carver · registry
-│   └── tests/                297 automated tests (+ manual real-video end-to-end scripts)
+│   └── tests/                316 automated tests (+ manual real-video end-to-end scripts)
 ├── docs/                     SOP · format_verification · oem_comparison · accuracy_measurement · format_sheets/
 ├── frontend/                 vanilla HTML/CSS/JS single-page app (no build step)
 ├── install.* / run.*         one-click setup and launch

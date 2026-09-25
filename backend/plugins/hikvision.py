@@ -2,8 +2,9 @@
 hikvision.py — Hikvision DVR/NVR brand plugin.
 
 What is implemented in v1:
-  - detect():          Check master sector at 0x200 for b'HIKVISION@HANGZHOU'.
-                       Returns 1.0 on match, 0.0 otherwise.
+  - detect():          Look for b'HIKVISION@HANGZHOU' in a 4 KiB window after 0x200 (Han's disk: 0x200;
+                       a real disk: 0x210, i.e. the whole file system shifted by 16 bytes, which is then
+                       added to every pointer). Returns 1.0 on match, 0.0 otherwise.
   - list_recordings(): returns [] — index data is used inside carve() (see below).
   - carve():           Uses the master sector and HIKBTREE data-block entries from
                        Han 2015 (hikvision_index.py) to find the video blocks and, where
@@ -33,9 +34,10 @@ from backend.plugins.constants import (
     HIKV_MASTER_SECTOR_OFFSET,
 )
 from backend.plugins.hikvision_index import (
+    find_master_sector,
     master_sector_problems,
-    read_master_sector,
-    scan_entries,
+    read_entries,
+    read_idr_times,
 )
 from backend.plugins.stream_carver import CarveRegion, carve_standard_streams
 
@@ -68,8 +70,8 @@ class HikvisionPlugin(BrandPlugin):
             if img.size < _MASTER_SECTOR_MIN_SIZE:
                 return 0.0
 
-            window = img.mm[HIKV_MASTER_SECTOR_OFFSET : HIKV_MASTER_SECTOR_OFFSET + 512]
-            if HIKV_MASTER_SECTOR_MAGIC in window:
+            # The signature was at 0x200 in Han's disk but at 0x210 on a real one: search a window after 0x200.
+            if find_master_sector(img.mm, img.size) is not None:
                 self._master_sector_found = True
                 return 1.0
             return 0.0
@@ -118,7 +120,7 @@ class HikvisionPlugin(BrandPlugin):
         UNCERTAIN until ffprobe decodes the export (then PARTIAL, never COMPLETE).
         """
         mm, total = img.mm, img.size
-        ms = read_master_sector(mm, total)
+        ms = find_master_sector(mm, total)
         problems = master_sector_problems(ms) if ms is not None else ["no master sector"]
         if ms is None or problems:
             frames, note = carve_standard_streams(img, "hikvision", progress_cb)
@@ -126,7 +128,7 @@ class HikvisionPlugin(BrandPlugin):
                 " Master sector not usable for indexed carving (" + "; ".join(problems) + ")."
             )
 
-        entries = scan_entries(mm, ms, total)
+        entries, method = read_entries(mm, ms, total)
         by_block: dict[int, list] = {}
         for e in entries:
             by_block.setdefault(e.block_index, []).append(e)
@@ -154,7 +156,25 @@ class HikvisionPlugin(BrandPlugin):
                     unindexed += 1
 
         frames, note = carve_standard_streams(img, "hikvision", progress_cb, regions=regions)
+        idr_blocks = idr_total = 0
+        idr_first = idr_last = None
+        for r in regions:
+            times = read_idr_times(mm, r.start, ms.block_size, total)
+            if times:
+                idr_blocks += 1
+                idr_total += len(times)
+                idr_first = min(times) if idr_first is None else min(idr_first, min(times))
+                idr_last = max(times) if idr_last is None else max(idr_last, max(times))
+        if ms.extra_offset:
+            note += (f" The file system is shifted by {ms.extra_offset} bytes in this image (signature at "
+                     f"{HIKV_MASTER_SECTOR_OFFSET + ms.extra_offset:#x}); all pointers were adjusted.")
+        if idr_total:
+            from datetime import datetime, timezone
+            note += (f" IDR tables (OFNI, time field only) found in {idr_blocks} block(s): {idr_total} key-frame times "
+                     f"from {datetime.fromtimestamp(idr_first, tz=timezone.utc):%Y-%m-%d %H:%M} to "
+                     f"{datetime.fromtimestamp(idr_last, tz=timezone.utc):%Y-%m-%d %H:%M} UTC (informational).")
         note += (
+            f" Entries read by: {method}."
             f" Index: {len(entries)} HIKBTREE data-block entries read; {indexed} block(s) got a "
             f"camera/time window, {ambiguous} block(s) had several entries (not assigned), "
             f"{unindexed} block(s) had no usable entry (unindexed/deleted footage)."
