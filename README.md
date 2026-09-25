@@ -12,7 +12,7 @@
 ![FastAPI](https://img.shields.io/badge/FastAPI-backend-009688?logo=fastapi&logoColor=white)
 ![OpenCV](https://img.shields.io/badge/OpenCV-DNN-5C3EE8?logo=opencv&logoColor=white)
 ![FFmpeg](https://img.shields.io/badge/FFmpeg-remux%20%26%20probe-007808?logo=ffmpeg&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-278%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-290%20passing-brightgreen)
 ![Real hardware](https://img.shields.io/badge/real%20recorder%20disks-not%20yet%20tested-red)
 
 </div>
@@ -61,6 +61,7 @@ for unknown recorders, and forensic bookkeeping (hashes, audit chain, report, le
 | 🙂 | **Face detection & search**: YuNet detector + SFace embeddings, reference-photo search | ✅ |
 | 🧍 | **Object detection**: YOLOX (80 COCO classes) with a classical fallback | ✅ 3 real photos · ⚠️ no CCTV data |
 | 🌀 | **Motion detection**: frame differencing, labelled as *basic*, never as AI | ✅ |
+| 🧪 | **Validation kit**: one command turns a real recorder's disk images + the exported clip into a finished validation report (verdict, recall/precision/order, byte placement, evidence hashes) | ✅ tested on generated disks · ready for real ones |
 | 📏 | **Accuracy against ground truth**: frame recall / precision / order, byte placement, log coverage | ✅ new, honest "not measured" otherwise |
 | ⛓️ | **Hash-chained audit log** of every action, tamper-evident | ✅ |
 | 📄 | **PDF report** + **BSA 2023 §63(4)** certificate template | ✅ |
@@ -139,7 +140,7 @@ Because no real recorder disk was available, the tool is tested by building disk
 | Parsers checked against **known-answer values printed in the papers/specs** | ✅ |
 | Tamper test: change one byte of evidence → verification fails | ✅ |
 | Accuracy feature on real video: identical, truncated, and different videos give the expected recall/precision/order | ✅ |
-| **Automated suite** | **278 tests passing** (270 on a fresh clone; the other 8 need a live Supabase `DATABASE_URL`) |
+| **Automated suite** | **290 tests passing** (282 on a fresh clone; the other 8 need a live Supabase `DATABASE_URL`) |
 
 **A defect the accuracy check found:** on a synthetic Dahua disk with its index wiped, the carver found only 21 of 40 frames (byte recall 86.5 %).
 The cause was a minimum frame size (100 bytes) that rejected tiny P-frames of a quiet camera; at 40 bytes it finds all 40 (byte recall 92.1 %,
@@ -275,6 +276,7 @@ in automatically with system parameters and hashes. Practice is aligned with **I
 
 | Document | What it is |
 |---|---|
+| [Validation Kit](docs/VALIDATION_KIT.md) | How anyone with a real recorder can produce a validation report in about an hour |
 | [Security](docs/SECURITY.md) | Threat model, every control, key management, residual risks, deployment checklist |
 | [System Architecture](docs/SYSTEM_ARCHITECTURE.md) | Components, data model, scan sequence, security design, extension points |
 | [User Manual](docs/USER_MANUAL.md) | Every screen, result and label explained; troubleshooting |
@@ -297,7 +299,7 @@ sih-26150/
 │   ├── cv_models/            YuNet, SFace, YOLOX (ONNX)
 │   ├── plugins/              dahua · dahua_dhfs · hikvision · hikvision_index · honeywell · cpplus
 │   │                         tplink · godrej · uniview · matrix · unknown · generic · stream_carver · registry
-│   └── tests/                278 automated tests (+ manual real-video end-to-end scripts)
+│   └── tests/                290 automated tests (+ manual real-video end-to-end scripts)
 ├── docs/                     SOP · format_verification · oem_comparison · accuracy_measurement · format_sheets/
 ├── frontend/                 vanilla HTML/CSS/JS single-page app (no build step)
 ├── install.* / run.*         one-click setup and launch
@@ -343,7 +345,7 @@ Legend: ✅ done · 🟡 partly / unvalidated · ❌ not done.
 
 ## 🗺️ Roadmap
 
-1. Obtain real recorder disks (or a supervised lab test) and promote formats through the admission gate.
+1. Run the [validation kit](docs/VALIDATION_KIT.md) on real recorder disks (a friend's DVR, a shop's retired disk, or an NTRO lab) and promote formats through the admission gate.
 2. Validate drive imaging on a scratch disk behind a write blocker.
 3. Fill in the validation results table with real-recorder runs ([protocol](docs/VALIDATION_REPORT.md)).
 4. Vendor formats for TP-Link, Uniview, Godrej, Matrix once a public source or sample disk exists; confirm CP Plus.
