@@ -29,6 +29,7 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
+from backend.sandbox import FFMPEG_SAFE_INPUT, run_limited
 from backend.models import Segment, SegmentStatus
 
 log = logging.getLogger(__name__)
@@ -59,16 +60,15 @@ def ffprobe_check(path: Path) -> tuple[bool, dict]:
     if not ffprobe_available():
         return False, {"error": "ffprobe not on PATH"}
     try:
-        result = subprocess.run(
+        result = run_limited(
             [
                 "ffprobe",
                 "-v", "error",
+                *FFMPEG_SAFE_INPUT,
                 "-show_entries", "stream=codec_name,codec_type,duration,nb_frames",
                 "-of", "json",
                 str(path),
             ],
-            capture_output=True,
-            text=True,
             timeout=60,
         )
         if result.returncode != 0:
@@ -118,16 +118,15 @@ def remux_dhav_to_mp4(raw_path: Path, mp4_path: Path) -> tuple[bool, str]:
     if not ffmpeg_available():
         return False, "ffmpeg not on PATH"
     try:
-        result = subprocess.run(
+        result = run_limited(
             [
-                "ffmpeg", "-y",
+                "ffmpeg", "-y", "-nostdin",
+                *FFMPEG_SAFE_INPUT,
                 "-f", "dhav",
                 "-i", str(raw_path),
                 "-c", "copy",
                 str(mp4_path),
             ],
-            capture_output=True,
-            text=True,
             timeout=300,
         )
         return result.returncode == 0, result.stderr[-500:] if result.stderr else ""
@@ -150,16 +149,15 @@ def remux_h264_to_mp4(raw_path: Path, mp4_path: Path) -> tuple[bool, str]:
         with open(raw_path, "rb") as fh:
             is_program_stream = fh.read(4) == b"\x00\x00\x01\xBA"
         input_fmt = [] if is_program_stream else ["-f", "h264"]
-        result = subprocess.run(
+        result = run_limited(
             [
-                "ffmpeg", "-y",
+                "ffmpeg", "-y", "-nostdin",
+                *FFMPEG_SAFE_INPUT,
                 *input_fmt,
                 "-i", str(raw_path),
                 "-c", "copy",
                 str(mp4_path),
             ],
-            capture_output=True,
-            text=True,
             timeout=300,
         )
         return result.returncode == 0, result.stderr[-500:] if result.stderr else ""

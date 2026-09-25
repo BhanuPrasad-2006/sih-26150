@@ -28,6 +28,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable, Optional
 
+from backend.sandbox import FFMPEG_SAFE_INPUT, run_limited
+
 log = logging.getLogger(__name__)
 
 _CHUNK = 8 * 1024 * 1024
@@ -92,14 +94,15 @@ def compare_bytes(recovered: Path, truth: Path) -> dict:
 # ── 2. Frames ─────────────────────────────────────────────────────────────────
 
 def _run(cmd: list[str], timeout: int) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    # Ground-truth videos come from outside the tool: limited, secret-free, local-files-only.
+    return run_limited(cmd, timeout=timeout)
 
 
 def decoded_frame_hashes(path: Path, timeout: int = 900) -> list[str]:
     """MD5 of every decoded video frame (yuv420p) via ffmpeg's framemd5 muxer."""
     if shutil.which("ffmpeg") is None:
         raise RuntimeError("ffmpeg not on PATH")
-    res = _run(["ffmpeg", "-v", "error", "-i", str(path), "-map", "0:v:0", "-an", "-sn",
+    res = _run(["ffmpeg", "-v", "error", "-nostdin", *FFMPEG_SAFE_INPUT, "-i", str(path), "-map", "0:v:0", "-an", "-sn",
                 "-pix_fmt", "yuv420p", "-f", "framemd5", "-"], timeout)
     if res.returncode != 0 and not res.stdout.strip():
         raise RuntimeError(f"could not decode {path.name}: {res.stderr.strip()[:200]}")
