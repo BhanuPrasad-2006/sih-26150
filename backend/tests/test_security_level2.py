@@ -24,7 +24,8 @@ def test_legacy_plaintext_still_readable():
 
 def test_tampered_or_wrong_key_ciphertext_is_rejected(monkeypatch):
     token = secure_store.encrypt_text("secret")
-    flipped = token[:-3] + ("A" if token[-3] != "A" else "B") + token[-2:]
+    mid = len(token) // 2                                                            # inside the ciphertext, never in padding bits
+    flipped = token[:mid] + ("A" if token[mid] != "A" else "B") + token[mid + 1:]
     with pytest.raises(ValueError):
         secure_store.decrypt_text(flipped)
     monkeypatch.setenv("SIH_DATA_KEY", "MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=")
