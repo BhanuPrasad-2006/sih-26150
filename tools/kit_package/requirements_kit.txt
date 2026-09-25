@@ -1,0 +1,5 @@
+# Exact versions the kit was tested with (a subset of the tool's requirements.lock.txt)
+pydantic==2.12.5
+numpy==2.2.6
+opencv-python-headless==4.13.0.92
+reportlab==4.4.10

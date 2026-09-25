@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recorder Validation Kit</title>
+<meta name="description" content="Test whether the SIH DVR/NVR Forensic Tool can recover deleted video from a real recorder. Runs on your own computer; nothing is uploaded.">
+<style>
+  :root {
+    --bg:#f5f7fb; --card:#ffffff; --ink:#1d2433; --muted:#5a6478; --line:#dfe5ef;
+    --brand:#0b6bcb; --brand-ink:#ffffff; --ok:#1e8e4e; --warn:#b26a00; --warnbg:#fff4de; --code:#eef2f8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f141c; --card:#171e29; --ink:#e8edf5; --muted:#9aa6ba; --line:#263042;
+            --brand:#4da3ff; --brand-ink:#08111d; --ok:#4cc38a; --warn:#f0b35a; --warnbg:#2a2113; --code:#1e2735; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; }
+  .wrap { max-width:920px; margin:0 auto; padding:32px 20px 64px; }
+  header h1 { font-size:clamp(28px,5vw,40px); line-height:1.15; margin:0 0 8px; }
+  header p { color:var(--muted); font-size:18px; margin:0; max-width:680px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:22px; margin-top:20px; }
+  .dl { display:flex; flex-wrap:wrap; gap:18px; align-items:center; justify-content:space-between; }
+  .btn { display:inline-block; background:var(--brand); color:var(--brand-ink); font-weight:700; text-decoration:none;
+         padding:14px 26px; border-radius:10px; font-size:18px; }
+  .btn:hover { filter:brightness(1.08); }
+  .meta { color:var(--muted); font-size:14px; }
+  code, .hash { font-family:ui-monospace,Consolas,monospace; font-size:13px; background:var(--code); padding:2px 6px; border-radius:6px; overflow-wrap:anywhere; }
+  h2 { font-size:22px; margin:0 0 12px; }
+  .steps { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px; margin-top:6px; }
+  .step { border:1px solid var(--line); border-radius:12px; padding:16px; }
+  .step b { display:inline-flex; width:30px; height:30px; border-radius:50%; background:var(--brand); color:var(--brand-ink);
+            align-items:center; justify-content:center; margin-right:8px; }
+  .step h3 { margin:0 0 6px; font-size:18px; display:flex; align-items:center; }
+  .step p { margin:0; color:var(--muted); font-size:15px; }
+  table { border-collapse:collapse; width:100%; font-size:15px; }
+  th, td { text-align:left; padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { width:34%; color:var(--muted); font-weight:600; }
+  .notice { background:var(--warnbg); border:1px solid var(--warn); border-radius:12px; padding:14px 18px; margin-top:20px; }
+  .two { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:16px; }
+  .yes { color:var(--ok); font-weight:700; } .no { color:var(--warn); font-weight:700; }
+  ul { margin:6px 0 0 20px; padding:0; } li { margin:4px 0; }
+  details { border-top:1px solid var(--line); padding:10px 0; } summary { cursor:pointer; font-weight:600; }
+  footer { margin-top:32px; color:var(--muted); font-size:14px; }
+  a { color:var(--brand); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>🧪 Recorder Validation Kit</h1>
+  <p>Help us find out whether our DVR/NVR forensic tool really recovers deleted video from a <strong>real</strong> recorder. It runs on your own computer and writes a report card.</p>
+</header>
+
+<div class="notice">
+  <strong>Honest status:</strong> the tool has only ever been tested on disk images we generated ourselves. A run on your recorder is the first real-world test, so whatever the report says, good or bad, is useful to us.
+</div>
+
+<div class="card dl">
+  <div>
+    <h2 style="margin-bottom:4px">Download</h2>
+    <div class="meta">Version 057a992 · built 2026-09-25 · 81 KB · Windows, Linux, macOS</div>
+    <div class="meta" style="margin-top:6px">SHA-256: <span class="hash">8066e921268ce312f21a0a6998d2929a3151c38868213c27653510afed29e80e</span></div>
+  </div>
+  <a class="btn" href="download/sih-validation-kit.zip" download>⬇ Download the kit</a>
+</div>
+
+<div class="card">
+  <h2>The whole thing in three steps</h2>
+  <div class="steps">
+    <div class="step"><h3><b>1</b> Record &amp; save a copy</h3>
+      <p>Record a 5-minute clip on the recorder with a phone clock in view. Export that same clip to a USB stick. This copy is the <em>answer sheet</em>.</p></div>
+    <div class="step"><h3><b>2</b> Delete &amp; copy the disk</h3>
+      <p>Delete the recording in the recorder's menu and switch it off straight away. Take the disk out and save it as one big file (a disk image).</p></div>
+    <div class="step"><h3><b>3</b> Run the kit, send the report</h3>
+      <p>Run one command. It writes a report card. Send us the small <code>result</code> folder, <strong>not</strong> the disk image.</p></div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Detailed steps</h2>
+  <table>
+    <tr><th>What you need</th><td>The recorder (any brand) and its hard disk · a camera or any video source · a PC with Python 3.11+ and FFmpeg · a USB-SATA adapter or dock (a hardware write blocker is better) · a second drive with room for the disk image · a phone or clock to film</td></tr>
+    <tr><th>1. Record</th><td>Set the recorder's clock and note the time zone. Record about 5 minutes with a clock or stopwatch visible to the camera.</td></tr>
+    <tr><th>2. Export the clip</th><td>With the recorder's own menu or player, export <em>that same clip</em> to a USB stick. Keep it as <code>clip.mp4</code> (or whatever the recorder produces).</td></tr>
+    <tr><th>3. Image before (optional)</th><td>Power off, remove the disk, connect it through the dock or write blocker, and create a raw image with FTK Imager (File → Create Disk Image → Physical Drive → Raw (dd)) called <code>original.dd</code>. If Windows offers to format or initialise the disk, choose <strong>Cancel</strong>.</td></tr>
+    <tr><th>4. Delete</th><td>Put the disk back. Delete the recording through the recorder's menu (don't format) and <strong>switch the recorder off immediately</strong>.</td></tr>
+    <tr><th>5. Image after</th><td>Remove the disk again and image it the same way: <code>deleted.dd</code>.</td></tr>
+    <tr><th>6. Install the kit</th><td>Unzip the download. Windows: double-click <code>install_kit.bat</code>. Linux/macOS: <code>./install_kit.sh</code>. (Once only.)</td></tr>
+    <tr><th>7. Fill in the notes</th><td>Open <code>validation_notes_template.json</code> and write the recorder's brand, model, firmware and what you did.</td></tr>
+    <tr><th>8. Run</th><td><code>run_kit.bat --after deleted.dd --clip clip.mp4 --before original.dd --notes validation_notes_template.json --out result</code><br>(Linux/macOS: <code>./run_kit.sh …</code>. Leave out <code>--before</code> if you skipped step 3.)</td></tr>
+    <tr><th>9. Send back</th><td>The folder <code>result</code>: <code>validation_report.pdf</code>, <code>validation_report.md</code>, <code>results.json</code>.</td></tr>
+  </table>
+</div>
+
+<div class="card two">
+  <div>
+    <h2>Privacy &amp; safety</h2>
+    <ul>
+      <li class="yes">✔ Nothing is uploaded: it runs offline on your computer.</li>
+      <li class="yes">✔ The disk images are opened read-only and checked with a fingerprint (SHA-256) before and after, so you can prove they were not changed.</li>
+      <li class="yes">✔ Use a spare test disk if you can, so private footage stays private.</li>
+      <li class="no">✘ Do not send the disk images unless you choose to; the report folder is enough.</li>
+    </ul>
+  </div>
+  <div>
+    <h2>What the report tells you</h2>
+    <ul>
+      <li>One-line verdict: matches / partly recovered / nothing found.</li>
+      <li>How many frames of your clip came back, whether they are correct and in the right order.</li>
+      <li>Where on the disk the recovered bytes came from (if you gave the "before" image).</li>
+      <li>What was <em>not</em> measured. It never guesses a number.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Questions</h2>
+  <details><summary>Does it work for my brand?</summary><p>Dahua, Hikvision and Honeywell have dedicated support (from published research, untested on real hardware); CP Plus is treated like Dahua. For any other brand the kit tries a generic method. Whatever happens, the report says so.</p></details>
+  <details><summary>How big are the files?</summary><p>A disk image is as large as the disk (a 500 GB disk gives a 500 GB file), so a small or fresh disk is easiest. The kit itself is under 1 MB and the report folder is small.</p></details>
+  <details><summary>The report says "nothing found". Did I do something wrong?</summary><p>Not necessarily: that is a real finding. Either the footage is gone or our tool does not yet understand that recorder. Send the report anyway.</p></details>
+  <details><summary>Is one result enough to say the tool works?</summary><p>No. One run measures one recorder in one situation. It is evidence, not a general recovery rate.</p></details>
+  <details><summary>How do I check the download is genuine?</summary><p>Compare the SHA-256 above with the file's hash (Windows: <code>certutil -hashfile sih-validation-kit.zip SHA256</code>). The source code is public.</p></details>
+</div>
+
+<footer>
+  Part of the SIH26150 DVR/NVR Forensic Tool ·
+  <a href="https://github.com/BhanuPrasad-2006/sih-26150">source code</a> ·
+  <a href="https://github.com/BhanuPrasad-2006/sih-26150/blob/main/docs/VALIDATION_KIT.md">full guide</a>
+</footer>
+
+</div>
+</body>
+</html>

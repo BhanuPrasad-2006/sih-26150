@@ -9,7 +9,7 @@ SIH26150 · DVR/NVR Forensic Analysis Tool · state of `main` after the last com
 | Has the tool been validated on a **real DVR/NVR disk**? | **No.** No real recorder disk was available. |
 | What was validated, then? | The software's behaviour on **disk images we built ourselves** from published format descriptions and from **real ffmpeg-encoded video**, plus the forensic bookkeeping (hashing, audit, reports, auth). |
 | Can any recovery rate or accuracy be quoted for real recorders? | **No.** Numbers from synthetic disks describe our test disks, not recorders. |
-| Automated tests | **290 passing** (282 without a live Supabase connection; the other 8 exercise the Postgres backend). 75 of them are security tests (headers, strict CSP, Host/Origin, audit seals, encryption, 2FA and recovery codes, signing, encrypted packages, HTTPS, sandbox, parser fuzzing). |
+| Automated tests | **297 passing** (289 without a live Supabase connection; the other 8 exercise the Postgres backend). 75 of them are security tests (headers, strict CSP, Host/Origin, audit seals, encryption, 2FA and recovery codes, signing, encrypted packages, HTTPS, sandbox, parser fuzzing). |
 | Trust level of every vendor format (see `format_verification.md`) | **L2 at best** (corroborated by sources and tested on synthetic data). **None is L3** (validated on a real disk). |
 
 This report therefore documents *verification* (does the code do what it is specified to do) and does **not** claim *validation* (does it work on the real thing). Section 7 gives the protocol for turning it into real validation.
@@ -75,7 +75,8 @@ Independence caveat: the disk builders and the parsers were written by the same 
 | test_fuzz_parsers.py | 5 | Mutation fuzzing of all parsers, oracle self-tests |
 | test_security_full.py | 16 | Recovery codes, session lifetime, sealed login log, HTTPS, embedded PDF signature, encrypted packages, security status |
 | test_validation_kit.py | 12 | Validation kit: verdicts, reports, evidence untouched, exit codes, parity with the app scan |
-| **Total** | **290** (includes parametrised cases) | |
+| test_kit_package.py | 7 | Downloadable kit: reproducible zip, minimal contents, runs with no web dependencies, page/zip/hash consistent |
+| **Total** | **297** (includes parametrised cases) | |
 
 ## 5. Defects found by testing
 
