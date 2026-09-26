@@ -91,3 +91,28 @@ def test_unverified_brands_get_a_warning_badge_not_the_verified_one():
     body = text[text.index("function brandBadge"):text.index("async function renderEvidenceScanScreen")]
     assert "unverified" in body and "unvalidated" in body and "detection-only" in body
     assert "badge-partial" in body and "badge-verified" in body
+
+
+def test_recordings_screen_has_batch_actions_and_progress_elements():
+    rec_text = (ROOT / "js" / "screens" / "RecordingsScreen.js").read_text(encoding="utf-8")
+    for el_id in ("btn-batch-export", "btn-batch-analytics", "btn-batch-cancel",
+                  "batch-progress-box", "batch-progress-label", "batch-progress-bar", "batch-progress-pct"):
+        assert f'id="{el_id}"' in rec_text, f"Missing element ID: {el_id}"
+    assert "Export all segments" in rec_text
+    assert "Run all analytics on exported" in rec_text
+    assert "handleBatchResult" in rec_text
+
+
+def test_api_has_batch_methods_with_concurrency_and_cancellation():
+    api_text = (ROOT / "js" / "api.js").read_text(encoding="utf-8")
+    assert "async batchExport(" in api_text
+    assert "async batchAnalytics(" in api_text
+    assert "shouldCancel" in api_text
+    assert "workers.push(worker())" in api_text
+
+
+def test_batch_bar_css_classes_defined():
+    for cls_name in (".batch-bar", ".batch-bar-controls", ".batch-progress-box",
+                     ".batch-progress-row", ".batch-progress-text", ".batch-progress-pct"):
+        assert cls_name in CSS, f"Missing CSS class: {cls_name}"
+
