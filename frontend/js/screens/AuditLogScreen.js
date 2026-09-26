@@ -38,18 +38,18 @@ async function renderAuditLogScreen(params) {
       <div class="page-header-row">
         <div>
           <div class="page-title">Hash-Chained Audit Log</div>
-          <div class="page-subtitle" style="font-family:var(--font-mono); font-size:12px;">
+          <div class="page-subtitle font-mono-sm">
             Hash<sub>n</sub> = SHA-256( Time | Action | Params | Hash<sub>n-1</sub> )
           </div>
         </div>
-        <div style="text-align:right;">
-          <span class="badge ${isValid ? 'badge-complete' : 'badge-error'}" style="font-size:12px; padding:6px 14px;">
+        <div class="text-right">
+          <span class="badge badge-lg ${isValid ? 'badge-complete' : 'badge-error'}">
             ${isValid ? `${icon('shield-check')} CHAIN VALID` : `${icon('x-circle')} TAMPERING DETECTED`}
           </span>
-          <div style="font-size:11px; color:var(--text-dim); margin-top:6px; max-width:220px; text-align:right; line-height:1.5;">
+          <div class="text-xs text-dim mt-6 max-w-220 text-right lh-base">
             ${isValid
               ? 'Every audit entry\'s hash matches the expected value — the chain has not been modified since creation.' + (auditData.seal ? '<br>Seal: ' + escapeHtml(auditData.seal.message) : '')
-              : `One or more entries do not match their expected hash. ${chainError ? '<br><span style="font-family:var(--font-mono); font-size:10px;">' + escapeHtml(chainError) + '</span>' : 'The log may have been tampered with.'}`}
+              : `One or more entries do not match their expected hash. ${chainError ? '<br><span class="font-mono-xxs">' + escapeHtml(chainError) + '</span>' : 'The log may have been tampered with.'}`}
           </div>
         </div>
       </div>
@@ -78,10 +78,10 @@ async function renderAuditLogScreen(params) {
                <tbody>
                  ${auditData.entries.map((e, idx) => `
                    <tr>
-                     <td><strong style="color:var(--text-muted);">#${idx + 1}</strong></td>
-                     <td style="font-size:12px; color:var(--text-muted); font-family:var(--font-mono);">${escapeHtml(formatIST(e.created_at))}</td>
-                     <td><span style="color:var(--accent-cyan); font-weight:600; font-size:13px;">${escapeHtml(e.action)}</span></td>
-                     <td style="font-size:11px; max-width:220px; color:var(--text-muted); font-family:var(--font-mono); word-break:break-all;">${escapeHtml(e.details || '—')}</td>
+                     <td><strong class="text-muted">#${idx + 1}</strong></td>
+                     <td class="font-mono-sm text-muted">${escapeHtml(formatIST(e.created_at))}</td>
+                     <td><span class="text-primary font-semibold text-base">${escapeHtml(e.action)}</span></td>
+                     <td class="font-mono-xs max-w-220 text-muted word-break-all">${escapeHtml(e.details || '—')}</td>
                      <td class="hash-font">${escapeHtml(e.entry_hash)}</td>
                    </tr>`).join('')}
                </tbody>

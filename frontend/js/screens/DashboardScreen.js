@@ -33,18 +33,18 @@ async function renderDashboardScreen() {
           <tbody id="cases-table-body">
             <!-- loading state -->
             <tr class="skeleton-row">
-              <td><div class="skeleton-cell" style="width:110px;"></div></td>
-              <td><div class="skeleton-cell" style="width:140px;"></div></td>
-              <td><div class="skeleton-cell" style="width:180px;"></div></td>
-              <td><div class="skeleton-cell" style="width:130px;"></div></td>
-              <td><div class="skeleton-cell" style="width:90px;"></div></td>
+              <td><div class="skeleton-cell skeleton-w-110"></div></td>
+              <td><div class="skeleton-cell skeleton-w-140"></div></td>
+              <td><div class="skeleton-cell skeleton-w-180"></div></td>
+              <td><div class="skeleton-cell skeleton-w-130"></div></td>
+              <td><div class="skeleton-cell skeleton-w-90"></div></td>
             </tr>
             <tr class="skeleton-row">
-              <td><div class="skeleton-cell" style="width:90px;"></div></td>
-              <td><div class="skeleton-cell" style="width:120px;"></div></td>
-              <td><div class="skeleton-cell" style="width:160px;"></div></td>
-              <td><div class="skeleton-cell" style="width:130px;"></div></td>
-              <td><div class="skeleton-cell" style="width:90px;"></div></td>
+              <td><div class="skeleton-cell skeleton-w-90"></div></td>
+              <td><div class="skeleton-cell skeleton-w-120"></div></td>
+              <td><div class="skeleton-cell skeleton-w-160"></div></td>
+              <td><div class="skeleton-cell skeleton-w-130"></div></td>
+              <td><div class="skeleton-cell skeleton-w-90"></div></td>
             </tr>
           </tbody>
         </table>
@@ -63,7 +63,7 @@ async function renderDashboardScreen() {
     if (cases.length === 0) {
       tbody.innerHTML = `
         <tr>
-          <td colspan="5" style="padding: 0; border: none;">
+          <td colspan="5" class="p-0 border-none">
             <div class="empty-state">
               ${emptyArt()}
               <div class="empty-state-title">No cases yet</div>
@@ -77,10 +77,10 @@ async function renderDashboardScreen() {
 
     tbody.innerHTML = cases.map(c => `
       <tr>
-        <td><strong style="color: var(--accent-cyan); font-family: var(--font-mono); font-size:13px;">${escapeHtml(c.case_number)}</strong></td>
+        <td><strong class="text-primary font-mono text-base">${escapeHtml(c.case_number)}</strong></td>
         <td>${escapeHtml(c.examiner)}</td>
-        <td style="color:var(--text-muted); font-size:12px;">${c.notes ? escapeHtml(c.notes) : '—'}</td>
-        <td style="color:var(--text-dim); font-size:12px;">${escapeHtml(formatIST(c.created_at))}</td>
+        <td class="text-muted text-sm">${c.notes ? escapeHtml(c.notes) : '—'}</td>
+        <td class="text-dim text-sm">${escapeHtml(formatIST(c.created_at))}</td>
         <td>
           <button class="btn btn-secondary btn-sm" ${navAttrs('case-detail', { caseId: c.case_id })}>Open ${icon('arrow-right')}</button>
         </td>
@@ -91,7 +91,7 @@ async function renderDashboardScreen() {
     const tbody = document.getElementById('cases-table-body');
     tbody.innerHTML = `
       <tr>
-        <td colspan="5" style="padding: 12px; border: none;">
+        <td colspan="5" class="p-12 border-none">
           <div class="error-banner">
             <div class="error-banner-icon">${icon('alert')}</div>
             <div class="error-banner-body">
@@ -114,7 +114,7 @@ async function openTwoFactorDialog() {
   }
   if (!enabled) {
     showModal('Two-factor authentication',
-      `<p style="margin:0 0 10px;">Adds a 6-digit code from an authenticator app to every login. Keep a copy of the key in a safe place:
+      `<p class="mb-10">Adds a 6-digit code from an authenticator app to every login. Keep a copy of the key in a safe place:
        if the phone is lost and no copy exists, an administrator has to clear the stored secret from the database.</p>
        <div id="tf-area"></div>`,
       [{ label: 'Set up', class: 'btn-primary', autoClose: false, onClick: async () => {
@@ -123,19 +123,19 @@ async function openTwoFactorDialog() {
             const r = await API.totpEnroll();
             area.innerHTML = `
               <div class="form-group"><label>Secret key (enter manually in the app)</label>
-                <input class="form-control" readonly value="${escapeHtml(r.secret)}" style="font-family:var(--font-mono);"></div>
+                <input class="form-control font-mono" readonly value="${escapeHtml(r.secret)}"></div>
               <div class="form-group"><label>Or the setup link</label>
-                <input class="form-control" readonly value="${escapeHtml(r.otpauth_uri)}" style="font-size:11px;"></div>
+                <input class="form-control text-xs" readonly value="${escapeHtml(r.otpauth_uri)}"></div>
               <div class="form-group"><label>Current 6-digit code</label>
                 <input id="tf-code" class="form-control" inputmode="numeric" maxlength="6"></div>
               <button id="tf-confirm" class="btn btn-primary">Confirm and enable</button>
-              <div id="tf-msg" style="margin-top:8px; font-size:13px;"></div>`;
+              <div id="tf-msg" class="mt-sm text-base"></div>`;
             document.getElementById('tf-confirm').onclick = async () => {
               const msg = document.getElementById('tf-msg');
               try {
                 const done = await API.totpConfirm(document.getElementById('tf-code').value.trim());
                 msg.innerHTML = 'Two-factor authentication is now <strong>ON</strong>. Save these one-time recovery codes offline (each works once; shown only now):' +
-                  '<pre style="margin-top:8px; padding:10px; background:var(--bg-surface-3); border-radius:6px; font-family:var(--font-mono); user-select:all;">' +
+                  '<pre class="totp-secret-box">' +
                   escapeHtml((done.recovery_codes || []).join('\n')) + '</pre>';
               } catch (e2) { msg.textContent = e2.message; }
             };
@@ -144,16 +144,16 @@ async function openTwoFactorDialog() {
        { label: 'Close', class: 'btn-secondary', onClick: () => {} }]);
   } else {
     showModal('Two-factor authentication',
-      `<p style="margin:0 0 10px;">Two-factor authentication is <strong>ON</strong>. To turn it off, enter your password and a current code.</p>
+      `<p class="mb-10">Two-factor authentication is <strong>ON</strong>. To turn it off, enter your password and a current code.</p>
        <div class="form-group"><label>Password</label><input id="tf-pw" type="password" class="form-control"></div>
        <div class="form-group"><label>Current 6-digit code (or a recovery code)</label><input id="tf-code" class="form-control" maxlength="16"></div>
-       <div id="tf-msg" style="font-size:13px;"></div>`,
+       <div id="tf-msg" class="text-base"></div>`,
       [{ label: 'New recovery codes', class: 'btn-secondary', autoClose: false, onClick: async () => {
           const msg = document.getElementById('tf-msg');
           try {
             const r = await API.totpRecoveryCodes(document.getElementById('tf-pw').value, document.getElementById('tf-code').value.trim());
             msg.innerHTML = 'New recovery codes (the old ones no longer work). Save them offline:' +
-              '<pre style="margin-top:8px; padding:10px; background:var(--bg-surface-3); border-radius:6px; font-family:var(--font-mono); user-select:all;">' +
+              '<pre class="totp-secret-box">' +
               escapeHtml(r.recovery_codes.join('\n')) + '</pre>';
           } catch (e) { msg.textContent = e.message; }
       } },

@@ -33,8 +33,8 @@ function _restoreChromeAfterAuth() {
 const _ICON_SHIELD = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.4 9 8 11 4.6-2 8-6 8-11V5l-8-3z"/><path d="m9 12 2 2 4-4"/></svg>`;
 const _ICON_LOCK = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>`;
 const _ICON_LOCK_PLUS = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><path d="M12 14v4M10 16h4"/></svg>`;
-const _ICON_WARN = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;flex:none;"><path d="M10.3 3.9 1.8 18a1 1 0 0 0 .9 1.5h18.6a1 1 0 0 0 .9-1.5L13.7 3.9a1 1 0 0 0-1.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg>`;
-const _ICON_BLOCK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;flex:none;"><circle cx="12" cy="12" r="9"/><path d="m5.5 5.5 13 13"/></svg>`;
+const _ICON_WARN = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-block-alert"><path d="M10.3 3.9 1.8 18a1 1 0 0 0 .9 1.5h18.6a1 1 0 0 0 .9-1.5L13.7 3.9a1 1 0 0 0-1.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg>`;
+const _ICON_BLOCK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-block-circle"><circle cx="12" cy="12" r="9"/><path d="m5.5 5.5 13 13"/></svg>`;
 const _ICON_CHECK = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m20 6-11 11-5-5"/></svg>`;
 
 function _brandPanelHtml() {
@@ -95,12 +95,12 @@ function renderSetupScreen() {
             />
           </div>
 
-          <div id="setup-error" style="display:none;" class="error-inline">
+          <div id="setup-error" class="error-inline hidden">
             ${_ICON_WARN}
             <span id="setup-error-msg"></span>
           </div>
 
-          <button type="submit" id="btn-setup" class="btn btn-primary btn-lg" style="width:100%; margin-top:8px;">
+          <button type="submit" id="btn-setup" class="btn btn-primary btn-lg w-full mt-sm">
             Set Password &amp; Open Tool ${icon('arrow-right')}
           </button>
         </form>
@@ -141,7 +141,7 @@ function renderSetupScreen() {
     } catch (err) {
       const isAlreadySet = err.message && err.message.toLowerCase().includes('already set');
       if (isAlreadySet) {
-        errMsg.innerHTML = 'Password is already set. <a href="#" data-nav="login" style="color:var(--accent-cyan); text-decoration:underline; font-weight:600; margin-left:6px;">Go to sign in</a>';
+        errMsg.innerHTML = 'Password is already set. <a href="#" data-nav="login" class="link-cyan">Go to sign in</a>';
       } else {
         errMsg.textContent = err.message || 'Setup failed. Please try again.';
       }
@@ -166,7 +166,7 @@ function renderLoginScreen() {
         <div class="auth-title">Welcome back</div>
         <div class="auth-subtitle">Sign in to open your cases. Everything you do here is recorded in the audit log.</div>
 
-        <div id="lockout-banner" style="display:none; margin-bottom:16px;" class="error-banner">
+        <div id="lockout-banner" class="error-banner hidden mb-lg">
           <div class="error-banner-icon">${_ICON_BLOCK}</div>
           <div class="error-banner-body">
             <div class="error-banner-title">Login temporarily locked</div>
@@ -189,18 +189,18 @@ function renderLoginScreen() {
             />
           </div>
 
-          <div class="form-group" id="totp-group" style="display:none;">
+          <div class="form-group hidden" id="totp-group">
             <label for="login-totp">Authentication code (or a one-time recovery code)</label>
             <input type="text" id="login-totp" class="form-control" maxlength="16"
                    placeholder="6-digit code, or XXXXX-XXXXX recovery code" autocomplete="one-time-code" />
           </div>
 
-          <div id="login-error" style="display:none;" class="error-inline">
+          <div id="login-error" class="error-inline hidden">
             ${_ICON_WARN}
             <span id="login-error-msg"></span>
           </div>
 
-          <button type="submit" id="btn-login" class="btn btn-primary btn-lg" style="width:100%; margin-top:8px;">
+          <button type="submit" id="btn-login" class="btn btn-primary btn-lg w-full mt-sm">
             Sign in ${icon('arrow-right')}
           </button>
         </form>

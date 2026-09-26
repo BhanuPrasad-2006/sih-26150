@@ -46,10 +46,10 @@ async function renderExportReportScreen(params) {
       <p>The Section 63(4) legal certificate pages carry a <strong>"DRAFT — NOT LEGAL ADVICE"</strong> watermark until reviewed and signed by a qualified expert.</p>
     </div>
 
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+    <div class="grid-2col">
       <div class="card">
         <div class="card-title">Included Report Sections</div>
-        <ul style="font-size: 13px; color: var(--text-muted); padding-left: 18px; line-height: 2.0; list-style-type: disc;">
+        <ul class="report-disc-list">
           <li>Cover Page with Case Reference &amp; Chain of Custody</li>
           <li>Evidence Integrity Hashes (Acquisition vs Pre-Scan)</li>
           <li>Brand Detection Results &amp; Confidence Breakdown</li>
@@ -63,10 +63,10 @@ async function renderExportReportScreen(params) {
 
       <div class="card">
         <div class="card-title">Legal Certificate Details</div>
-        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px; line-height:1.6;">
+        <p class="lead-text">
           Under Bharatiya Sakshya Adhiniyam 2023 Section 63(4) (formerly Indian Evidence Act Section 65B):
         </p>
-        <div style="background: var(--bg-surface-3); padding: 14px 16px; border-radius: 8px; font-size: 12px; font-family: var(--font-mono); color: var(--text-muted); line-height:1.8; border-left:3px solid var(--border-glow);">
+        <div class="report-notice-box">
           • <strong>Part A</strong> (Tool Automated): Hashes, software version, algorithm details.<br>
           • <strong>Part B</strong> (Investigator): Physical seizure, custody dates, signature line.
         </div>
@@ -75,23 +75,23 @@ async function renderExportReportScreen(params) {
 
     <div class="card">
       <div class="card-title">Encrypted Case Package</div>
-      <p style="font-size:12px; color:var(--text-muted); margin:0 0 10px; line-height:1.6;">
+      <p class="report-subtitle-text">
         A single passphrase-encrypted file (AES-256-GCM) with this case's exports, signed reports, analyses and audit log,
         for archiving or hand-over. Evidence images are not included. Any change to the file is detected when it is opened
         (<code>python -m backend.case_package decrypt file.sihpkg out.zip</code>). Lose the passphrase and it cannot be opened.
       </p>
-      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
-        <input type="password" id="pkg-pass" class="form-control" style="max-width:320px;" placeholder="Passphrase (12+ characters)" autocomplete="new-password">
+      <div class="d-flex gap-10 flex-wrap items-center">
+        <input type="password" id="pkg-pass" class="form-control max-w-sm" placeholder="Passphrase (12+ characters)" autocomplete="new-password">
         <button id="btn-package" class="btn btn-secondary">${icon('lock')} Create encrypted package</button>
-        <span id="pkg-msg" style="font-size:12px; color:var(--text-muted);"></span>
+        <span id="pkg-msg" class="text-sm text-muted"></span>
       </div>
     </div>
 
     <!-- Result panel — hidden until generation completes -->
-    <div id="report-result-card" style="display:none;"></div>
+    <div id="report-result-card" class="hidden"></div>
 
     <!-- Generation error — hidden until an error occurs -->
-    <div id="report-error-card" style="display:none;"></div>
+    <div id="report-error-card" class="hidden"></div>
   `;
 
   document.getElementById('btn-package').onclick = async () => {
@@ -117,8 +117,8 @@ async function renderExportReportScreen(params) {
     genBtn.disabled = true;
     genBtn.innerHTML = '<span class="btn-spinner"></span> Generating…';
 
-    document.getElementById('report-result-card').style.display = 'none';
-    document.getElementById('report-error-card').style.display  = 'none';
+    document.getElementById('report-result-card').classList.add('hidden');
+    document.getElementById('report-error-card').classList.add('hidden');
 
     try {
       const res = await API.generateReport(caseId, evidenceId);
@@ -127,15 +127,15 @@ async function renderExportReportScreen(params) {
       // Success — show inline result card
       const resultCard = document.getElementById('report-result-card');
       resultCard.innerHTML = `
-        <div class="card" style="border-color:var(--status-complete);">
-          <div class="card-title" style="color:var(--status-complete);">${icon('check-circle')} PDF Report Generated &amp; Downloaded</div>
-          <div style="font-size:13px; display:flex; flex-direction:column; gap:10px;">
-            <div class="success-inline" style="border-radius:6px; border-left:none; border:1px solid var(--status-complete);">
+        <div class="card border-complete">
+          <div class="card-title text-complete">${icon('check-circle')} PDF Report Generated &amp; Downloaded</div>
+          <div class="flex-col gap-10 text-base">
+            <div class="success-inline report-pkg-complete">
               Your browser has been triggered to download the PDF report.
             </div>
             <div>
               <div class="meta-label">Filename</div>
-              <div style="font-family:var(--font-mono); font-size:12px; color:var(--text-main); word-break:break-all; margin-top:4px;">${escapeHtml(res.filename)}</div>
+              <div class="font-mono-sm text-main word-break-all mt-xs">${escapeHtml(res.filename)}</div>
             </div>
             <div>
               <div class="meta-label">File Size</div>
@@ -143,7 +143,7 @@ async function renderExportReportScreen(params) {
             </div>
           </div>
         </div>`;
-      resultCard.style.display = 'block';
+      resultCard.classList.remove('hidden');
 
       genBtn.disabled = false;
       genBtn.innerHTML = icon('file-text') + ' Regenerate PDF Report';
@@ -159,7 +159,7 @@ async function renderExportReportScreen(params) {
             <div class="error-banner-msg">${escapeHtml(err.message)}</div>
           </div>
         </div>`;
-      errCard.style.display = 'block';
+      errCard.classList.remove('hidden');
 
       genBtn.disabled = false;
       genBtn.innerHTML = icon('file-text') + ' Retry PDF Generation';
