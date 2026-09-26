@@ -207,7 +207,8 @@ async function renderRecordingsScreen(params) {
                             : `<span class="text-sm text-dim">Not exported</span>`}
                         </td>
                         <td>${aiDetectionsCell}</td>
-                        <td>
+                        <td class="action-cell">
+                          ${isExported ? playButtonHtml(caseId, evidenceId, s.segment_id) : ''}
                           <button id="export-btn-${s.segment_id}" class="btn btn-secondary btn-sm btn-compact"
                             ${actAttrs('export', caseId, evidenceId, s.segment_id)}
                             title="${isExported ? 'Re-Export MP4 container' : 'Export video to MP4 container'}">
@@ -514,6 +515,37 @@ async function runFaceSearch(caseId) {
   }
 }
 
+/** Play button for an exported segment (shown only once an MP4 exists). */
+function playButtonHtml(caseId, evidenceId, segmentId) {
+  return `<button type="button" id="play-btn-${escapeHtml(segmentId)}" class="btn btn-primary btn-sm btn-compact"
+            ${actAttrs('play', caseId, evidenceId, segmentId)} title="Watch the exported video here">${icon('play')} Play</button>`;
+}
+
+/** Watch an exported segment inside the app (plays the exported MP4 copy; the evidence is never touched). */
+function playSegment(caseId, evidenceId, segmentId) {
+  const src = segmentVideoUrl(caseId, segmentId);
+  showModal(
+    `${icon('film')} Exported segment`,
+    `<video id="segment-player" class="video-player" controls preload="metadata" playsinline src="${escapeHtml(src)}"></video>
+     <div id="segment-player-error" class="error-inline hidden">
+       <span>${icon('alert')}</span><span id="segment-player-error-msg"></span>
+     </div>
+     <p class="form-hint mt-md">This is the exported MP4 copy, played read-only. Use the video controls to pause, seek and change speed.
+     Playing it does not change the file or the evidence image.</p>`,
+    [{ label: 'Close', class: 'btn-secondary', onClick: () => {} }]
+  );
+  const modal = document.querySelector('#modal-root .modal-content');
+  if (modal) modal.classList.add('modal-wide');
+  const video = document.getElementById('segment-player');
+  if (video) {
+    video.addEventListener('error', () => {
+      document.getElementById('segment-player-error-msg').textContent =
+        'This video could not be played. It may be missing from disk or not decodable by your browser; export the segment again or open the exported file in an external player.';
+      document.getElementById('segment-player-error').classList.remove('hidden');
+    });
+  }
+}
+
 async function exportSegment(caseId, evidenceId, segmentId, btnEl) {
   // Disable the export button and show spinner
   if (btnEl) {
@@ -548,6 +580,9 @@ async function exportSegment(caseId, evidenceId, segmentId, btnEl) {
       exportBtn.disabled = false;
       exportBtn.title = 'Re-Export MP4 container';
       exportBtn.innerHTML = `${icon('download')} Re-Export`;
+      if (!document.getElementById(`play-btn-${segmentId}`)) {
+        exportBtn.insertAdjacentHTML('beforebegin', playButtonHtml(caseId, evidenceId, segmentId));
+      }
       const row = exportBtn.closest('tr');
       if (row && row.children.length >= 7) {
         row.children[6].innerHTML = `<span class="badge badge-complete text-xxs">Exported</span>`;

@@ -46,6 +46,23 @@ async function renderExportReportScreen(params) {
       <p>The Section 63(4) legal certificate pages carry a <strong>"DRAFT — NOT LEGAL ADVICE"</strong> watermark until reviewed and signed by a qualified expert.</p>
     </div>
 
+    <details class="card cert-details" id="cert-details" open>
+      <summary class="cert-summary">
+        <span class="cert-summary-title">${iconChip('file-text')} Certificate details</span>
+        <span class="text-sm text-muted" id="cert-summary-note">Printed on the Section 63(4) pages</span>
+      </summary>
+      <p class="card-lead">
+        Details the tool cannot know: who seized the recorder and which case it belongs to. They are printed on the
+        certificate pages <strong>exactly as you enter them</strong> and marked as not verified by the tool. Anything left blank
+        is listed in the report as not provided.
+      </p>
+      <div id="cert-form" class="cert-grid"><div class="spinner spinner-sm"></div></div>
+      <div class="d-flex gap-10 flex-wrap items-center mt-lg">
+        <button type="button" id="btn-save-cert" class="btn btn-secondary btn-sm">${icon('check')} Save details</button>
+        <span id="cert-msg" class="text-sm text-muted"></span>
+      </div>
+    </details>
+
     <div class="grid-2col">
       <div class="card">
         <div class="card-title">Included Report Sections</div>
@@ -67,8 +84,8 @@ async function renderExportReportScreen(params) {
           Under Bharatiya Sakshya Adhiniyam 2023 Section 63(4) (formerly Indian Evidence Act Section 65B):
         </p>
         <div class="report-notice-box">
-          • <strong>Part A</strong> (Tool Automated): Hashes, software version, algorithm details.<br>
-          • <strong>Part B</strong> (Investigator): Physical seizure, custody dates, signature line.
+          • <strong>Part A</strong>: hashes, software version and algorithm (from the tool), plus the police station, FIR, seizure officer and recorder details you enter above.<br>
+          • <strong>Part B</strong> (Investigator): custody dates and signature lines, left blank for the signatory.
         </div>
       </div>
     </div>
@@ -93,6 +110,55 @@ async function renderExportReportScreen(params) {
     <!-- Generation error — hidden until an error occurs -->
     <div id="report-error-card" class="hidden"></div>
   `;
+
+  // ── Certificate details (examiner-entered; stored per case; printed in the PDF as entered) ──
+  const CERT_PLACEHOLDERS = {
+    police_station: 'e.g. Cyber Crime Police Station, Hyderabad',
+    fir_number: 'e.g. FIR 128/2026',
+    seizure_officer: 'e.g. A. Sharma',
+    seizure_officer_rank: 'e.g. Inspector',
+    device_make_model: 'e.g. Dahua XVR5108HS-4KL-X',
+    device_serial: 'From the label on the recorder',
+  };
+  let certFieldKeys = [];
+
+  const readCertForm = () => {
+    const values = {};
+    certFieldKeys.forEach((k) => { values[k] = document.getElementById(`cert-${k}`).value; });
+    return values;
+  };
+  const saveCertForm = async () => {
+    const r = await API.saveCertificate(caseId, readCertForm());
+    certFieldKeys.forEach((k) => { document.getElementById(`cert-${k}`).value = r.values[k] || ''; });
+    return r;
+  };
+
+  try {
+    const cert = await API.getCertificate(caseId);
+    certFieldKeys = cert.fields.map((f) => f.key);
+    document.getElementById('cert-form').innerHTML = cert.fields.map((f) => `
+      <div class="form-group mb-0">
+        <label for="cert-${escapeHtml(f.key)}">${escapeHtml(f.label)}</label>
+        <input type="text" id="cert-${escapeHtml(f.key)}" class="form-control" maxlength="200" autocomplete="off"
+          placeholder="${escapeHtml(CERT_PLACEHOLDERS[f.key] || '')}" value="${escapeHtml(cert.values[f.key] || '')}">
+      </div>`).join('');
+  } catch (err) {
+    document.getElementById('cert-form').innerHTML =
+      `<div class="error-inline"><span>${icon('alert')}</span><span>Could not load the certificate details: ${escapeHtml(err.message)}</span></div>`;
+  }
+
+  document.getElementById('btn-save-cert').onclick = async () => {
+    const msg = document.getElementById('cert-msg');
+    msg.textContent = 'Saving…';
+    try {
+      const r = await saveCertForm();
+      msg.textContent = r.missing.length ? `Saved. Still blank: ${r.missing.join(', ')}.` : 'Saved. All details provided.';
+      showToast('Certificate details saved', 'success');
+    } catch (err) {
+      msg.textContent = err.message;
+      showToast('Could not save certificate details: ' + err.message, 'error');   // toasts render text, not HTML
+    }
+  };
 
   document.getElementById('btn-package').onclick = async () => {
     const msg = document.getElementById('pkg-msg');
@@ -121,6 +187,16 @@ async function renderExportReportScreen(params) {
     document.getElementById('report-error-card').classList.add('hidden');
 
     try {
+      if (certFieldKeys.length) {
+        try {
+          await saveCertForm();
+        } catch (saveErr) {
+          showToast(`Report not generated: the certificate details could not be saved (${saveErr.message})`, 'error');
+          genBtn.disabled = false;
+          genBtn.innerHTML = icon('file-text') + ' Generate PDF Report';
+          return;
+        }
+      }
       const res = await API.generateReport(caseId, evidenceId);
       showToast(`PDF report generated: ${escapeHtml(res.filename)}`, 'success');
 

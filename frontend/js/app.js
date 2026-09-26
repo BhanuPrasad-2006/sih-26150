@@ -124,6 +124,7 @@ document.addEventListener('click', (e) => {
     face: runFaceDetection,
     object: runObjectDetection,
     export: exportSegment,
+    play: playSegment,
   };
   const fn = actions[el.dataset.act];
   if (fn) fn(el.dataset.case, el.dataset.evidence, el.dataset.segment, el);

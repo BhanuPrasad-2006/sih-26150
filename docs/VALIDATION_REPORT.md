@@ -9,7 +9,7 @@ SIH26150 · DVR/NVR Forensic Analysis Tool · state of `main` after the last com
 | Has the tool been validated on a **real DVR/NVR disk**? | **No.** No real recorder disk was available. |
 | What was validated, then? | The software's behaviour on **disk images we built ourselves** from published format descriptions and from **real ffmpeg-encoded video**, plus the forensic bookkeeping (hashing, audit, reports, auth). |
 | Can any recovery rate or accuracy be quoted for real recorders? | **No.** Numbers from synthetic disks describe our test disks, not recorders. |
-| Automated tests | **329 passing** (321 without a live Supabase connection; the other 8 exercise the Postgres backend). 79 of them are security tests (headers, strict CSP, Host/Origin, audit seals, encryption, 2FA and recovery codes, signing, encrypted packages, HTTPS, sandbox, parser fuzzing). |
+| Automated tests | **365 passing** (357 without a live Supabase connection; the other 8 exercise the Postgres backend). 79 of them are security tests (headers, strict CSP, Host/Origin, audit seals, encryption, 2FA and recovery codes, signing, encrypted packages, HTTPS, sandbox, parser fuzzing). |
 | Trust level of every vendor format (see `format_verification.md`) | **L2 at best** (corroborated by sources and tested on synthetic data). **None is L3** (validated on a real disk). |
 
 This report therefore documents *verification* (does the code do what it is specified to do) and does **not** claim *validation* (does it work on the real thing). Section 7 gives the protocol for turning it into real validation.
@@ -69,7 +69,7 @@ Independence caveat: the disk builders and the parsers were written by the same 
 | test_dahua.py, test_timeline.py | 4 each | DHAV validation, timeline |
 | test_database.py, test_hikvision.py, test_matrix.py, test_uniview.py | 3 each | Storage, plugin detection |
 | test_reconstructor.py | 1 | Reconstruction |
-| test_security.py | 28 | Headers, strict CSP, Host/Origin, docs auth, path allow-list, audit seal, model integrity, escaping |
+| test_security.py | 29 | Headers, strict CSP, Host/Origin, docs auth, path allow-list, audit seal, model integrity, escaping |
 | test_security_level2.py | 18 | Encryption at rest, TOTP (RFC vectors, replay), signed reports, upload cap |
 | test_sandbox.py | 8 | ffmpeg limits, scrubbed environment, protocol whitelist |
 | test_fuzz_parsers.py | 5 | Mutation fuzzing of all parsers, oracle self-tests |
@@ -77,8 +77,10 @@ Independence caveat: the disk builders and the parsers were written by the same 
 | test_validation_kit.py | 12 | Validation kit: verdicts, reports, evidence untouched, exit codes, parity with the app scan |
 | test_kit_package.py | 7 | Downloadable kit: reproducible zip, minimal contents, runs with no web dependencies, page/zip/hash consistent |
 | test_hikvision_real_disk.py | 19 | Values from a real 1 TB Hikvision disk's published parse: master sector, entries, 16-byte shift, page-structured index, OFNI times |
-| test_frontend_ui.py | 9 | Interface guards: every icon exists, CSS variables defined, no emoji, upload element IDs kept, no auto-redirect, warning badges |
-| **Total** | **329** (includes parametrised cases) | |
+| test_frontend_ui.py | 24 | Interface guards: every icon exists, CSS variables defined, no emoji, upload element IDs kept, no auto-redirect, warning badges |
+| test_playback.py | 8 | In-app playback: range requests, refuses files outside the case exports folder, needs a session, export untouched |
+| test_certificate_meta.py | 12 | Certificate details: cleaning, per-case storage, API, audit entry without values, what the PDF prints |
+| **Total** | **365** (includes parametrised cases) | |
 
 ## 5. Defects found by testing
 

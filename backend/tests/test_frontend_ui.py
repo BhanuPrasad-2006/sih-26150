@@ -209,3 +209,25 @@ def test_header_has_case_context_pill():
 
 
 
+
+
+def test_recordings_screen_offers_playback_only_for_exported_segments():
+    text = (ROOT / "js" / "screens" / "RecordingsScreen.js").read_text(encoding="utf-8")
+    assert "function playSegment" in text and "segmentVideoUrl(" in text
+    assert "${isExported ? playButtonHtml(" in text, "Play must only be shown once an MP4 exists"
+    app = (ROOT / "js" / "app.js").read_text(encoding="utf-8")
+    assert "play: playSegment" in app
+    assert "/video/" in (ROOT / "js" / "api.js").read_text(encoding="utf-8")
+
+
+def test_generic_carving_gets_an_explanation_instead_of_a_bare_zero_percent():
+    text = (ROOT / "js" / "screens" / "EvidenceScanScreen.js").read_text(encoding="utf-8")
+    assert "Generic stream carving active" in text and "What this means" in text
+    assert "Confidence: <strong>" not in text
+
+
+def test_export_screen_has_the_certificate_details_form_and_saves_before_generating():
+    text = (ROOT / "js" / "screens" / "ExportReportScreen.js").read_text(encoding="utf-8")
+    assert 'id="cert-form"' in text and 'id="btn-save-cert"' in text
+    assert text.index("await saveCertForm()") < text.index("await API.generateReport(")
+    assert "escapeHtml(f.label)" in text and "escapeHtml(cert.values[f.key]" in text

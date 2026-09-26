@@ -40,6 +40,7 @@ from reportlab.platypus import (
     TableStyle,
 )
 
+from backend import certificate_meta
 from backend.models import AuditEntry, Case, Evidence, LogEvent, Segment, SegmentStatus
 
 # ── Colours ───────────────────────────────────────────────────────────────────
@@ -227,6 +228,7 @@ def generate_report(
     accuracy_results: Optional[list] = None,
     object_results: Optional[list] = None,
     audit_seal: Optional[dict] = None,
+    certificate_details: Optional[dict] = None,
 ) -> None:
     """
     Generate a PDF forensic report at *output_path*.
@@ -239,9 +241,15 @@ def generate_report(
 
     *accuracy_results* is the list of stored ground-truth comparisons (backend/accuracy.py). When empty,
     the report states that recovery was NOT measured; it never invents a percentage.
+
+    *certificate_details* holds the examiner-entered police station, FIR number, seizure officer and recorder
+    identifiers (backend/certificate_meta.py). They are printed as entered and labelled unverified; blanks are listed.
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
     S = _styles()
+    cert = certificate_meta.clean(certificate_details)
+    cert_missing = certificate_meta.missing_labels(cert)
+    NOT_GIVEN = "not provided"
 
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     report_reference = f"RPT-{case.case_number}-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
@@ -270,6 +278,8 @@ def generate_report(
             ["Report date",  generated_at],
             ["Tool version", f"{TOOL_NAME} {TOOL_VERSION}"],
             ["Case notes",   case.notes or "—"],
+            ["Police station / agency", cert["police_station"] or NOT_GIVEN],
+            ["FIR / crime reference", cert["fir_number"] or NOT_GIVEN],
         ]
         elements.append(Table(cover_data, colWidths=[5 * cm, 12 * cm], style=_TBL_HDR))
         elements.append(Spacer(1, 0.4 * cm))
@@ -437,6 +447,11 @@ Recovery accuracy must be established on real recorders before figures are relie
         part_a_data = [
             ["Field",                        "Pre-filled value"],
             ["Report reference",             report_reference],
+            ["Police station / agency",      cert["police_station"] or NOT_GIVEN],
+            ["FIR / crime reference",        cert["fir_number"] or NOT_GIVEN],
+            ["Seizure officer",              ", ".join(x for x in (cert["seizure_officer"], cert["seizure_officer_rank"]) if x) or NOT_GIVEN],
+            ["Recorder make and model",      cert["device_make_model"] or NOT_GIVEN],
+            ["Recorder serial number",       cert["device_serial"] or NOT_GIVEN],
             ["Device description",           f"DVR/NVR disk image, brand: {evidence.brand or 'Unknown'}"],
             ["Hash algorithm",               "SHA-256"],
             ["Hash value of the record",     evidence.sha256_before or "—"],
@@ -447,6 +462,12 @@ Recovery accuracy must be established on real recorders before figures are relie
             ["Date",                         "____________________________ (to be signed)"],
         ]
         elements.append(Table(part_a_data, colWidths=[7*cm, 10*cm], style=_TBL_HDR))
+        elements.append(Paragraph(
+            "Police station, FIR, seizure officer and recorder details are as entered by the examiner; the tool "
+            "has not verified them."
+            + (f" Not provided: {', '.join(cert_missing)}." if cert_missing else ""),
+            S["small"],
+        ))
         elements.append(Spacer(1, 0.3 * cm))
 
         elements.append(Paragraph("Part B — Expert Certificate (technical fields only)", S["h2"]))
