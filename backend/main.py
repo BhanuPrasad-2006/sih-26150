@@ -388,7 +388,13 @@ async def _run_scan(case_id: str, evidence_id: str) -> None:
             )
 
         img = await asyncio.to_thread(EvidenceImage.open, Path(ev.path), _progress_cb)
-        _open_images[case_id] = img
+        old = _open_images.get(evidence_id)
+        if old is not None:
+            try:
+                old.close()
+            except Exception:
+                pass
+        _open_images[evidence_id] = img          # keyed by evidence, so several images in one case do not clash
         ev.sha256_before = img.sha256_before
         ev.md5_before    = img.md5_before
         ev.size_bytes    = img.size
@@ -995,12 +1001,35 @@ async def upload_evidence(
     return ev
 
 
-@app.post("/api/cases/{case_id}/scan")
-async def start_scan(case_id: str, bg: BackgroundTasks):
+async def _evidence_for(case_id: str, evidence_id: Optional[str] = None) -> Evidence:
+    """The evidence item a request is about: the one named, or (for older callers) the most recently loaded."""
     evs = await asyncio.to_thread(db.list_evidence_for_case, case_id)
     if not evs:
-        raise HTTPException(400, "No evidence loaded for this case")
-    ev = evs[-1]  # scan the most recently loaded evidence
+        raise HTTPException(400, "No evidence for this case")
+    if not evidence_id:
+        return evs[-1]
+    ev = next((e for e in evs if e.evidence_id == evidence_id), None)
+    if not ev:
+        raise HTTPException(404, f"Evidence '{evidence_id}' not found in case '{case_id}'")
+    return ev
+
+
+async def _find_segment(case_id: str, segment_id: str):
+    """(evidence, segment) for a segment id, searching every evidence item in the case (not just the newest)."""
+    evs = await asyncio.to_thread(db.list_evidence_for_case, case_id)
+    if not evs:
+        raise HTTPException(400, "No evidence for this case")
+    for ev in evs:
+        segments = await asyncio.to_thread(db.list_segments_for_evidence, ev.evidence_id)
+        seg = next((s for s in segments if s.segment_id == segment_id), None)
+        if seg:
+            return ev, seg
+    raise HTTPException(404, "Segment not found")
+
+
+@app.post("/api/cases/{case_id}/scan")
+async def start_scan(case_id: str, bg: BackgroundTasks, evidence_id: Optional[str] = None):
+    ev = await _evidence_for(case_id, evidence_id)      # the image named in the request, else the newest
 
     if case_id not in _progress_queues:
         _progress_queues[case_id] = asyncio.Queue()
@@ -1101,16 +1130,9 @@ async def case_correlation(case_id: str, window_seconds: float = 5.0):
 
 @app.post("/api/cases/{case_id}/export/{segment_id}")
 async def export_one_segment(case_id: str, segment_id: str):
-    evs = await asyncio.to_thread(db.list_evidence_for_case, case_id)
-    if not evs:
-        raise HTTPException(400, "No evidence for this case")
-    ev = evs[-1]
-    segments = await asyncio.to_thread(db.list_segments_for_evidence, ev.evidence_id)
-    seg = next((s for s in segments if s.segment_id == segment_id), None)
-    if not seg:
-        raise HTTPException(404, "Segment not found")
+    ev, seg = await _find_segment(case_id, segment_id)
 
-    img = _open_images.get(case_id)
+    img = _open_images.get(ev.evidence_id)
     if not img or img.mm is None:
         raise HTTPException(400, "Evidence image is not loaded; re-run scan first")
 
@@ -1159,14 +1181,7 @@ async def detect_segment_motion(case_id: str, segment_id: str):
     Optional post-export Basic Motion Detection.
     Decoupled from carving/recovery — operates read-only on exported video files.
     """
-    evs = await asyncio.to_thread(db.list_evidence_for_case, case_id)
-    if not evs:
-        raise HTTPException(400, "No evidence for this case")
-    ev = evs[-1]
-    segments = await asyncio.to_thread(db.list_segments_for_evidence, ev.evidence_id)
-    seg = next((s for s in segments if s.segment_id == segment_id), None)
-    if not seg:
-        raise HTTPException(404, "Segment not found")
+    ev, seg = await _find_segment(case_id, segment_id)
 
     if not seg.export_path or not Path(seg.export_path).is_file():
         raise HTTPException(400, "Segment has not been exported yet. Export to MP4 before running motion detection.")
@@ -1202,14 +1217,7 @@ async def detect_segment_faces(case_id: str, segment_id: str):
     Decoupled from carving/recovery — operates read-only on exported video files.
     Detection only: no face recognition/identification is performed or claimed.
     """
-    evs = await asyncio.to_thread(db.list_evidence_for_case, case_id)
-    if not evs:
-        raise HTTPException(400, "No evidence for this case")
-    ev = evs[-1]
-    segments = await asyncio.to_thread(db.list_segments_for_evidence, ev.evidence_id)
-    seg = next((s for s in segments if s.segment_id == segment_id), None)
-    if not seg:
-        raise HTTPException(404, "Segment not found")
+    ev, seg = await _find_segment(case_id, segment_id)
 
     if not seg.export_path or not Path(seg.export_path).is_file():
         raise HTTPException(400, "Segment has not been exported yet. Export to MP4 before running face detection.")
@@ -1252,9 +1260,8 @@ async def detect_segment_faces(case_id: str, segment_id: str):
 @app.post("/api/cases/{case_id}/face-search")
 async def search_faces(case_id: str, reference_image: UploadFile = File(...)):
     """
-    Search for faces similar to an uploaded reference photo across every
-    segment in this case that has already been indexed (see
-    detect_segment_faces, which indexes as a side effect).
+    Search for faces similar to an uploaded reference photo across every EXPORTED segment in this case.
+    Segments not yet indexed are indexed on the fly (detect_segment_faces also indexes, as a side effect).
 
     IMPORTANT: results are ranked by similarity, NOT confirmed identities.
     See backend/face_search.py's module docstring for a real false-match
@@ -1271,10 +1278,23 @@ async def search_faces(case_id: str, reference_image: UploadFile = File(...)):
         raise HTTPException(400, "No face was detected in the uploaded reference photo.")
 
     evidence = await asyncio.to_thread(db.list_evidence_for_case, case_id)
-    segment_ids: list[str] = []
+    all_segments = []
     for ev_item in evidence:
-        segs = await asyncio.to_thread(db.list_segments_for_evidence, ev_item.evidence_id)
-        segment_ids.extend(s.segment_id for s in segs)
+        all_segments.extend(await asyncio.to_thread(db.list_segments_for_evidence, ev_item.evidence_id))
+    segment_ids = [s.segment_id for s in all_segments]
+    exported = [s for s in all_segments if s.export_path and Path(s.export_path).is_file()]
+
+    # Make every exported segment searchable without a separate "Check Faces" step: index the ones not indexed yet
+    # (segments already checked and found to hold no face are skipped).
+    known = {r["segment_id"] for r in await asyncio.to_thread(db.list_face_embeddings_for_segments, [s.segment_id for s in exported])}
+    newly_indexed = 0
+    for s in exported:
+        if s.segment_id in known or s.face_detected is False:
+            continue
+        records = await asyncio.to_thread(index_faces_for_search, s.export_path)
+        if records:
+            await asyncio.to_thread(db.save_face_embeddings, s.segment_id, records)
+            newly_indexed += 1
 
     raw_records = await asyncio.to_thread(db.list_face_embeddings_for_segments, segment_ids)
     candidates = [
@@ -1288,7 +1308,21 @@ async def search_faces(case_id: str, reference_image: UploadFile = File(...)):
 
     matches = await asyncio.to_thread(face_search.rank_matches, reference_embedding, candidates)
 
-    _audit(case_id, "face_search", f"candidates_searched={len(candidates)} matches_returned={len(matches)}")
+    # One line per exported segment: where the reference face was (or was not) seen.
+    best: dict[str, float] = {}
+    for m in matches:
+        best[m.segment_id] = max(best.get(m.segment_id, -1.0), m.similarity)
+    indexed_ids = {c[0] for c in candidates}
+    per_segment = [{
+        "segment_id": s.segment_id, "camera": s.camera,
+        "start_time": s.start_time.isoformat() if s.start_time else None,
+        "faces_indexed": s.segment_id in indexed_ids,
+        "best_similarity": round(best[s.segment_id], 4) if s.segment_id in best else None,
+        "above_reference_threshold": best.get(s.segment_id, -1.0) >= face_search.REFERENCE_MATCH_THRESHOLD,
+    } for s in exported]
+
+    _audit(case_id, "face_search",
+           f"candidates_searched={len(candidates)} matches_returned={len(matches)} newly_indexed_segments={newly_indexed}")
 
     return {
         "label": face_search.FACE_SEARCH_LABEL,
@@ -1298,19 +1332,19 @@ async def search_faces(case_id: str, reference_image: UploadFile = File(...)):
             "matches. Different people can score above the reference threshold shown "
             "here — always corroborate with independent evidence before relying on a match."
         ),
-        "segments_indexed": len(set(segment_ids) & {c[0] for c in candidates}),
+        "segments_indexed": len(set(segment_ids) & indexed_ids),
+        "exported_segments": len(exported),
+        "total_segments": len(all_segments),
+        "per_segment": per_segment,
         "matches": [m.to_dict() for m in matches],
     }
 
 
 @app.get("/api/cases/{case_id}/verify")
-async def verify_evidence(case_id: str):
+async def verify_evidence(case_id: str, evidence_id: Optional[str] = None):
     # Re-open the evidence file by its stored path rather than relying on an
     # in-memory handle from a previous scan (which is lost on server restart).
-    evs = await asyncio.to_thread(db.list_evidence_for_case, case_id)
-    if not evs:
-        raise HTTPException(400, "No evidence for this case")
-    ev = evs[-1]
+    ev = await _evidence_for(case_id, evidence_id)
     if not ev.sha256_before:
         raise HTTPException(400, "Evidence has not been hashed yet — run a scan first")
     if not Path(ev.path).is_file():
@@ -1387,14 +1421,7 @@ async def run_accuracy(
     if not (has_video or has_log or has_orig):
         raise HTTPException(400, "Supply at least one ground truth: a video, a recording log, or the original disk image.")
 
-    evs = await asyncio.to_thread(db.list_evidence_for_case, case_id)
-    if not evs:
-        raise HTTPException(400, "No evidence for this case")
-    ev = evs[-1]
-    segments = await asyncio.to_thread(db.list_segments_for_evidence, ev.evidence_id)
-    seg = next((s for s in segments if s.segment_id == segment_id), None)
-    if seg is None:
-        raise HTTPException(404, "Segment not found")
+    ev, seg = await _find_segment(case_id, segment_id)
 
     log_entries = None
     if has_log:
@@ -1416,7 +1443,7 @@ async def run_accuracy(
                 await out.write(chunk)
 
     inputs = accuracy_mod.AccuracyInputs(
-        segment=seg, all_segments=segments, truth_file=truth_path, log_entries=log_entries,
+        segment=seg, all_segments=await asyncio.to_thread(db.list_segments_for_evidence, ev.evidence_id), truth_file=truth_path, log_entries=log_entries,
         log_clock=log_clock, original_image=original_image_path.strip() if has_orig else None,
         mode=mode, device_utc_offset_minutes=ev.device_utc_offset_minutes,
     )
@@ -1468,13 +1495,7 @@ async def detect_segment_objects(case_id: str, segment_id: str):
     Optional post-export object detection (YOLOX when a model file is present, otherwise the
     classical HOG person detector). Read-only on the exported video; result stored with the case.
     """
-    evs = await asyncio.to_thread(db.list_evidence_for_case, case_id)
-    if not evs:
-        raise HTTPException(400, "No evidence for this case")
-    segments = await asyncio.to_thread(db.list_segments_for_evidence, evs[-1].evidence_id)
-    seg = next((s for s in segments if s.segment_id == segment_id), None)
-    if not seg:
-        raise HTTPException(404, "Segment not found")
+    _, seg = await _find_segment(case_id, segment_id)
     if not seg.export_path or not Path(seg.export_path).is_file():
         raise HTTPException(400, "Segment has not been exported yet. Export to MP4 before running object detection.")
 
@@ -1635,14 +1656,11 @@ async def save_certificate_details(case_id: str, req: CertificateDetailsRequest)
 
 
 @app.get("/api/cases/{case_id}/report")
-async def get_report(case_id: str):
+async def get_report(case_id: str, evidence_id: Optional[str] = None):
     case = await asyncio.to_thread(db.get_case, case_id)
     if not case:
         raise HTTPException(404, "Case not found")
-    evs = await asyncio.to_thread(db.list_evidence_for_case, case_id)
-    if not evs:
-        raise HTTPException(400, "No evidence for this case")
-    ev = evs[-1]
+    ev = await _evidence_for(case_id, evidence_id)
     segments  = await asyncio.to_thread(db.list_segments_for_evidence, ev.evidence_id)
     log_evts  = await asyncio.to_thread(db.list_log_events, ev.evidence_id)
     audit_log = _get_case_audit_log(case_id)

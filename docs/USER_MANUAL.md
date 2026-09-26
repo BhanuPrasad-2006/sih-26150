@@ -95,6 +95,7 @@ Each row is a segment: camera, time range (UTC when an offset was set), frame co
 The notes column states the basis (indexed / carved, whether timestamps came from the disk, anything unavailable). Actions per segment:
 
 - **Export MP4** — lossless stream copy (no re-encoding) with `ffprobe` validation and a file hash. Analytics require an export first.
+- **Search for a person** — upload a reference photo under *Search for a Person Across Recordings*. Every **exported** segment is checked automatically (no separate Faces step). The result is one line per camera with the best similarity and whether it is above or below the match threshold, plus a list of every matching face. These are candidates for a person to review, never confirmed identities.
 - **Play** — appears once a segment is exported. It plays the exported MP4 copy in a window inside the app (pause, seek, speed, full screen). Playing never changes the file or the evidence image. If your browser cannot decode the video, open the exported file in an external player.
 - **Check Motion** — frame differencing; shows *Basic Motion Detection*, not AI.
 - **Check Faces** — YuNet face detection (presence and count only, no identity) and indexing for search.

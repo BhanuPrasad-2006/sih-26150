@@ -254,3 +254,25 @@ def test_scan_screen_shows_a_real_status_and_a_clear_failure_panel():
     assert "function showScanFailure" in text and "scan-title-spinner" in text
     assert "Scan failed: ${escapeHtml(errMsg)}" not in text, "the raw technical message must not be the only thing shown"
     assert "escapeHtml(evLabel)" in text and "escapeHtml(evPath)" in text     # file names are user-controlled
+
+
+def test_export_turns_the_export_required_cell_into_the_run_buttons_without_a_reload():
+    text = (ROOT / "js" / "screens" / "RecordingsScreen.js").read_text(encoding="utf-8")
+    assert "function aiDetectionsCellHtml" in text
+    after_export = text[text.index("async function exportSegment"):]
+    assert "aiDetectionsCellHtml({ segment_id: segmentId }, true" in after_export, \
+        "after Export the AI cell must get its Motion/Faces/Objects buttons, not keep saying 'Export required'"
+
+
+def test_face_search_shows_one_line_per_camera_and_explains_empty_results():
+    text = (ROOT / "js" / "screens" / "RecordingsScreen.js").read_text(encoding="utf-8")
+    assert "res.per_segment" in text and "No similar face found" in text and "Nothing to search yet" in text
+    assert "run \"Check Faces\"" not in text
+
+
+def test_scan_verify_and_report_pass_the_evidence_id():
+    api = (ROOT / "js" / "api.js").read_text(encoding="utf-8")
+    for name in ("async startScan(caseId, evidenceId)", "async verifyEvidenceIntegrity(caseId, evidenceId)",
+                 "async generateReport(caseId, evidenceId)"):
+        assert name in api
+    assert api.count("evidence_id=${encodeURIComponent(evidenceId)}") >= 3

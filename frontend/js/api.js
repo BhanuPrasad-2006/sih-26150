@@ -336,8 +336,8 @@ const API = {
     });
   },
 
-  async startScan(caseId) {
-    const url = `/api/cases/${caseId}/scan`;
+  async startScan(caseId, evidenceId) {
+    const url = `/api/cases/${caseId}/scan` + (evidenceId ? `?evidence_id=${encodeURIComponent(evidenceId)}` : '');
     const res = await fetch(url, { method: 'POST' });
     await this._checkOk(res, url);
     return res.json();
@@ -657,8 +657,8 @@ const API = {
     return res.json();
   },
 
-  async verifyEvidenceIntegrity(caseId) {
-    const url = `/api/cases/${caseId}/verify`;
+  async verifyEvidenceIntegrity(caseId, evidenceId) {
+    const url = `/api/cases/${caseId}/verify` + (evidenceId ? `?evidence_id=${encodeURIComponent(evidenceId)}` : '');
     const res = await fetch(url);
     await this._checkOk(res, url);
     const data = await res.json();
@@ -689,8 +689,8 @@ const API = {
     return res.json();
   },
 
-  async generateReport(caseId) {
-    const url = `/api/cases/${caseId}/report`;
+  async generateReport(caseId, evidenceId) {
+    const url = `/api/cases/${caseId}/report` + (evidenceId ? `?evidence_id=${encodeURIComponent(evidenceId)}` : '');
     const res = await fetch(url);
     await this._checkOk(res, url);
     const blob = await res.blob();

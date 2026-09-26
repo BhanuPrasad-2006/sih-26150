@@ -101,10 +101,12 @@ Use this one with the **accuracy** test below: the tool looks fine until you com
 
 ## Face search (find a person across the recordings)
 
-1. On **Recordings**, export both segments, then press **Faces** on each (face search only looks at segments already checked).
+1. On **Recordings**, **export** both segments (press **Export all segments**). Face search only looks at exported videos, and checks them
+   for you: there is no separate "Faces" step needed.
 2. Under **Search for a Person Across Recordings**, choose `people/person_A.png` and press Search. The tool's match threshold is {thr}.
-   - Expected on `dahua_deleted.dd`: person A matches the **Camera 1 recording only** (similarity about {r['dahua_deleted.dd']['segments'][0]['best_similarity']['A']:.2f});
-     the Camera 2 recording scores about {r['dahua_deleted.dd']['segments'][1]['best_similarity']['A']:.2f}, below the threshold, which is correct (A never appears there).
+   The result is one line per camera: the best similarity and whether it is above or below the threshold.
+   - Expected on `dahua_deleted.dd`: person A is **above** the threshold in the Camera 1 recording only (best similarity about {r['dahua_deleted.dd']['segments'][0]['best_similarity']['A']:.2f});
+     the Camera 2 recording scores about {r['dahua_deleted.dd']['segments'][1]['best_similarity']['A']:.2f}, **below** the threshold, which is correct (A never appears there).
 3. Search with `person_B.png`: B matches **both** recordings.
 4. The two faces score about {sims['A-B']:.2f} against each other, so the model tells them apart easily.
 
@@ -135,6 +137,7 @@ TP-Link has no times, so its single segment appears under "not positioned" and t
 
 ## Other checks worth doing
 
+- **Faces / Objects:** after exporting, the **Faces** button reports how many faces were seen in the sampled frames (up to 2 in the Camera 1 recording); **Objects** finds a "person" in the cartoon scene.
 - **Motion:** press Motion on an exported segment. The people move, so motion should be detected.
 - **Object detection:** do not expect much. The people are cartoons and the object model was trained on photographs.
 - **Encrypted package:** on Report & Certificate, create a package with a 12+ character passphrase; then open it with

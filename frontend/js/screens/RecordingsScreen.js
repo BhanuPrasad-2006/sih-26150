@@ -35,6 +35,49 @@ function segmentStatusMeta(status) {
   }
 }
 
+/** The "AI detections" cell of a segment row: run-buttons (or results) once exported, a hint before. */
+function aiDetectionsCellHtml(s, isExported, caseId, evidenceId, objectResults) {
+  if (!isExported) {
+    return `<div class="ai-pills"><span class="ai-pill ai-pill-disabled" data-tooltip="Export MP4 first to analyze video">${icon('film')} Export required</span></div>`;
+  }
+    // Motion Pill
+    let motionPill = '';
+    if (s.motion_detected === true) {
+      motionPill = `<button type="button" class="ai-pill ai-pill-active" ${actAttrs('motion', caseId, evidenceId, s.segment_id)} data-tooltip="${escapeHtml(s.motion_details || 'Basic Motion Detection: Motion detected')}">${icon('activity')} Motion</button>`;
+    } else if (s.motion_detected === false) {
+      motionPill = `<button type="button" class="ai-pill ai-pill-muted" ${actAttrs('motion', caseId, evidenceId, s.segment_id)} data-tooltip="${escapeHtml(s.motion_details || 'Basic Motion Detection: No significant motion detected')}">${icon('activity')} No motion</button>`;
+    } else {
+      motionPill = `<button type="button" class="ai-pill" ${actAttrs('motion', caseId, evidenceId, s.segment_id)} data-tooltip="Run Basic Motion Detection">${icon('play')} Motion</button>`;
+    }
+
+    // Face Pill
+    let facePill = '';
+    if (s.face_detected === true) {
+      facePill = `<button type="button" class="ai-pill ai-pill-active" ${actAttrs('face', caseId, evidenceId, s.segment_id)} data-tooltip="${escapeHtml(s.face_detection_details || 'AI-Based Face Detection: Face(s) detected')}">${icon('scan-face')} Faces</button>`;
+    } else if (s.face_detected === false) {
+      facePill = `<button type="button" class="ai-pill ai-pill-muted" ${actAttrs('face', caseId, evidenceId, s.segment_id)} data-tooltip="${escapeHtml(s.face_detection_details || 'AI-Based Face Detection: No faces detected')}">${icon('scan-face')} No faces</button>`;
+    } else {
+      facePill = `<button type="button" class="ai-pill" ${actAttrs('face', caseId, evidenceId, s.segment_id)} data-tooltip="Run AI-Based Face Detection">${icon('play')} Faces</button>`;
+    }
+
+    // Object Pill
+    let objectPill = '';
+    const o = objectResults[s.segment_id];
+    if (o) {
+      const names = Object.keys(o.classes || {});
+      if (names.length > 0) {
+        const objLabel = names.slice(0, 2).join(', ') + (names.length > 2 ? '…' : '');
+        objectPill = `<button type="button" class="ai-pill ai-pill-active" ${actAttrs('object', caseId, evidenceId, s.segment_id)} data-tooltip="${escapeHtml(o.summary || '')}">${icon('box')} ${escapeHtml(objLabel)}</button>`;
+      } else {
+        objectPill = `<button type="button" class="ai-pill ai-pill-muted" ${actAttrs('object', caseId, evidenceId, s.segment_id)} data-tooltip="${escapeHtml(o.summary || 'None found')}">${icon('box')} No objects</button>`;
+      }
+    } else {
+      objectPill = `<button type="button" class="ai-pill" ${actAttrs('object', caseId, evidenceId, s.segment_id)} data-tooltip="Run Object Detection">${icon('play')} Objects</button>`;
+    }
+
+  return `<div class="ai-pills">${motionPill}${facePill}${objectPill}</div>`;
+}
+
 async function renderRecordingsScreen(params) {
   const { caseId, evidenceId } = params;
   const root = document.getElementById('content-root');
@@ -149,47 +192,7 @@ async function renderRecordingsScreen(params) {
                    const endStr   = s.end_time   ? new Date(s.end_time).toISOString().replace('T', ' ').substring(0, 19) : '—';
                    const isExported = !!s.export_path;
                    const hashDisplay = s.sha256 ? s.sha256.substring(0, 12) + '…' : '—';
-                    let aiDetectionsCell = '';
-                    if (!isExported) {
-                      aiDetectionsCell = `<div class="ai-pills"><span class="ai-pill ai-pill-disabled" data-tooltip="Export MP4 first to analyze video">${icon('film')} Export required</span></div>`;
-                    } else {
-                      // Motion Pill
-                      let motionPill = '';
-                      if (s.motion_detected === true) {
-                        motionPill = `<button type="button" class="ai-pill ai-pill-active" ${actAttrs('motion', caseId, evidenceId, s.segment_id)} data-tooltip="${escapeHtml(s.motion_details || 'Basic Motion Detection: Motion detected')}">${icon('activity')} Motion</button>`;
-                      } else if (s.motion_detected === false) {
-                        motionPill = `<button type="button" class="ai-pill ai-pill-muted" ${actAttrs('motion', caseId, evidenceId, s.segment_id)} data-tooltip="${escapeHtml(s.motion_details || 'Basic Motion Detection: No significant motion detected')}">${icon('activity')} No motion</button>`;
-                      } else {
-                        motionPill = `<button type="button" class="ai-pill" ${actAttrs('motion', caseId, evidenceId, s.segment_id)} data-tooltip="Run Basic Motion Detection">${icon('play')} Motion</button>`;
-                      }
-
-                      // Face Pill
-                      let facePill = '';
-                      if (s.face_detected === true) {
-                        facePill = `<button type="button" class="ai-pill ai-pill-active" ${actAttrs('face', caseId, evidenceId, s.segment_id)} data-tooltip="${escapeHtml(s.face_detection_details || 'AI-Based Face Detection: Face(s) detected')}">${icon('scan-face')} Faces</button>`;
-                      } else if (s.face_detected === false) {
-                        facePill = `<button type="button" class="ai-pill ai-pill-muted" ${actAttrs('face', caseId, evidenceId, s.segment_id)} data-tooltip="${escapeHtml(s.face_detection_details || 'AI-Based Face Detection: No faces detected')}">${icon('scan-face')} No faces</button>`;
-                      } else {
-                        facePill = `<button type="button" class="ai-pill" ${actAttrs('face', caseId, evidenceId, s.segment_id)} data-tooltip="Run AI-Based Face Detection">${icon('play')} Faces</button>`;
-                      }
-
-                      // Object Pill
-                      let objectPill = '';
-                      const o = objectResults[s.segment_id];
-                      if (o) {
-                        const names = Object.keys(o.classes || {});
-                        if (names.length > 0) {
-                          const objLabel = names.slice(0, 2).join(', ') + (names.length > 2 ? '…' : '');
-                          objectPill = `<button type="button" class="ai-pill ai-pill-active" ${actAttrs('object', caseId, evidenceId, s.segment_id)} data-tooltip="${escapeHtml(o.summary || '')}">${icon('box')} ${escapeHtml(objLabel)}</button>`;
-                        } else {
-                          objectPill = `<button type="button" class="ai-pill ai-pill-muted" ${actAttrs('object', caseId, evidenceId, s.segment_id)} data-tooltip="${escapeHtml(o.summary || 'None found')}">${icon('box')} No objects</button>`;
-                        }
-                      } else {
-                        objectPill = `<button type="button" class="ai-pill" ${actAttrs('object', caseId, evidenceId, s.segment_id)} data-tooltip="Run Object Detection">${icon('play')} Objects</button>`;
-                      }
-
-                      aiDetectionsCell = `<div class="ai-pills">${motionPill}${facePill}${objectPill}</div>`;
-                    }
+                    const aiDetectionsCell = aiDetectionsCellHtml(s, isExported, caseId, evidenceId, objectResults);
 
                     return `
                       <tr id="segment-row-${escapeHtml(s.segment_id)}" data-segment-id="${escapeHtml(s.segment_id)}">
@@ -227,8 +230,8 @@ async function renderRecordingsScreen(params) {
     <div class="card">
       <div class="card-title"><span>Search for a Person Across Recordings</span></div>
       <p class="lead-text-sm">
-        Optional: upload a reference photo to search for similar faces across every segment above that has
-        already been checked with "Check Faces". <strong>Results are similarity candidates for human review,
+        Optional: upload a reference photo to search for similar faces across every segment above that has been
+        exported (segments not yet checked are checked automatically). <strong>Results are similarity candidates for human review,
         not confirmed identity matches</strong> — different people can score above the reference threshold
         shown in results. Always corroborate independently.
       </p>
@@ -472,33 +475,57 @@ async function runFaceSearch(caseId) {
     const res = await API.searchFaces(caseId, file);
     const matches = res.matches || [];
 
-    if (matches.length === 0) {
+    const perSegment = res.per_segment || [];
+    const threshold = res.reference_threshold;
+    if (!res.exported_segments) {
       resultsEl.innerHTML = `
-        <div class="empty-state py-16">
-          <div class="empty-state-subtitle">No candidate faces found. Either no segments have been indexed yet
-          (run "Check Faces" on exported segments below first), or none were similar enough to appear.</div>
+        <div class="notice-card">
+          <div><h3>Nothing to search yet</h3>
+          <p>None of this image's segments has been exported. Export a segment first (the Export button in its row); the search only looks at exported videos.</p></div>
         </div>`;
     } else {
+      const found = perSegment.filter(p => p.above_reference_threshold);
+      const top = perSegment.reduce((m, p) => Math.max(m, p.best_similarity ?? -1), -1);
+      const verdict = found.length
+        ? `<div class="success-inline">${icon('check-circle')} A similar face was found in ${found.length} of ${perSegment.length} exported segment${perSegment.length === 1 ? '' : 's'}.</div>`
+        : `<div class="notice-card"><div><h3>No similar face found</h3>
+             <p>None of the ${perSegment.length} exported segment${perSegment.length === 1 ? '' : 's'} contains a face that scores at or above ${threshold}${top >= 0 ? ` (the highest score was ${(top * 100).toFixed(1)}%)` : ' (no faces were found in the exported videos at all)'}.</p></div></div>`;
       resultsEl.innerHTML = `
-        <div class="notice-card mb-10">
-          <p class="m-0 text-sm">${escapeHtml(res.warning)}</p>
-        </div>
+        ${verdict}
+        <div class="notice-card mb-10 mt-md"><p class="m-0 text-sm">${escapeHtml(res.warning)}</p></div>
         <div class="table-container">
           <table>
-            <thead><tr><th>Segment</th><th>Time Offset</th><th>Similarity</th><th>vs. Reference Threshold (${res.reference_threshold})</th></tr></thead>
+            <thead><tr><th>Camera</th><th>Recorder time</th><th>Best similarity</th><th>vs. threshold (${escapeHtml(String(threshold))})</th></tr></thead>
             <tbody>
-              ${matches.map(m => `
+              ${perSegment.map(p => `
                 <tr>
-                  <td class="hash-font text-xs">${escapeHtml(m.segment_id.substring(0, 8))}…</td>
-                  <td>${m.frame_offset_seconds.toFixed(1)}s</td>
-                  <td><strong>${(m.similarity * 100).toFixed(1)}%</strong></td>
-                  <td>${m.above_reference_threshold
+                  <td><strong>Camera ${escapeHtml(String(p.camera ?? '?'))}</strong></td>
+                  <td class="font-mono-sm text-muted">${p.start_time ? escapeHtml(String(p.start_time).replace('T', ' ').substring(0, 19)) : '—'}</td>
+                  <td>${p.best_similarity == null ? '<span class="text-dim">no faces found</span>' : `<strong>${(p.best_similarity * 100).toFixed(1)}%</strong>`}</td>
+                  <td>${p.above_reference_threshold
                     ? '<span class="badge badge-partial">Above — review</span>'
                     : '<span class="badge badge-pending">Below</span>'}</td>
                 </tr>`).join('')}
             </tbody>
           </table>
-        </div>`;
+        </div>
+        ${matches.length ? `
+        <details class="mt-lg">
+          <summary class="text-sm text-muted cursor-pointer">Every matching face (${matches.length})</summary>
+          <div class="table-container mt-sm">
+            <table>
+              <thead><tr><th>Segment</th><th>Time in video</th><th>Similarity</th></tr></thead>
+              <tbody>
+                ${matches.map(m => `
+                  <tr>
+                    <td class="hash-font text-xs">${escapeHtml(m.segment_id.substring(0, 8))}…</td>
+                    <td>${m.frame_offset_seconds.toFixed(1)}s</td>
+                    <td><strong>${(m.similarity * 100).toFixed(1)}%</strong></td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+        </details>` : ''}`;
     }
   } catch (err) {
     resultsEl.innerHTML = `
@@ -584,6 +611,17 @@ async function exportSegment(caseId, evidenceId, segmentId, btnEl) {
         exportBtn.insertAdjacentHTML('beforebegin', playButtonHtml(caseId, evidenceId, segmentId));
       }
       const row = exportBtn.closest('tr');
+      if (row && row.children.length >= 8) {
+        // The AI-detections cell (column 8) still said "Export required": give it its Motion / Faces / Objects buttons.
+        const aiCell = row.children[7];
+        if (aiCell && aiCell.querySelector('.ai-pill-disabled')) {
+          aiCell.innerHTML = aiDetectionsCellHtml({ segment_id: segmentId }, true, caseId, evidenceId, {});
+        }
+        if (res.segment && res.segment.status) {
+          const meta = segmentStatusMeta(res.segment.status);
+          row.children[3].innerHTML = `<span class="badge ${meta.badgeClass}" data-tooltip="${escapeHtml(meta.tooltip)}">${escapeHtml(res.segment.status)}</span>`;
+        }
+      }
       if (row && row.children.length >= 7) {
         row.children[6].innerHTML = `<span class="badge badge-complete text-xxs">Exported</span>`;
         if (detail.sha256 && row.children[5]) {
