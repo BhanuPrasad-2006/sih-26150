@@ -172,7 +172,7 @@ async function updateHeaderContext(caseId, evidenceId = null) {
           }
           await updateHeaderContext(caseId, currentEvidence.evidence_id);
         } catch (err) {
-          showToast(`Verification failed: ${escapeHtml(err.message)}`, 'error');
+          showToast('Verification failed: ' + err.message, 'error');
           await updateHeaderContext(caseId, currentEvidence.evidence_id);
         }
       };

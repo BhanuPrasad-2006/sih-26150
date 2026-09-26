@@ -173,7 +173,7 @@ async function renderExportReportScreen(params) {
       showToast(`Forensic package downloaded (${sizeStr})`, 'success');
     } catch (e) {
       msg.textContent = e.message;
-      showToast(`Package creation failed: ${escapeHtml(e.message)}`, 'error');
+      showToast('Package creation failed: ' + e.message, 'error');
     }
   };
 
@@ -198,7 +198,7 @@ async function renderExportReportScreen(params) {
         }
       }
       const res = await API.generateReport(caseId, evidenceId);
-      showToast(`PDF report generated: ${escapeHtml(res.filename)}`, 'success');
+      showToast('PDF report generated: ' + res.filename, 'success');
 
       // Success — show inline result card
       const resultCard = document.getElementById('report-result-card');
@@ -225,7 +225,7 @@ async function renderExportReportScreen(params) {
       genBtn.innerHTML = icon('file-text') + ' Regenerate PDF Report';
 
     } catch (err) {
-      showToast(`Report generation failed: ${escapeHtml(err.message)}`, 'error');
+      showToast('Report generation failed: ' + err.message, 'error');
       const errCard = document.getElementById('report-error-card');
       errCard.innerHTML = `
         <div class="error-banner">
