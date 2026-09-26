@@ -160,40 +160,27 @@ async function renderEvidenceScanScreen(params) {
   `;
 
   // ── Verify integrity ───────────────────────────────────────────────────────
-  document.getElementById('btn-verify-integrity').onclick = async () => {
-    showModal('Integrity Verification', `
-      <div class="loading-state" style="padding:24px;">
-        <div class="spinner"></div>
-        <p>Verifying SHA-256 hash against acquisition baseline…</p>
-      </div>`);
-    try {
-      const res = await API.verifyEvidenceIntegrity(caseId, evidenceId);
-      showModal(
-        'Integrity Verification Result',
-        res.match
-          ? `<div class="success-inline" style="border-radius:6px; border-left:none; border:1px solid var(--status-complete);">
-               ${icon('check-circle')} MATCH — Disk image has not been altered or tampered with.
-             </div>
-             <p class="hash-font" style="margin-top:12px; word-break:break-all;">SHA-256: ${res.current_sha256}</p>`
-          : `<div class="error-banner" style="margin-top:0;">
-               <div class="error-banner-icon">${icon('x-circle')}</div>
-               <div class="error-banner-body">
-                 <div class="error-banner-title">MISMATCH DETECTED</div>
-                 <div class="error-banner-msg">The disk image has been modified since acquisition. Do not use this evidence until the discrepancy is investigated.</div>
-               </div>
-             </div>`
-      );
-    } catch (err) {
-      showModal('Verification Error', `
-        <div class="error-banner" style="margin-top:0;">
-          <div class="error-banner-icon">${icon('alert')}</div>
-          <div class="error-banner-body">
-            <div class="error-banner-title">Verification failed</div>
-            <div class="error-banner-msg">${escapeHtml(err.message)}</div>
-          </div>
-        </div>`);
-    }
-  };
+  const btnVerify = document.getElementById('btn-verify-integrity');
+  if (btnVerify) {
+    btnVerify.onclick = async () => {
+      btnVerify.disabled = true;
+      btnVerify.innerHTML = '<span class="btn-spinner"></span> Verifying…';
+      try {
+        const res = await API.verifyEvidenceIntegrity(caseId, evidenceId);
+        if (res.match) {
+          const shaShort = res.current_sha256 ? res.current_sha256.substring(0, 12) + '…' : '';
+          showToast(`Integrity MATCH: Disk image verified against baseline (${shaShort})`, 'success');
+        } else {
+          showToast('MISMATCH DETECTED: Disk image has been modified since acquisition!', 'error', { duration: 8000 });
+        }
+      } catch (err) {
+        showToast(`Verification failed: ${escapeHtml(err.message)}`, 'error');
+      } finally {
+        btnVerify.disabled = false;
+        btnVerify.innerHTML = `${icon('shield-check')} Verify Integrity`;
+      }
+    };
+  }
 
   // ── Start scan ─────────────────────────────────────────────────────────────
   const btnScan = document.getElementById('btn-start-scan');
