@@ -47,34 +47,73 @@ function timelinePercent(value, rangeStart, rangeMs) {
 }
 
 function timelineTicks(startTime, endTime) {
+  return timelineTicksForRange(startTime, endTime, 'all');
+}
+
+function timelineTicksForRange(startTime, endTime, zoomPreset = 'all') {
   const start = new Date(startTime).getTime();
   const end = new Date(endTime).getTime();
   const range = Math.max(0, end - start);
-  return Array.from({ length: 5 }, (_, index) => {
-    const offset = range * (index / 4);
-    return {
-      left: index * 25,
-      label: timelineFormatUtc(new Date(start + offset).toISOString())
-    };
-  });
+  if (range <= 0) return [];
+
+  let intervalMs = 0;
+  if (zoomPreset === '1h') intervalMs = 15 * 60 * 1000;       // 15 minutes
+  else if (zoomPreset === '6h') intervalMs = 60 * 60 * 1000;   // 1 hour
+  else if (zoomPreset === '24h') intervalMs = 4 * 3600 * 1000; // 4 hours
+
+  // If 'all' or if the range is too small for the interval
+  if (!intervalMs || range < intervalMs * 1.5) {
+    return Array.from({ length: 5 }, (_, index) => {
+      const offset = range * (index / 4);
+      return {
+        left: index * 25,
+        label: timelineFormatUtc(new Date(start + offset).toISOString())
+      };
+    });
+  }
+
+  const ticks = [];
+  let current = Math.ceil(start / intervalMs) * intervalMs;
+  if (((current - start) / range) * 100 > 10) {
+    ticks.push({
+      left: 0,
+      label: timelineFormatUtc(new Date(start).toISOString())
+    });
+  }
+
+  while (current <= end) {
+    const leftPct = ((current - start) / range) * 100;
+    ticks.push({
+      left: leftPct,
+      label: timelineFormatUtc(new Date(current).toISOString())
+    });
+    current += intervalMs;
+  }
+
+  return ticks;
 }
 
-function renderTimelineSegment(segment, rangeStart, rangeMs) {
+function renderTimelineSegment(segment, rangeStart, rangeMs, caseId, defaultEvidenceId) {
   const left = timelinePercent(segment.start_time, rangeStart, rangeMs);
   const end = timelinePercent(segment.end_time, rangeStart, rangeMs);
   const width = Math.min(100 - left, Math.max(1.25, end - left));
   const status = (segment.status || 'UNCERTAIN').toUpperCase();
-  const title = [
-    `Camera ${segment.camera}`,
-    `${timelineFormatUtc(segment.start_time)} — ${timelineFormatUtc(segment.end_time)}`,
-    `${segment.frame_count || 0} frames · ${status}`,
-    segment.notes || ''
-  ].filter(Boolean).join('\n');
+  const evId = segment.evidence_id || defaultEvidenceId || '';
 
   return `
     <div class="timeline-segment ${timelineStatusClass(status)}"
+      data-segment-id="${escapeHtml(segment.segment_id)}"
+      data-evidence-id="${escapeHtml(evId)}"
+      data-camera="${escapeHtml(String(segment.camera ?? ''))}"
+      data-start="${escapeHtml(segment.start_time || '')}"
+      data-end="${escapeHtml(segment.end_time || '')}"
+      data-frames="${escapeHtml(String(segment.frame_count || 0))}"
+      data-status="${escapeHtml(status)}"
+      data-sha256="${escapeHtml(segment.sha256 || '')}"
+      data-notes="${escapeHtml(segment.notes || '')}"
+      ${navAttrs('recordings', { caseId, evidenceId: evId, highlightSegmentId: segment.segment_id })}
       style="left:${left}%; width:${width}%;"
-      title="${timelineEscapeHtml(title)}">
+      aria-label="Camera ${escapeHtml(String(segment.camera))}: ${escapeHtml(timelineFormatUtc(segment.start_time))} to ${escapeHtml(timelineFormatUtc(segment.end_time))}, ${escapeHtml(status)}">
       <span class="timeline-segment-label">${status}</span>
     </div>`;
 }
@@ -92,7 +131,7 @@ function renderTimelineGap(gap, rangeStart, rangeMs) {
     </div>`;
 }
 
-function renderTimelineLane(lane, rangeStart, rangeMs) {
+function renderTimelineLane(lane, rangeStart, rangeMs, caseId, defaultEvidenceId) {
   return `
     <section class="timeline-lane" aria-label="Camera ${lane.camera} timeline">
       <div class="timeline-lane-label">
@@ -101,7 +140,7 @@ function renderTimelineLane(lane, rangeStart, rangeMs) {
       </div>
       <div class="timeline-lane-track">
         ${lane.gaps.map(gap => renderTimelineGap(gap, rangeStart, rangeMs)).join('')}
-        ${lane.segments.map(segment => renderTimelineSegment(segment, rangeStart, rangeMs)).join('')}
+        ${lane.segments.map(segment => renderTimelineSegment(segment, rangeStart, rangeMs, caseId, defaultEvidenceId)).join('')}
       </div>
     </section>`;
 }
@@ -224,6 +263,13 @@ async function renderTimelineScreen(params) {
     <div class="card">
       <div class="card-title">
         <span>Shared Timeline</span>
+        <div class="timeline-zoom-controls" role="toolbar" aria-label="Timeline zoom presets">
+          <span class="timeline-zoom-label">Zoom:</span>
+          <button type="button" class="btn btn-secondary timeline-zoom-btn" data-zoom="1h">1h</button>
+          <button type="button" class="btn btn-secondary timeline-zoom-btn" data-zoom="6h">6h</button>
+          <button type="button" class="btn btn-secondary timeline-zoom-btn" data-zoom="24h">24h</button>
+          <button type="button" class="btn btn-secondary timeline-zoom-btn active" data-zoom="all">All</button>
+        </div>
         <div class="status-legend" aria-label="Segment status legend">
           <span class="status-legend-item">Segments:</span>
           <span class="badge badge-complete">COMPLETE</span>
@@ -240,10 +286,12 @@ async function renderTimelineScreen(params) {
               ${ticks.map(tick => `<span class="timeline-tick" style="left:${tick.left}%">${tick.label}</span>`).join('')}
             </div>
           </div>
-          ${lanes.map(lane => renderTimelineLane(lane, rangeStart, rangeMs)).join('')}
+          ${lanes.map(lane => renderTimelineLane(lane, rangeStart, rangeMs, caseId, params.evidenceId)).join('')}
         </div>
       </div>
     </div>
+
+    <div id="timeline-hover-card" class="timeline-hover-card" style="display:none;" role="tooltip" aria-hidden="true"></div>
 
     ${renderCorrelationCard(correlation)}
 
@@ -253,4 +301,117 @@ async function renderTimelineScreen(params) {
         <p>These recovered segments lack a valid start/end timestamp and are therefore excluded from the visual timeline. Review them in Recordings before relying on their chronology.</p>
       </div>` : ''}
   `;
+
+  // ── Hover card interaction ────────────────────────────────────────────────
+  const hoverCard = document.getElementById('timeline-hover-card');
+  const scrollArea = root.querySelector('.timeline-scroll');
+
+  if (hoverCard && scrollArea) {
+    let activeSegment = null;
+
+    const updatePosition = (segmentEl) => {
+      const rect = segmentEl.getBoundingClientRect();
+      const cardWidth = 260;
+      const cardHeight = 110;
+
+      let left = rect.left + rect.width / 2;
+      let top = rect.top - 10;
+
+      if (top - cardHeight < 10) {
+        top = rect.bottom + cardHeight + 10;
+      }
+
+      const halfWidth = cardWidth / 2;
+      const minLeft = halfWidth + 10;
+      const maxLeft = window.innerWidth - halfWidth - 10;
+      if (left < minLeft) left = minLeft;
+      if (left > maxLeft) left = maxLeft;
+
+      hoverCard.style.left = `${Math.round(left)}px`;
+      hoverCard.style.top = `${Math.round(top)}px`;
+    };
+
+    scrollArea.addEventListener('mouseover', (e) => {
+      const seg = e.target.closest('.timeline-segment');
+      if (!seg) return;
+      activeSegment = seg;
+
+      const d = seg.dataset;
+      const status = (d.status || 'UNCERTAIN').toUpperCase();
+      const badgeClass = timelineStatusClass(status).replace('timeline-segment--', 'badge-');
+      const shaShort = d.sha256 ? `${escapeHtml(d.sha256.substring(0, 12))}…` : '—';
+      const notesHtml = d.notes ? `<div class="hover-card-notes">${escapeHtml(d.notes)}</div>` : '';
+
+      hoverCard.innerHTML = `
+        <div class="hover-card-header">
+          <strong>Camera ${escapeHtml(d.camera || '?')}</strong>
+          <span class="badge ${escapeHtml(badgeClass)}">${escapeHtml(status)}</span>
+        </div>
+        <div class="hover-card-time">${escapeHtml(timelineFormatUtc(d.start))} — ${escapeHtml(timelineFormatUtc(d.end))}</div>
+        <div class="hover-card-meta">Recorder time · ${escapeHtml(d.frames || '0')} frames</div>
+        <div class="hover-card-hash">SHA-256: ${shaShort}</div>
+        ${notesHtml}
+      `;
+      hoverCard.style.display = 'flex';
+      hoverCard.setAttribute('aria-hidden', 'false');
+      updatePosition(seg);
+    });
+
+    scrollArea.addEventListener('mouseout', (e) => {
+      const seg = e.target.closest('.timeline-segment');
+      if (!seg) return;
+      if (seg.contains(e.relatedTarget)) return;
+
+      activeSegment = null;
+      hoverCard.style.display = 'none';
+      hoverCard.setAttribute('aria-hidden', 'true');
+    });
+
+    scrollArea.addEventListener('scroll', () => {
+      if (activeSegment) {
+        hoverCard.style.display = 'none';
+        hoverCard.setAttribute('aria-hidden', 'true');
+        activeSegment = null;
+      }
+    }, { passive: true });
+  }
+
+  // ── Zoom presets toolbar ──────────────────────────────────────────────────
+  const zoomControls = root.querySelector('.timeline-zoom-controls');
+  const timelineContent = root.querySelector('.timeline-content');
+  const axisTrack = root.querySelector('.timeline-axis-track');
+
+  if (zoomControls && timelineContent && axisTrack) {
+    zoomControls.addEventListener('click', (e) => {
+      const btn = e.target.closest('.timeline-zoom-btn');
+      if (!btn) return;
+      const zoom = btn.dataset.zoom;
+
+      zoomControls.querySelectorAll('.timeline-zoom-btn').forEach(b => {
+        b.classList.toggle('active', b === btn);
+      });
+
+      let minWidth = '100%';
+      if (zoom === '1h') {
+        const windowMs = 3600 * 1000;
+        const pct = Math.min(5000, Math.max(100, Math.round((rangeMs / windowMs) * 100)));
+        minWidth = `${pct}%`;
+      } else if (zoom === '6h') {
+        const windowMs = 6 * 3600 * 1000;
+        const pct = Math.min(5000, Math.max(100, Math.round((rangeMs / windowMs) * 100)));
+        minWidth = `${pct}%`;
+      } else if (zoom === '24h') {
+        const windowMs = 24 * 3600 * 1000;
+        const pct = Math.min(5000, Math.max(100, Math.round((rangeMs / windowMs) * 100)));
+        minWidth = `${pct}%`;
+      } else {
+        minWidth = '100%';
+      }
+
+      timelineContent.style.minWidth = minWidth;
+
+      const newTicks = timelineTicksForRange(timeline.start_time, timeline.end_time, zoom);
+      axisTrack.innerHTML = newTicks.map(tick => `<span class="timeline-tick" style="left:${tick.left}%">${tick.label}</span>`).join('');
+    });
+  }
 }
