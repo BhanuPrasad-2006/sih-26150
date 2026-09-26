@@ -12,7 +12,7 @@
 ![FastAPI](https://img.shields.io/badge/FastAPI-backend-009688?logo=fastapi&logoColor=white)
 ![OpenCV](https://img.shields.io/badge/OpenCV-DNN-5C3EE8?logo=opencv&logoColor=white)
 ![FFmpeg](https://img.shields.io/badge/FFmpeg-remux%20%26%20probe-007808?logo=ffmpeg&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-316%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-329%20passing-brightgreen)
 ![Real hardware](https://img.shields.io/badge/real%20recorder%20disks-not%20yet%20tested-red)
 
 </div>
@@ -65,13 +65,14 @@ for unknown recorders, and forensic bookkeeping (hashes, audit chain, report, le
 | 📏 | **Accuracy against ground truth**: frame recall / precision / order, byte placement, log coverage | ✅ new, honest "not measured" otherwise |
 | ⛓️ | **Hash-chained audit log** of every action, tamper-evident | ✅ |
 | 📄 | **PDF report** + **BSA 2023 §63(4)** certificate template | ✅ |
-| 🔑 | Single-examiner login, sessions, lockout; SQLite or Supabase/Postgres | ✅ |
+| 🔑 | Single-examiner login, optional 2FA, sessions, lockout that survives a restart; SQLite or Supabase/Postgres | ✅ |
+| 🎨 | **Interface**: light and dark themes, drag-and-drop evidence upload, inline SVG icons, audit and case times in IST | ✅ |
 
 ## 🏗️ Architecture
 
 ```mermaid
 flowchart LR
-    subgraph UI["Web UI (vanilla JS SPA)"]
+    subgraph UI["Web UI (vanilla JS SPA, light/dark)"]
         A1[Cases] --> A2[Evidence & Scan] --> A3[Recordings] --> A4[Timeline] --> A5[Report]
     end
     UI <-->|REST + SSE| API
@@ -140,7 +141,7 @@ Because no real recorder disk was available, the tool is tested by building disk
 | Parsers checked against **known-answer values printed in the papers/specs** | ✅ |
 | Tamper test: change one byte of evidence → verification fails | ✅ |
 | Accuracy feature on real video: identical, truncated, and different videos give the expected recall/precision/order | ✅ |
-| **Automated suite** | **316 tests passing** (308 on a fresh clone; the other 8 need a live Supabase `DATABASE_URL`) |
+| **Automated suite** | **329 tests** (321 pass on a fresh clone; the other 8 need a live Supabase `DATABASE_URL`); GitHub Actions also runs `pip-audit` and `bandit` |
 
 **A defect the accuracy check found:** on a synthetic Dahua disk with its index wiped, the carver found only 21 of 40 frames (byte recall 86.5 %).
 The cause was a minimum frame size (100 bytes) that rejected tiny P-frames of a quiet camera; at 40 bytes it finds all 40 (byte recall 92.1 %,
@@ -214,12 +215,18 @@ Open **http://127.0.0.1:8000**. On first run you create an examiner password (12
 ## 🖱️ Using the tool
 
 1. **Create a case** (case number, examiner, notes).
-2. **Attach evidence**: choose a file, give a path, or **image a drive** (requires the setting above and your write-blocker confirmation).
-3. **Scan**: hashes → brand detection → index → carving → reconstruction → final re-hash, with live progress.
+2. **Add disk image** (three ways, one window): **drag and drop** a file onto the upload area or browse for it; give the **path** of a file already on this machine (best for multi-GB images); or **image a drive** (requires the setting above and your write-blocker confirmation). The window shows the file name and size before you start, and a progress bar while it uploads.
+3. **Scan**: hashes → brand detection → index → carving → reconstruction → final re-hash, with live progress. When it finishes you stay on the page and press **View recordings**; nothing redirects on its own. The file type shown comes from the file itself, and brands that are unverified or detection-only get an amber badge.
 4. **Recordings**: review segments, export MP4, run faces / objects / motion, search a person by photo.
 5. **Accuracy** *(test scenarios)*: compare a segment with ground truth.
 6. **Timeline**: per-camera timeline and cross-camera correlation.
 7. **Report**: PDF with hashes, segments, correlation, accuracy, object detection, audit chain and the BSA §63(4) certificate.
+
+**Interface notes**
+
+- **Theme:** follows your system's light/dark setting; the sun/moon button in the header switches it (remembered in that browser only).
+- **Times:** case-created and audit-log times are shown in **IST**. Times of recovered video are shown as **Recorder time**, exactly as read from the recorder, because they carry no time zone; enter the device clock offset when adding the image if you want cross-device correlation.
+- **Colours:** green = complete, amber = partial or unverified, orange = uncertain, red = error.
 
 Step-by-step procedure: [docs/SOP.md](docs/SOP.md).
 
@@ -244,7 +251,7 @@ All routes except login/setup require the session cookie. Interactive docs at `/
 - **Local only**: binds to `127.0.0.1`; a loud warning is emitted if `SIH_HOST` says otherwise.
 - **Single-examiner password**: bcrypt hash only, minimum 12 characters; the plaintext is never stored or logged.
 - **Sessions**: `HttpOnly`, `SameSite=Strict` cookie; 30-minute idle timeout (configurable).
-- **Brute-force lockout**: 5 failures → 60 s lock with live countdown; messages never reveal more than "Incorrect password."
+- **Brute-force lockout**: 5 failures → 60 s lock with live countdown; the count and lock time are stored in the database, so restarting the server does not reset them; messages never reveal more than "Incorrect password."
 - **Read-only evidence**: images are memory-mapped read-only; the evidence hash is re-checked after every scan and on demand.
 - **Imaging** is off by default, requires a write-blocker attestation (recorded, not enforceable by software), refuses to overwrite, and removes a partial image on failure.
 - **Two-factor login (optional TOTP)** with **one-time recovery codes**: RFC 6238 codes (tested against the RFC vectors), single-use, encrypted secret, uniform errors; every other session ends when it changes. Turn it on from the dashboard.
@@ -299,14 +306,14 @@ sih-26150/
 │   ├── cv_models/            YuNet, SFace, YOLOX (ONNX)
 │   ├── plugins/              dahua · dahua_dhfs · hikvision · hikvision_index · honeywell · cpplus
 │   │                         tplink · godrej · uniview · matrix · unknown · generic · stream_carver · registry
-│   └── tests/                316 automated tests (+ manual real-video end-to-end scripts)
+│   └── tests/                329 automated tests (+ manual real-video end-to-end scripts)
 ├── docs/                     SOP · format_verification · oem_comparison · accuracy_measurement · format_sheets/
-├── frontend/                 vanilla HTML/CSS/JS single-page app (no build step)
+├── frontend/                 vanilla HTML/CSS/JS single-page app (no build step); css/style.css design system, js/icons.js icon set
 ├── install.* / run.*         one-click setup and launch
 └── requirements.txt
 ```
 
-≈ 13,400 lines of Python (≈ 4,300 of them tests) and ≈ 4,600 lines of front-end code.
+≈ 18,500 lines of Python including tools (≈ 6,600 of them tests) and ≈ 4,300 lines of front-end code.
 
 ## 📋 Problem-statement checklist
 
@@ -340,7 +347,7 @@ Legend: ✅ done · 🟡 partly / unvalidated · ❌ not done.
 6. **Drive imaging** has not been run on a physical disk; raw devices need administrator rights; software cannot enforce write-blocking.
 7. **Object detection** was checked on three photos, not on CCTV footage; small, dark or distant subjects will be missed. Frames are sampled.
 8. **Accuracy numbers** describe one test on one disk and are not a general recovery rate.
-9. Clock drift and time zones are examiner-supplied, never inferred.
+9. Clock drift and time zones are examiner-supplied, never inferred. Recovered-video times are the recorder's own clock and are not converted to IST or UTC by the interface.
 10. Single-examiner tool, bound to localhost; not a multi-user service.
 
 ## 🗺️ Roadmap
