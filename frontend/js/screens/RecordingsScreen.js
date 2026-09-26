@@ -526,67 +526,41 @@ async function exportSegment(caseId, evidenceId, segmentId, btnEl) {
     const detail = res.detail || {};
 
     if (detail.error) {
-      // The backend genuinely could not export this segment (e.g. no
-      // verified frame boundaries for experimental Hikvision carving) —
-      // show this as a failure, never as a false "Export Successful".
-      showModal(
-        'Export Unavailable',
-        `<div class="error-banner" style="margin-top:0;">
-           <div class="error-banner-icon">${icon('alert')}</div>
-           <div class="error-banner-body">
-             <div class="error-banner-title">This segment could not be exported</div>
-             <div class="error-banner-msg">${escapeHtml(detail.error)}</div>
-           </div>
-         </div>`,
-        [{ label: 'OK', class: 'btn-secondary', onClick: () => renderRecordingsScreen({ caseId, evidenceId }) }]
-      );
+      // The backend genuinely could not export this segment — show as toast failure
+      showToast(`Export unavailable: ${detail.error}`, 'error');
+      if (btnEl) {
+        btnEl.disabled = false;
+        btnEl.innerHTML = `${icon('download')} Export`;
+      }
       return;
     }
 
-    showModal(
-      'Export Successful',
-      `
-        <div class="success-inline" style="border-radius:6px; border-left:none; border:1px solid var(--status-complete); margin-bottom:12px;">
-          ${icon('check-circle')} Segment exported successfully!
-        </div>
-        <div style="font-size:13px; display:flex; flex-direction:column; gap:10px;">
-          <div>
-            <div class="meta-label">File Path</div>
-            <div style="font-family:var(--font-mono); font-size:12px; color:var(--text-main); word-break:break-all; margin-top:4px;">${escapeHtml(detail.export_path)}</div>
-          </div>
-          <div>
-            <div class="meta-label">SHA-256</div>
-            <div class="hash-font" style="margin-top:4px; word-break:break-all;">${escapeHtml(detail.sha256)}</div>
-          </div>
-          <div>
-            <div class="meta-label">ffprobe Validation</div>
-            <div class="meta-value" style="margin-top:4px; color:${detail.ffprobe_valid ? 'var(--status-complete)' : 'var(--status-error)'};">
-              ${detail.ffprobe_valid ? `${icon('check-circle')} Valid MP4 container` : `${icon('alert')} Warning: stream structure invalid`}
-            </div>
-          </div>
-          ${detail.ffmpeg_warning ? `
-          <div>
-            <div class="meta-label">FFmpeg Notice</div>
-            <div class="meta-value" style="margin-top:4px; color:var(--status-partial);">${icon('alert')} ${escapeHtml(detail.ffmpeg_warning)}</div>
-          </div>` : ''}
-        </div>`,
-      [{ label: 'OK', class: 'btn-primary', onClick: () => renderRecordingsScreen({ caseId, evidenceId }) }]
-    );
+    const filename = detail.export_path ? detail.export_path.split(/[\\/]/).pop() : 'video.mp4';
+    const shaShort = detail.sha256 ? detail.sha256.substring(0, 12) : '';
+    const cam = res.camera ?? (detail.camera ?? '');
+    const camLabel = cam ? `Camera ${cam} — ` : '';
+
+    showToast(`Export complete: ${camLabel}${filename}${shaShort ? ` (SHA: ${shaShort}…)` : ''}`, 'success');
+
+    // Update button and row without blocking modal
+    const exportBtn = document.getElementById(`export-btn-${segmentId}`);
+    if (exportBtn) {
+      exportBtn.disabled = false;
+      exportBtn.title = 'Re-Export MP4 container';
+      exportBtn.innerHTML = `${icon('download')} Re-Export`;
+      const row = exportBtn.closest('tr');
+      if (row && row.children.length >= 7) {
+        row.children[6].innerHTML = `<span class="badge badge-complete" style="font-size:10px;">Exported</span>`;
+        if (detail.sha256 && row.children[5]) {
+          row.children[5].innerHTML = `<span title="${escapeHtml(detail.sha256)}">${escapeHtml(detail.sha256.substring(0, 8))}…</span>`;
+        }
+      }
+    }
   } catch (err) {
-    showModal('Export Failed',
-      `<div class="error-banner" style="margin-top:0;">
-         <div class="error-banner-icon">${icon('alert')}</div>
-         <div class="error-banner-body">
-           <div class="error-banner-title">Export failed</div>
-           <div class="error-banner-msg">${escapeHtml(err.message)}</div>
-         </div>
-       </div>`,
-      [{ label: 'OK', class: 'btn-secondary', onClick: () => {} }]
-    );
-    // Re-enable button
+    showToast(`Export failed: ${escapeHtml(err.message)}`, 'error');
     if (btnEl) {
       btnEl.disabled = false;
-      btnEl.innerHTML = 'Export MP4';
+      btnEl.innerHTML = `${icon('download')} Export`;
     }
   }
 }
