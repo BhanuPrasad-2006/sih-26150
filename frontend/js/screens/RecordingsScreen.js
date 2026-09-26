@@ -101,7 +101,33 @@ async function renderRecordingsScreen(params) {
                Go to Acquisition &amp; Scan ${icon('arrow-right')}
              </button>
            </div>`
-        : `<div class="table-container">
+        : `
+            <div class="batch-bar">
+              <div class="batch-bar-controls">
+                <button id="btn-batch-export" class="btn btn-secondary btn-sm" type="button">
+                  ${icon('download')} Export all segments
+                </button>
+                <button id="btn-batch-analytics" class="btn btn-secondary btn-sm" type="button">
+                  ${icon('sparkles')} Run all analytics on exported
+                </button>
+              </div>
+              <div id="batch-progress-box" class="batch-progress-box" style="display:none;">
+                <div class="batch-progress-row">
+                  <span id="batch-progress-label" class="batch-progress-text">
+                    <span class="spinner spinner-sm"></span> Initialising batch...
+                  </span>
+                  <span id="batch-progress-pct" class="batch-progress-pct">0%</span>
+                  <button id="btn-batch-cancel" class="btn btn-secondary btn-sm" type="button">
+                    ${icon('x')} Cancel
+                  </button>
+                </div>
+                <div class="progress-bar-container" style="margin:4px 0 0;">
+                  <div id="batch-progress-bar" class="progress-bar-fill" style="width:0%;"></div>
+                </div>
+              </div>
+            </div>
+            <div class="table-container">
+
              <table>
                <thead>
                  <tr>
@@ -273,8 +299,150 @@ async function renderRecordingsScreen(params) {
     document.getElementById('face-search-btn').onclick = () => runFaceSearch(caseId);
     document.getElementById('acc-run').onclick = () => runAccuracyCheck(caseId);
     loadAccuracyHistory(caseId);
+
+    const btnBatchExport = document.getElementById('btn-batch-export');
+    const btnBatchAnalytics = document.getElementById('btn-batch-analytics');
+    const btnBatchCancel = document.getElementById('btn-batch-cancel');
+    const progressBox = document.getElementById('batch-progress-box');
+    const progressLabel = document.getElementById('batch-progress-label');
+    const progressBar = document.getElementById('batch-progress-bar');
+    const progressPct = document.getElementById('batch-progress-pct');
+
+    let cancelRequested = false;
+
+    if (btnBatchCancel) {
+      btnBatchCancel.onclick = () => {
+        cancelRequested = true;
+        btnBatchCancel.disabled = true;
+        btnBatchCancel.innerHTML = '<span class="btn-spinner"></span> Cancelling…';
+      };
+    }
+
+    if (btnBatchExport) {
+      btnBatchExport.onclick = async () => {
+        cancelRequested = false;
+        btnBatchExport.disabled = true;
+        btnBatchAnalytics.disabled = true;
+        if (btnBatchCancel) {
+          btnBatchCancel.disabled = false;
+          btnBatchCancel.innerHTML = `${icon('x')} Cancel`;
+        }
+        if (progressBox) progressBox.style.display = 'flex';
+        if (progressBar) progressBar.style.width = '0%';
+        if (progressPct) progressPct.textContent = '0%';
+        if (progressLabel) progressLabel.innerHTML = '<span class="spinner spinner-sm"></span> Initialising export…';
+
+        const shouldCancel = () => cancelRequested || !document.getElementById('batch-progress-box');
+        const onProgress = ({ done, total, message }) => {
+          const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+          if (progressBar) progressBar.style.width = `${pct}%`;
+          if (progressPct) progressPct.textContent = `${pct}%`;
+          if (progressLabel) progressLabel.innerHTML = `<span class="spinner spinner-sm"></span> ${escapeHtml(message || `${done} of ${total} done`)}`;
+        };
+
+        try {
+          const res = await API.batchExport(caseId, evidenceId, segments, { onProgress, shouldCancel });
+          handleBatchResult('Batch Export', res, caseId, evidenceId);
+        } catch (err) {
+          showModal(
+            'Batch Export Error',
+            `<div class="error-banner">
+               <div class="error-banner-icon">${icon('alert')}</div>
+               <div class="error-banner-body">
+                 <div class="error-banner-title">Batch export encountered an error</div>
+                 <div class="error-banner-msg">${escapeHtml(err.message)}</div>
+               </div>
+             </div>`,
+            [{ label: 'OK', class: 'btn-secondary', onClick: () => renderRecordingsScreen({ caseId, evidenceId }) }]
+          );
+        }
+      };
+    }
+
+    if (btnBatchAnalytics) {
+      btnBatchAnalytics.onclick = async () => {
+        const exported = segments.filter(s => !!s.export_path);
+        if (exported.length === 0) {
+          showModal(
+            'Export Required',
+            `<div class="notice-card info">
+               <div>
+                 <h3>${icon('info')} No exported segments found</h3>
+                 <p>Video analytics (motion, face, and object detection) require an exported MP4 container. Click <strong>Export all segments</strong> first, or export individual segments.</p>
+               </div>
+             </div>`,
+            [{ label: 'OK', class: 'btn-primary', onClick: () => {} }]
+          );
+          return;
+        }
+
+        cancelRequested = false;
+        btnBatchExport.disabled = true;
+        btnBatchAnalytics.disabled = true;
+        if (btnBatchCancel) {
+          btnBatchCancel.disabled = false;
+          btnBatchCancel.innerHTML = `${icon('x')} Cancel`;
+        }
+        if (progressBox) progressBox.style.display = 'flex';
+        if (progressBar) progressBar.style.width = '0%';
+        if (progressPct) progressPct.textContent = '0%';
+        if (progressLabel) progressLabel.innerHTML = '<span class="spinner spinner-sm"></span> Initialising analytics…';
+
+        const shouldCancel = () => cancelRequested || !document.getElementById('batch-progress-box');
+        const onProgress = ({ done, total, message }) => {
+          const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+          if (progressBar) progressBar.style.width = `${pct}%`;
+          if (progressPct) progressPct.textContent = `${pct}%`;
+          if (progressLabel) progressLabel.innerHTML = `<span class="spinner spinner-sm"></span> ${escapeHtml(message || `${done} of ${total} done`)}`;
+        };
+
+        try {
+          const res = await API.batchAnalytics(caseId, exported, { onProgress, shouldCancel });
+          handleBatchResult('Batch Analytics', res, caseId, evidenceId);
+        } catch (err) {
+          showModal(
+            'Batch Analytics Error',
+            `<div class="error-banner">
+               <div class="error-banner-icon">${icon('alert')}</div>
+               <div class="error-banner-body">
+                 <div class="error-banner-title">Batch analytics encountered an error</div>
+                 <div class="error-banner-msg">${escapeHtml(err.message)}</div>
+               </div>
+             </div>`,
+            [{ label: 'OK', class: 'btn-secondary', onClick: () => renderRecordingsScreen({ caseId, evidenceId }) }]
+          );
+        }
+      };
+    }
   }
 }
+
+function handleBatchResult(actionName, res, caseId, evidenceId) {
+  if (res.failures && res.failures.length > 0) {
+    showModal(
+      `${actionName} Complete — with warnings`,
+      `<div class="notice-card warning">
+         <div>
+           <h3>${icon('alert')} Some items could not be processed</h3>
+           <p>${res.completed - res.failures.length} of ${res.total} completed successfully. The following ${res.failures.length} item(s) failed:</p>
+           <ul style="font-size:12px; margin-top:8px; line-height:1.6; padding-left:18px;">
+             ${res.failures.map(f => `<li>Camera ${escapeHtml(String(f.camera ?? '?'))}${f.type ? ' (' + escapeHtml(f.type) + ')' : ''}: ${escapeHtml(f.error)}</li>`).join('')}
+           </ul>
+         </div>
+       </div>`,
+      [{ label: 'OK', class: 'btn-primary', onClick: () => renderRecordingsScreen({ caseId, evidenceId }) }]
+    );
+  } else if (res.cancelled) {
+    showModal(
+      `${actionName} Cancelled`,
+      `<p>${res.completed} of ${res.total} items processed before cancellation.</p>`,
+      [{ label: 'OK', class: 'btn-secondary', onClick: () => renderRecordingsScreen({ caseId, evidenceId }) }]
+    );
+  } else {
+    renderRecordingsScreen({ caseId, evidenceId });
+  }
+}
+
 
 async function runFaceSearch(caseId) {
   const fileInput = document.getElementById('face-search-input');
