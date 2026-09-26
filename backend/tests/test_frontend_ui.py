@@ -158,4 +158,38 @@ def test_timeline_improvements_css_classes_defined():
         assert cls_name in CSS, f"Missing CSS class: {cls_name}"
 
 
+def test_toast_component_and_script_loaded():
+    assert "Toast.js" in INDEX
+    toast_file = ROOT / "js" / "components" / "Toast.js"
+    assert toast_file.is_file()
+    toast_text = toast_file.read_text(encoding="utf-8")
+    assert "function showToast(" in toast_text
+    assert "function dismissToast(" in toast_text
+    assert "toast-container" in toast_text
+    assert "TOAST_MAX_COUNT" in toast_text
+    assert "aria-live" in toast_text
+
+
+def test_toast_css_classes_defined():
+    css = (ROOT / "css" / "style.css").read_text(encoding="utf-8")
+    for cls_name in (".toast-container", ".toast", ".toast-success", ".toast-info",
+                     ".toast-warn", ".toast-error", ".toast-close"):
+        assert cls_name in css, f"Missing CSS class: {cls_name}"
+
+
+def test_screens_use_toasts_for_transient_confirmations():
+    rec_text = (ROOT / "js" / "screens" / "RecordingsScreen.js").read_text(encoding="utf-8")
+    assert "showToast(" in rec_text
+    assert "Export complete:" in rec_text
+
+    scan_text = (ROOT / "js" / "screens" / "EvidenceScanScreen.js").read_text(encoding="utf-8")
+    assert "showToast(" in scan_text
+    assert "Integrity MATCH:" in scan_text
+
+    rep_text = (ROOT / "js" / "screens" / "ExportReportScreen.js").read_text(encoding="utf-8")
+    assert "showToast(" in rep_text
+    assert "PDF report generated:" in rep_text
+
+
+
 
