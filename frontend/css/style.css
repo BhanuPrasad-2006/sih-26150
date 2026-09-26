@@ -1075,5 +1075,76 @@ tbody tr:hover td { background: var(--primary-soft); }
   color: var(--status-error);
 }
 
+/* Case Context Pill in Header */
+.case-context-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--text-main);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.case-context-pill:hover {
+  border-color: var(--accent-cyan);
+}
+.case-pill-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  text-decoration: none;
+}
+.case-pill-info:hover .case-pill-id {
+  color: var(--accent-cyan);
+}
+.case-pill-id {
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.case-pill-sep {
+  color: var(--text-dim);
+  user-select: none;
+}
+.case-pill-evidence {
+  color: var(--text-muted);
+}
+.case-pill-evidence strong {
+  color: var(--text-main);
+}
+.case-pill-integrity {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-weight: 500;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+}
+.case-pill-integrity:hover {
+  opacity: 0.88;
+  transform: scale(1.02);
+}
+
+@media (max-width: 900px) {
+  .case-pill-evidence {
+    display: none;
+  }
+}
+@media (max-width: 600px) {
+  .case-context-pill {
+    display: none !important;
+  }
+}
+
+
 
 

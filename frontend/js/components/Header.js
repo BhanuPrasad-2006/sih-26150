@@ -21,6 +21,7 @@ function renderHeader(breadcrumbs = []) {
       </div>
     </div>
     <div class="header-meta">
+      <div id="case-context-pill" class="case-context-pill" style="display:none;" role="region" aria-label="Case context"></div>
       <div class="host-pill" data-tooltip="This tool is served from this machine. Nothing leaves it unless you export."><span class="dot"></span><span class="label">${escapeHtml(hostLabel)}</span></div>
       <button type="button" id="theme-toggle" class="icon-btn" aria-label="Switch light or dark theme" title="Switch light / dark theme">${icon(themeIcon)}</button>
     </div>
@@ -68,4 +69,115 @@ function renderHeader(breadcrumbs = []) {
       navigateTo(screen, params);
     });
   });
+}
+
+let activeHeaderCaseId = null;
+let activeHeaderEvidenceId = null;
+
+async function updateHeaderContext(caseId, evidenceId = null) {
+  const pill = document.getElementById('case-context-pill');
+  if (!pill) return;
+
+  if (!caseId) {
+    pill.style.display = 'none';
+    activeHeaderCaseId = null;
+    activeHeaderEvidenceId = null;
+    return;
+  }
+
+  activeHeaderCaseId = caseId;
+  activeHeaderEvidenceId = evidenceId;
+
+  try {
+    const caseData = await API.getCase(caseId);
+    if (activeHeaderCaseId !== caseId) return;
+
+    const evidenceList = caseData.evidence || [];
+    let currentEvidence = null;
+    if (evidenceId) {
+      currentEvidence = evidenceList.find(e => e.evidence_id === evidenceId);
+    }
+    if (!currentEvidence && evidenceList.length > 0) {
+      currentEvidence = evidenceList[0];
+    }
+
+    const caseNum = caseData.case_number || (caseData.case_id ? caseData.case_id.substring(0, 8) : caseId);
+    let evidenceLabel = 'None';
+    let integrityState = 'none';
+
+    if (currentEvidence) {
+      evidenceLabel = currentEvidence.label
+        || (currentEvidence.path ? currentEvidence.path.split(/[\\/]/).pop() : (currentEvidence.evidence_id.substring(0, 8) + '…'));
+
+      if (currentEvidence.sha256_after === 'MISMATCH') {
+        integrityState = 'mismatch';
+      } else if (currentEvidence.sha256_after && currentEvidence.sha256_after === currentEvidence.sha256_before) {
+        integrityState = 'verified';
+      } else if (currentEvidence.sha256_after) {
+        integrityState = 'verified';
+      } else {
+        integrityState = 'unverified';
+      }
+    }
+
+    let integrityClass = 'badge-pending';
+    let integrityIcon = 'shield';
+    let integrityText = 'Not verified yet';
+    let integrityTitle = 'Disk image not verified yet. Click to verify integrity.';
+
+    if (integrityState === 'verified') {
+      integrityClass = 'badge-verified';
+      integrityIcon = 'check-circle';
+      integrityText = 'Verified';
+      integrityTitle = 'Integrity verified: matches baseline. Click to re-verify.';
+    } else if (integrityState === 'mismatch') {
+      integrityClass = 'badge-error';
+      integrityIcon = 'alert';
+      integrityText = 'Mismatch';
+      integrityTitle = 'MISMATCH DETECTED: disk image has been modified! Click to re-verify.';
+    } else if (integrityState === 'none') {
+      integrityClass = 'badge-pending';
+      integrityIcon = 'info';
+      integrityText = 'No evidence';
+      integrityTitle = 'No evidence image loaded for this case yet.';
+    }
+
+    pill.innerHTML = `
+      <div class="case-pill-info" ${navAttrs('case-detail', { caseId: caseId })} title="Return to Case Overview">
+        <span class="case-pill-id">${icon('folder')} Case #${escapeHtml(caseNum)}</span>
+        <span class="case-pill-sep">·</span>
+        <span class="case-pill-evidence">Evidence: <strong>${escapeHtml(evidenceLabel)}</strong></span>
+      </div>
+      <span class="case-pill-sep">·</span>
+      <button type="button" class="case-pill-integrity badge ${integrityClass}" id="btn-pill-verify" title="${integrityTitle}">
+        ${icon(integrityIcon)} ${escapeHtml(integrityText)}
+      </button>
+    `;
+    pill.style.display = 'inline-flex';
+
+    const verifyBtn = document.getElementById('btn-pill-verify');
+    if (verifyBtn && currentEvidence) {
+      verifyBtn.onclick = async (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        verifyBtn.disabled = true;
+        verifyBtn.innerHTML = '<span class="btn-spinner"></span> Verifying…';
+        try {
+          const res = await API.verifyEvidenceIntegrity(caseId, currentEvidence.evidence_id);
+          if (res.match) {
+            const shaShort = res.current_sha256 ? res.current_sha256.substring(0, 12) + '…' : '';
+            showToast(`Integrity MATCH: Disk image verified against baseline (${shaShort})`, 'success');
+          } else {
+            showToast('MISMATCH DETECTED: Disk image has been modified since acquisition!', 'error', { duration: 8000 });
+          }
+          await updateHeaderContext(caseId, currentEvidence.evidence_id);
+        } catch (err) {
+          showToast(`Verification failed: ${escapeHtml(err.message)}`, 'error');
+          await updateHeaderContext(caseId, currentEvidence.evidence_id);
+        }
+      };
+    }
+  } catch (_) {
+    pill.style.display = 'none';
+  }
 }
