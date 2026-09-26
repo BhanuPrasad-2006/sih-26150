@@ -73,7 +73,7 @@ Independence caveat: the disk builders and the parsers were written by the same 
 | test_security_level2.py | 18 | Encryption at rest, TOTP (RFC vectors, replay), signed reports, upload cap |
 | test_sandbox.py | 8 | ffmpeg limits, scrubbed environment, protocol whitelist |
 | test_fuzz_parsers.py | 5 | Mutation fuzzing of all parsers, oracle self-tests |
-| test_security_full.py | 16 | Recovery codes, session lifetime, sealed login log, HTTPS, embedded PDF signature, encrypted packages, security status |
+| test_security_full.py | 20 | Recovery codes, session lifetime, sealed login log, HTTPS, embedded PDF signature, encrypted packages, security status, lockout surviving a restart |
 | test_validation_kit.py | 12 | Validation kit: verdicts, reports, evidence untouched, exit codes, parity with the app scan |
 | test_kit_package.py | 7 | Downloadable kit: reproducible zip, minimal contents, runs with no web dependencies, page/zip/hash consistent |
 | test_hikvision_real_disk.py | 19 | Values from a real 1 TB Hikvision disk's published parse: master sector, entries, 16-byte shift, page-structured index, OFNI times |

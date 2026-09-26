@@ -1,5 +1,5 @@
 /**
- * TimelineScreen.js — Shared UTC timeline for every recovered segment in a case.
+ * TimelineScreen.js — Shared timeline for every recovered segment in a case.
  *
  * The API provides timestamp-sorted camera lanes and per-lane uncovered gaps.
  * This screen only presents that data; it never changes recovered segments.
@@ -8,7 +8,7 @@
 function timelineFormatUtc(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'Unknown time';
-  return date.toISOString().replace('T', ' ').replace('.000Z', ' UTC');
+  return date.toISOString().replace('T', ' ').replace('.000Z', '');
 }
 
 function timelineDuration(seconds) {
@@ -166,7 +166,7 @@ async function renderTimelineScreen(params) {
     root.innerHTML = `
       <div class="page-header"><div class="page-title">Cross-Camera Timeline</div></div>
       <div class="error-banner">
-        <div class="error-banner-icon">⚠️</div>
+        <div class="error-banner-icon">${icon('alert')}</div>
         <div class="error-banner-body">
           <div class="error-banner-title">Failed to load timeline</div>
           <div class="error-banner-msg">${escapeHtml(err.message)}</div>
@@ -194,10 +194,10 @@ async function renderTimelineScreen(params) {
     root.innerHTML = `
       <div class="page-header">
         <div class="page-title">Cross-Camera Timeline</div>
-        <div class="page-subtitle">A shared UTC view of recovered footage across every camera and evidence image in this case.</div>
+        <div class="page-subtitle">A shared view of recovered footage across every camera and evidence image in this case.</div>
       </div>
       <div class="card empty-state">
-        <div class="empty-state-icon">🕒</div>
+        ${emptyArt()}
         <div class="empty-state-title">${title}</div>
         <div class="empty-state-subtitle">${subtitle}</div>
         <button class="btn btn-primary" ${navAttrs('case-detail', { caseId: caseId })}>Return to Case Overview</button>
@@ -212,7 +212,7 @@ async function renderTimelineScreen(params) {
   root.innerHTML = `
     <div class="page-header">
       <div class="page-title">Cross-Camera Timeline</div>
-      <div class="page-subtitle">All recovered, timestamped segments are aligned in UTC. Striped intervals indicate periods without recovered footage on that camera.</div>
+      <div class="page-subtitle">All recovered, timestamped segments are placed on one axis using each recorder's own clock. Striped intervals indicate periods without recovered footage on that camera.</div>
     </div>
 
     <div class="timeline-summary-grid">
@@ -235,7 +235,7 @@ async function renderTimelineScreen(params) {
       <div class="timeline-scroll">
         <div class="timeline-content">
           <div class="timeline-axis">
-            <div class="timeline-axis-label">UTC</div>
+            <div class="timeline-axis-label">Recorder time</div>
             <div class="timeline-axis-track">
               ${ticks.map(tick => `<span class="timeline-tick" style="left:${tick.left}%">${tick.label}</span>`).join('')}
             </div>
@@ -249,7 +249,7 @@ async function renderTimelineScreen(params) {
 
     ${timeline.unplaced_segments?.length ? `
       <div class="notice-card">
-        <h3>⚠️ ${timeline.unplaced_segments.length} segment${timeline.unplaced_segments.length === 1 ? '' : 's'} not positioned</h3>
+        <h3>${icon('alert')} ${timeline.unplaced_segments.length} segment${timeline.unplaced_segments.length === 1 ? '' : 's'} not positioned</h3>
         <p>These recovered segments lack a valid start/end timestamp and are therefore excluded from the visual timeline. Review them in Recordings before relying on their chronology.</p>
       </div>` : ''}
   `;

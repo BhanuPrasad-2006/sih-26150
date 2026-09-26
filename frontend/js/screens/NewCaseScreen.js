@@ -47,13 +47,13 @@ function renderNewCaseScreen() {
 
         <!-- inline error — hidden by default -->
         <div id="case-error" style="display:none;" class="error-inline">
-          <span>⚠️</span>
+          <span>${icon('alert')}</span>
           <span id="case-error-msg"></span>
         </div>
 
         <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px;">
-          <button type="button" class="btn btn-secondary" ${navAttrs('dashboard')}>← Cancel</button>
-          <button type="submit" id="btn-submit-case" class="btn btn-primary">Create Case &amp; Add Evidence ➔</button>
+          <button type="button" class="btn btn-secondary" ${navAttrs('dashboard')}>${icon('arrow-left')} Cancel</button>
+          <button type="submit" id="btn-submit-case" class="btn btn-primary">Create case &amp; continue ${icon('arrow-right')}</button>
         </div>
       </form>
     </div>
@@ -143,7 +143,7 @@ function renderNewCaseScreen() {
       errMsg.textContent = err.message;
       errEl.style.display = 'flex';
       submitBtn.disabled = false;
-      submitBtn.innerHTML = 'Create Case &amp; Add Evidence ➔';
+      submitBtn.innerHTML = 'Create case &amp; continue ' + icon('arrow-right');
     }
   };
 }

@@ -39,7 +39,7 @@ On first launch you create the examiner password (at least 12 characters); it is
 Dashboard → **🔐 Two-factor** → **Set up**. Enter the secret key (or setup link) into an authenticator app (Google/Microsoft Authenticator, Authy, 1Password), type the current 6-digit code and confirm. From then on the login asks for password **and** code. Each code works once. **Save the 10 recovery codes shown at that moment offline** (each works once, instead of the 6-digit code, when the phone is lost). To turn two-factor off, or to get a new set of recovery codes, you need the password and a current code (or a recovery code). If both the phone and the recovery codes are lost, an administrator has to clear the stored secret from the database (see [SECURITY.md](SECURITY.md) §3).
 
 ### Security self-check
-Dashboard → **🛡 Security** lists two-factor, HTTPS, network exposure, key files, disk encryption of the case drive, audit seals and model integrity, and marks what needs attention.
+After logging in, open `/api/security/status` in the browser; it lists two-factor, HTTPS, network exposure, key files, disk encryption of the case drive, audit seals and model integrity, and marks what needs attention.
 
 ## 3. Dashboard and cases
 

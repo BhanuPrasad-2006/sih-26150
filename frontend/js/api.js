@@ -26,6 +26,25 @@ function navAttrs(screen, params) {
   return `data-nav="${escapeHtml(screen)}" data-params="${escapeHtml(JSON.stringify(params || {}))}"`;
 }
 
+/**
+ * Format a real UTC instant (audit-log entries, case creation) as Indian Standard Time.
+ * Uses the Asia/Kolkata zone explicitly, so it does not depend on the viewer's computer settings.
+ * Do NOT use it on carved recording times: those are the recorder's own clock and carry no time zone.
+ */
+function formatIST(value) {
+  if (!value) return '—';
+  // Timestamps without a zone suffix are stored UTC; without this JS would read them as local time.
+  const text = String(value);
+  const d = new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(text) ? text : text + 'Z');
+  if (Number.isNaN(d.getTime())) return '—';
+  const p = {};
+  new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).formatToParts(d).forEach(x => { p[x.type] = x.value; });
+  return `${p.year}-${p.month}-${p.day} ${p.hour === '24' ? '00' : p.hour}:${p.minute}:${p.second} IST`;
+}
+
 /** Attributes for a per-segment action button, handled by the same delegated listener. */
 function actAttrs(action, caseId, evidenceId, segmentId) {
   return `data-act="${escapeHtml(action)}" data-case="${escapeHtml(caseId)}" data-evidence="${escapeHtml(evidenceId)}" data-segment="${escapeHtml(segmentId)}"`;
