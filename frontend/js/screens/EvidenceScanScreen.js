@@ -142,16 +142,16 @@ async function renderEvidenceScanScreen(params) {
         <div class="flex-col gap-14 text-base">
           <div>
             <div class="meta-label">SHA-256</div>
-            <div class="hash-font mt-xs word-break-all">${sha256}</div>
+            <div class="hash-font mt-xs word-break-all" id="acq-sha256">${sha256}</div>
           </div>
           <div>
             <div class="meta-label">MD5</div>
-            <div class="hash-font mt-xs word-break-all">${md5}</div>
+            <div class="hash-font mt-xs word-break-all" id="acq-md5">${md5}</div>
           </div>
           <div class="d-flex gap-32 mt-xs">
             <div>
               <div class="meta-label">File Size</div>
-              <div class="meta-value">${sizeMB} MB</div>
+              <div class="meta-value" id="acq-size">${sizeMB} MB</div>
             </div>
             <div>
               <div class="meta-label">Format</div>
@@ -213,7 +213,7 @@ async function renderEvidenceScanScreen(params) {
           showToast('MISMATCH DETECTED: Disk image has been modified since acquisition!', 'error', { duration: 8000 });
         }
       } catch (err) {
-        showToast(`Verification failed: ${escapeHtml(err.message)}`, 'error');
+        showToast('Verification failed: ' + err.message, 'error');   // toasts render text, not HTML
       } finally {
         btnVerify.disabled = false;
         btnVerify.innerHTML = `${icon('shield-check')} Verify Integrity`;
@@ -265,8 +265,12 @@ async function renderEvidenceScanScreen(params) {
               </div>`;
             btnScan.disabled = false;
             btnScan.innerHTML = icon('refresh') + ' Re-Run Forensic Scan';
-            // Show the brand the scan just decided on (was left at the pre-scan value).
+            // Show what the scan just worked out (hashes, size and brand were left at their pre-scan values).
             API.getEvidence(caseId, evidenceId).then((fresh) => {
+              const setText = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+              setText('acq-sha256', fresh.sha256_before || fresh.sha256_after || '—');
+              setText('acq-md5', fresh.md5_before || '—');
+              if (fresh.size_bytes != null) setText('acq-size', (fresh.size_bytes / (1024 * 1024)).toFixed(2) + ' MB');
               const card = document.getElementById('brand-card-body');
               if (card) {
                 const pct = fresh.confidence != null ? (fresh.confidence * 100).toFixed(0) : '—';

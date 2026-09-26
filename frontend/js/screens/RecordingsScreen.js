@@ -592,7 +592,7 @@ async function exportSegment(caseId, evidenceId, segmentId, btnEl) {
       }
     }
   } catch (err) {
-    showToast(`Export failed: ${escapeHtml(err.message)}`, 'error');
+    showToast('Export failed: ' + err.message, 'error');
     if (btnEl) {
       btnEl.disabled = false;
       btnEl.innerHTML = `${icon('download')} Export`;

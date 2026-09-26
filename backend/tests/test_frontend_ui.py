@@ -231,3 +231,16 @@ def test_export_screen_has_the_certificate_details_form_and_saves_before_generat
     assert 'id="cert-form"' in text and 'id="btn-save-cert"' in text
     assert text.index("await saveCertForm()") < text.index("await API.generateReport(")
     assert "escapeHtml(f.label)" in text and "escapeHtml(cert.values[f.key]" in text
+
+
+def test_toast_messages_are_not_html_escaped_because_toasts_render_text():
+    for f in JS:
+        for n, line in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
+            if "showToast(" in line and "escapeHtml(" in line and "html: true" not in line:
+                raise AssertionError(f"{f.name}:{n}: toasts use textContent; escaping would show &amp; to the user")
+
+
+def test_scan_screen_refreshes_hashes_size_and_brand_when_the_scan_finishes():
+    text = (ROOT / "js" / "screens" / "EvidenceScanScreen.js").read_text(encoding="utf-8")
+    for element_id in ("acq-sha256", "acq-md5", "acq-size", "brand-card-body"):
+        assert f'id="{element_id}"' in text and f"'{element_id}'" in text or f'getElementById(\'{element_id}\')' in text, element_id
