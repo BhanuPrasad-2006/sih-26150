@@ -1,6 +1,32 @@
 /**
  * EvidenceScanScreen.js — Acquisition overview, brand detection, and live carving scan.
  */
+/** What kind of file this is, from its extension. The tool reads every image as raw bytes. */
+function evidenceFormatLabel(path) {
+  const name = String(path || '').split(/[\\/]/).pop();
+  const m = /\.([A-Za-z0-9]{1,6})$/.exec(name);
+  const ext = m ? m[1].toLowerCase() : '';
+  if (!ext) return 'Raw image (no file extension)';
+  if (['e01', 'ex01', 'aff', 'aff4', 'vmdk', 'vhd', 'vhdx', 'qcow2'].includes(ext)) {
+    return `Container image (.${ext}) — read as raw bytes; convert to raw first`;
+  }
+  if (ext === '001') return 'Raw image, first split part (.001)';
+  if (['dd', 'img', 'raw', 'bin', 'iso'].includes(ext)) return `Raw disk image (.${ext})`;
+  return `Raw image (.${ext})`;
+}
+
+/** Badge style for the detected brand: only recognised, described layouts look "verified". */
+function brandBadge(brand) {
+  const b = String(brand || '').toLowerCase();
+  if (!b || b.includes('unknown') || b.includes('unidentified') || b.includes('generic')) {
+    return { cls: 'badge-pending', tip: 'No recorder brand was identified.' };
+  }
+  if (b.includes('unverified') || b.includes('unvalidated') || b.includes('detection-only')) {
+    return { cls: 'badge-partial', tip: 'Detection only. This layout has not been verified on a real recorder disk, so treat results with caution.' };
+  }
+  return { cls: 'badge-verified', tip: 'Recognised recorder layout.' };
+}
+
 async function renderEvidenceScanScreen(params) {
   const { caseId, evidenceId } = params;
   const root = document.getElementById('content-root');
@@ -21,7 +47,7 @@ async function renderEvidenceScanScreen(params) {
         <div class="page-title">Acquisition &amp; Scan</div>
       </div>
       <div class="error-banner">
-        <div class="error-banner-icon">⚠️</div>
+        <div class="error-banner-icon">${icon('alert')}</div>
         <div class="error-banner-body">
           <div class="error-banner-title">Failed to load evidence</div>
           <div class="error-banner-msg">${escapeHtml(err.message)}</div>
@@ -41,7 +67,7 @@ async function renderEvidenceScanScreen(params) {
   const scanStatus  = ev.scan_status || 'PENDING';
   const isScanning  = scanStatus === 'SCANNING';
   const isCompleted = scanStatus === 'COMPLETED';
-  const scanBtnLabel = isCompleted ? '🔁 Re-Run Forensic Scan' : '🚀 Start Carving Scan';
+  const scanBtnLabel = isCompleted ? icon('refresh') + ' Re-Run Forensic Scan' : icon('rocket') + ' Start Carving Scan';
 
   const statusBadgeClass = isCompleted ? 'badge-complete'
                          : isScanning  ? 'badge-scanning'
@@ -55,7 +81,7 @@ async function renderEvidenceScanScreen(params) {
           <div class="page-subtitle" style="font-family:var(--font-mono); font-size:12px;">${evPath}</div>
         </div>
         <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
-          <button id="btn-verify-integrity" class="btn btn-secondary">🔍 Verify Image Hashes</button>
+          <button id="btn-verify-integrity" class="btn btn-secondary">${icon('fingerprint')} Verify Image Hashes</button>
           <button id="btn-start-scan" class="btn btn-primary"
             ${isScanning ? 'disabled title="A scan is already running on this image"' : ''}>
             ${isScanning ? '<span class="btn-spinner"></span> Scan Running…' : scanBtnLabel}
@@ -84,7 +110,7 @@ async function renderEvidenceScanScreen(params) {
             </div>
             <div>
               <div class="meta-label">Format</div>
-              <div class="meta-value">Raw Binary (.dd)</div>
+              <div class="meta-value">${escapeHtml(evidenceFormatLabel(ev.path))}</div>
             </div>
           </div>
         </div>
@@ -94,10 +120,10 @@ async function renderEvidenceScanScreen(params) {
       <div class="card" style="margin-bottom:0;">
         <div class="card-title">Brand Detection</div>
         <div style="text-align:center; padding:12px 0;">
-          <div style="font-size:26px; font-weight:700; color:var(--accent-cyan); margin-bottom:6px;">${detBrand}</div>
+          <div style="font-size:26px; font-weight:700; color:var(--accent-cyan); margin-bottom:6px;">${escapeHtml(detBrand)}</div>
           <div style="font-size:13px; color:var(--text-muted);">Confidence: <strong>${brandConf}%</strong></div>
           <div style="margin-top:12px;">
-            <span class="badge ${detBrand.toLowerCase().includes('unverified') ? 'badge-uncertain' : 'badge-verified'}">${detBrand}</span>
+            <span class="badge ${brandBadge(detBrand).cls}" data-tooltip="${escapeHtml(brandBadge(detBrand).tip)}">${escapeHtml(detBrand)}</span>
           </div>
         </div>
       </div>
@@ -122,7 +148,7 @@ async function renderEvidenceScanScreen(params) {
     <div class="card" style="margin-top:20px;">
       <div class="card-title">
         <span>Scan Results &amp; Segments</span>
-        ${isCompleted ? `<button class="btn btn-secondary btn-sm" ${navAttrs('recordings', { caseId: caseId, evidenceId: evidenceId })}>View Recordings ➔</button>` : ''}
+        ${isCompleted ? `<button class="btn btn-secondary btn-sm" ${navAttrs('recordings', { caseId: caseId, evidenceId: evidenceId })}>View Recordings ${icon('arrow-right')}</button>` : ''}
       </div>
       <div style="display:flex; align-items:center; gap:12px; font-size:14px;">
         <span style="color:var(--text-muted);">Current status:</span>
@@ -145,12 +171,12 @@ async function renderEvidenceScanScreen(params) {
       showModal(
         'Integrity Verification Result',
         res.match
-          ? `<div class="success-inline" style="border-radius:6px; border-left:none; border:1px solid rgba(16,185,129,0.4);">
-               ✅ MATCH — Disk image has not been altered or tampered with.
+          ? `<div class="success-inline" style="border-radius:6px; border-left:none; border:1px solid var(--status-complete);">
+               ${icon('check-circle')} MATCH — Disk image has not been altered or tampered with.
              </div>
              <p class="hash-font" style="margin-top:12px; word-break:break-all;">SHA-256: ${res.current_sha256}</p>`
           : `<div class="error-banner" style="margin-top:0;">
-               <div class="error-banner-icon">❌</div>
+               <div class="error-banner-icon">${icon('x-circle')}</div>
                <div class="error-banner-body">
                  <div class="error-banner-title">MISMATCH DETECTED</div>
                  <div class="error-banner-msg">The disk image has been modified since acquisition. Do not use this evidence until the discrepancy is investigated.</div>
@@ -160,7 +186,7 @@ async function renderEvidenceScanScreen(params) {
     } catch (err) {
       showModal('Verification Error', `
         <div class="error-banner" style="margin-top:0;">
-          <div class="error-banner-icon">⚠️</div>
+          <div class="error-banner-icon">${icon('alert')}</div>
           <div class="error-banner-body">
             <div class="error-banner-title">Verification failed</div>
             <div class="error-banner-msg">${escapeHtml(err.message)}</div>
@@ -206,33 +232,34 @@ async function renderEvidenceScanScreen(params) {
           (comp) => {
             progressPct.innerText = '100%';
             progressBar.style.width = '100%';
-            statusText.innerHTML = `<span style="color:var(--status-complete);">✅ ${escapeHtml(comp.message || 'Scan complete.')}</span>`;
+            statusText.innerHTML = `
+              <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+                <span style="color:var(--status-complete);">${icon('check-circle')} ${escapeHtml(comp.message || 'Scan complete.')}</span>
+                <button class="btn btn-primary btn-sm" ${navAttrs('recordings', { caseId: caseId, evidenceId: evidenceId })}>View recordings ${icon('arrow-right')}</button>
+              </div>`;
             btnScan.disabled = false;
-            btnScan.innerHTML = '🔁 Re-Run Forensic Scan';
-            setTimeout(() => {
-              navigateTo('recordings', { caseId, evidenceId });
-            }, 1200);
+            btnScan.innerHTML = icon('refresh') + ' Re-Run Forensic Scan';
           },
           // onError
           (errMsg) => {
             statusText.innerHTML = `
               <div class="error-inline" style="margin-top:8px;">
-                <span>⚠️</span>
+                <span>${icon('alert')}</span>
                 <span>Scan failed: ${escapeHtml(errMsg)}</span>
               </div>`;
             btnScan.disabled = false;
-            btnScan.innerHTML = '🚀 Retry Carving Scan';
+            btnScan.innerHTML = icon('rocket') + ' Retry Carving Scan';
           }
         );
       } catch (err) {
         // Could not even start the scan
         statusText.innerHTML = `
           <div class="error-inline" style="margin-top:8px;">
-            <span>⚠️</span>
+            <span>${icon('alert')}</span>
             <span>Failed to initiate scan: ${escapeHtml(err.message)}</span>
           </div>`;
         btnScan.disabled = false;
-        btnScan.innerHTML = '🚀 Start Carving Scan';
+        btnScan.innerHTML = icon('rocket') + ' Start Carving Scan';
       }
     };
   }

@@ -7,11 +7,9 @@ function showModal(title, bodyHtml, buttons = []) {
   root.innerHTML = `
     <div class="modal-overlay">
       <div class="modal-content">
-        <div class="card-title" style="margin-bottom:14px;">
-          <span style="font-size:16px;">${title}</span>
-          <button id="modal-close-btn"
-            style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:20px; line-height:1; padding:0; flex-shrink:0;"
-            aria-label="Close modal">✕</button>
+        <div class="card-title">
+          <span>${title}</span>
+          <button id="modal-close-btn" class="modal-close" aria-label="Close modal">${icon('x')}</button>
         </div>
         <div class="modal-body" style="margin-bottom:20px; font-size:14px; line-height:1.6;">
           ${bodyHtml}
