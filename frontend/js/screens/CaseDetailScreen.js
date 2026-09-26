@@ -43,7 +43,7 @@ async function renderCaseDetailScreen(params) {
     <div class="page-header">
       <div class="page-header-row">
         <div>
-          <div class="page-title">Case: <span style="color:var(--accent-cyan);">${escapeHtml(caseObj.case_number)}</span></div>
+          <div class="page-title">Case: <span class="text-primary">${escapeHtml(caseObj.case_number)}</span></div>
           <div class="page-subtitle">Investigator: ${escapeHtml(caseObj.examiner)}</div>
         </div>
         <button id="btn-add-evidence" class="btn btn-primary btn-lg">${icon('upload-cloud')} Add disk image</button>
@@ -63,7 +63,7 @@ async function renderCaseDetailScreen(params) {
         </div>
         <div>
           <div class="meta-label">Notes</div>
-          <div class="meta-value" style="color:var(--text-muted);">${caseObj.notes ? escapeHtml(caseObj.notes) : '—'}</div>
+          <div class="meta-value text-muted">${caseObj.notes ? escapeHtml(caseObj.notes) : '—'}</div>
         </div>
       </div>
     </div>
@@ -71,7 +71,7 @@ async function renderCaseDetailScreen(params) {
     <div class="card">
       <div class="card-title">
         <span>Attached Evidence Images</span>
-        <span style="font-size:12px; color:var(--text-dim); font-weight:400;">${evidence.length} image${evidence.length !== 1 ? 's' : ''} loaded</span>
+        <span class="text-sm text-dim font-normal">${evidence.length} image${evidence.length !== 1 ? 's' : ''} loaded</span>
       </div>
       <div id="evidence-area">
         ${renderEvidenceTable(evidence, caseId)}
@@ -86,7 +86,7 @@ async function renderCaseDetailScreen(params) {
     showModal(
       `${icon('hard-drive')} Add disk image`,
       `
-        <p class="card-lead" style="margin-top:0;">
+        <p class="card-lead mt-0">
           Add the recorder's disk image to this case. It is hashed on load and only ever read, never changed. Pick <b>one</b> of the three ways below.
         </p>
 
@@ -99,7 +99,7 @@ async function renderCaseDetailScreen(params) {
           <!-- Option 1: Choose File -->
           <div class="option-card">
             <h4>${iconChip('upload-cloud')} Option 1 · Upload from this computer</h4>
-            <input type="file" id="modal-ev-file-input" accept=".dd,.img,.raw,.bin,.001,.iso,*" style="display:none;">
+            <input type="file" id="modal-ev-file-input" accept=".dd,.img,.raw,.bin,.001,.iso,*" class="hidden">
             <div id="modal-ev-browse-btn" class="dropzone" role="button" tabindex="0" aria-label="Choose a disk image file">
               ${dropArt()}
               <div class="dropzone-title">Drop your disk image here</div>
@@ -112,7 +112,7 @@ async function renderCaseDetailScreen(params) {
                 <div class="file-chip-name" id="modal-ev-file-name">No file chosen</div>
                 <div class="file-chip-meta">Ready to upload to case storage</div>
               </div>
-              <button type="button" id="modal-ev-file-clear" class="modal-close" style="display:none;" title="Remove selected file" aria-label="Remove selected file">${icon('x')}</button>
+              <button type="button" id="modal-ev-file-clear" class="modal-close hidden" title="Remove selected file" aria-label="Remove selected file">${icon('x')}</button>
             </div>
           </div>
 
@@ -130,14 +130,14 @@ async function renderCaseDetailScreen(params) {
           <!-- Option 3: Image a drive -->
           <div class="option-card">
             <h4>${iconChip('hard-drive', 'warn')} Option 3 · Create an image from a connected drive</h4>
-            <div id="modal-acq-area" style="font-size:12.5px; color:var(--text-dim);">Checking whether drive imaging is available…</div>
+            <div id="modal-acq-area" class="text-dim-125">Checking whether drive imaging is available…</div>
           </div>
         </div>
 
         <div class="form-group">
           <label>Device Clock Offset from UTC (optional)</label>
           <input type="number" id="modal-ev-tz-offset" class="form-control" placeholder="e.g. 330 for IST (UTC+5:30)" step="1" min="-720" max="840">
-          <p style="font-size:12px; color:var(--text-dim); margin-top:4px; line-height:1.5;">
+          <p class="text-sm text-dim mt-xs lh-base">
             Minutes, e.g. <code>330</code> for IST. Only set this if you have independently confirmed the
             recorder's configured timezone — carved timestamps are otherwise shown as raw device-reported
             values and are <strong>not</strong> assumed to be UTC. Used to normalize timestamps for
@@ -145,17 +145,17 @@ async function renderCaseDetailScreen(params) {
           </p>
         </div>
 
-        <div id="modal-ev-progress-box" class="upload-progress" style="display:none;">
-          <div style="display:flex; justify-content:space-between; font-size:12.5px; color:var(--text-muted);">
+        <div id="modal-ev-progress-box" class="upload-progress hidden">
+          <div class="d-flex justify-between text-muted-125">
             <span id="modal-ev-progress-status">Uploading evidence file...</span>
-            <span id="modal-ev-progress-pct" style="font-weight:700; color:var(--accent-cyan);">0%</span>
+            <span id="modal-ev-progress-pct" class="font-bold text-primary">0%</span>
           </div>
-          <div class="progress-bar-container" style="margin:8px 0 0;">
-            <div id="modal-ev-progress-bar" class="progress-bar-fill" style="width:0%;"></div>
+          <div class="progress-bar-container mt-sm mb-0">
+            <div id="modal-ev-progress-bar" class="progress-bar-fill"></div>
           </div>
         </div>
 
-        <div id="modal-ev-error" style="display:none; margin-top:12px;" class="error-inline">
+        <div id="modal-ev-error" class="error-inline hidden mt-md">
           <span>${icon('alert')}</span><span id="modal-ev-error-msg"></span>
         </div>
       `,
@@ -174,16 +174,16 @@ async function renderCaseDetailScreen(params) {
             const errMsgEl = document.getElementById('modal-ev-error-msg');
             const submitBtn = document.getElementById('modal-btn-1');
 
-            errDiv.style.display = 'none';
+            errDiv.classList.add('hidden');
 
             if (!selectedFile && !path) {
               errMsgEl.textContent = 'Please choose a file or enter an image file path.';
-              errDiv.style.display = 'flex';
+              errDiv.classList.remove('hidden');
               return;
             }
             if (tzOffsetRaw !== '' && (Number.isNaN(tzOffset) || tzOffset < -720 || tzOffset > 840)) {
               errMsgEl.textContent = 'Device clock offset must be a number of minutes between -720 and 840.';
-              errDiv.style.display = 'flex';
+              errDiv.classList.remove('hidden');
               return;
             }
 
@@ -195,7 +195,7 @@ async function renderCaseDetailScreen(params) {
                 const progressPct = document.getElementById('modal-ev-progress-pct');
                 const progressBar = document.getElementById('modal-ev-progress-bar');
 
-                progressBox.style.display = 'block';
+                progressBox.classList.remove('hidden');
                 if (submitBtn) {
                   submitBtn.disabled = true;
                   submitBtn.textContent = 'Uploading...';
@@ -223,9 +223,9 @@ async function renderCaseDetailScreen(params) {
               navigateTo('evidence-scan', { caseId, evidenceId: ev.evidence_id || ev.id });
             } catch (err) {
               errMsgEl.textContent = err.message || 'Failed to load evidence image';
-              errDiv.style.display = 'flex';
+              errDiv.classList.remove('hidden');
               const progressBox = document.getElementById('modal-ev-progress-box');
-              if (progressBox) progressBox.style.display = 'none';
+              if (progressBox) progressBox.classList.add('hidden');
               if (submitBtn) {
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'Load & Calculate Hashes';
@@ -271,7 +271,7 @@ async function renderCaseDetailScreen(params) {
           fileNameSpan.textContent = `${file.name} (${sizeMb} MB)`;
           fileNameSpan.style.color = 'var(--text-bright, #fff)';
           fileNameSpan.style.fontWeight = '500';
-          fileClearBtn.style.display = 'inline-flex';
+          fileClearBtn.classList.remove('hidden');
           if (fileChip) fileChip.classList.add('show');
           if (pathInput) pathInput.value = '';
         }
@@ -285,7 +285,7 @@ async function renderCaseDetailScreen(params) {
         fileNameSpan.textContent = 'No file chosen';
         fileNameSpan.style.color = 'var(--text-muted)';
         fileNameSpan.style.fontWeight = 'normal';
-        fileClearBtn.style.display = 'none';
+        fileClearBtn.classList.add('hidden');
         if (fileChip) fileChip.classList.remove('show');
       };
     }
@@ -298,7 +298,7 @@ async function renderCaseDetailScreen(params) {
           fileNameSpan.textContent = 'No file chosen';
           fileNameSpan.style.color = 'var(--text-muted)';
           fileNameSpan.style.fontWeight = 'normal';
-          fileClearBtn.style.display = 'none';
+          fileClearBtn.classList.add('hidden');
           if (fileChip) fileChip.classList.remove('show');
         }
       };
@@ -325,20 +325,20 @@ async function initAcquisitionPanel(caseId) {
     `<option value="${escapeHtml(d.path)}">${escapeHtml(d.path)} — ${escapeHtml(d.model || 'unknown model')}` +
     `${d.size_bytes ? ' — ' + (d.size_bytes / 1e9).toFixed(1) + ' GB' : ''}</option>`).join('');
   area.innerHTML = `
-    <div style="display:flex; flex-direction:column; gap:8px;">
+    <div class="flex-col gap-sm">
       <select id="acq-drive" class="form-control"><option value="">Pick a drive…</option>${options}</select>
       <input type="text" id="acq-path" class="form-control" placeholder="…or type a device / file path">
-      <label style="display:flex; gap:8px; align-items:flex-start; line-height:1.5; color:var(--text-muted);">
-        <input type="checkbox" id="acq-wb" style="margin-top:3px;">
+      <label class="d-flex gap-sm items-start lh-base text-muted">
+        <input type="checkbox" id="acq-wb" class="mt-3">
         <span>I confirm this source is connected through a <strong>hardware write blocker</strong> (or a read-only mount).
         The software cannot enforce this; your confirmation is recorded in the audit log.</span>
       </label>
-      <label style="display:flex; gap:8px; align-items:center; color:var(--text-muted);">
+      <label class="d-flex gap-sm items-center text-muted">
         <input type="checkbox" id="acq-verify"> Also re-read the source afterwards to confirm it did not change (slower)
       </label>
-      <div style="color:var(--status-partial);">Imaging a real drive reads the whole disk and can take hours. Raw devices usually need administrator/root rights.</div>
+      <div class="text-partial">Imaging a real drive reads the whole disk and can take hours. Raw devices usually need administrator/root rights.</div>
       <button type="button" id="acq-start" class="btn btn-secondary">Start imaging</button>
-      <div id="acq-status" style="font-family:var(--font-mono); word-break:break-all;"></div>
+      <div id="acq-status" class="font-mono word-break-all"></div>
     </div>`;
 
   document.getElementById('acq-drive').onchange = (e) => {
@@ -371,7 +371,7 @@ async function initAcquisitionPanel(caseId) {
             const r = st.report;
             el.innerHTML = `Done. SHA-256 ${escapeHtml(r.sha256)}<br>` +
               (r.is_bit_exact ? 'Image verified and bit-exact.'
-                              : `<span style="color:var(--status-partial);">Not bit-exact: ${escapeHtml((r.notes || []).join(' '))}</span>`);
+                              : `<span class="text-partial">Not bit-exact: ${escapeHtml((r.notes || []).join(' '))}</span>`);
             setTimeout(() => { closeModal(); navigateTo('evidence-scan', { caseId, evidenceId: st.evidence_id }); }, 1500);
           } else if (st.state === 'failed') {
             clearInterval(timer);
@@ -430,7 +430,7 @@ function renderEvidenceTable(evidence, caseId) {
             return `
               <tr>
                 <td><strong>${escapeHtml(ev.evidence_label || ev.evidence_id)}</strong></td>
-                <td style="font-family:var(--font-mono); font-size:11px; color:var(--text-muted); max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(ev.path || ev.file_path || '')}</td>
+                <td class="font-mono-xs text-muted max-w-200 text-truncate">${escapeHtml(ev.path || ev.file_path || '')}</td>
                 <td><span class="badge ${brandBadge}">${escapeHtml(brand)}${confidence}</span></td>
                 <td class="hash-font">${ev.sha256_before ? ev.sha256_before.substring(0, 16) + '…' : '—'}</td>
                 <td><span class="badge ${badgeClass}">${scanStatus}</span></td>

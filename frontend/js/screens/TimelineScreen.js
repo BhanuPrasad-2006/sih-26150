@@ -93,6 +93,14 @@ function timelineTicksForRange(startTime, endTime, zoomPreset = 'all') {
   return ticks;
 }
 
+function applyTimelinePositions(container) {
+  if (!container) return;
+  container.querySelectorAll('[data-left]').forEach(el => {
+    el.style.left = `${el.dataset.left}%`;
+    if (el.dataset.width) el.style.width = `${el.dataset.width}%`;
+  });
+}
+
 function renderTimelineSegment(segment, rangeStart, rangeMs, caseId, defaultEvidenceId) {
   const left = timelinePercent(segment.start_time, rangeStart, rangeMs);
   const end = timelinePercent(segment.end_time, rangeStart, rangeMs);
@@ -112,7 +120,7 @@ function renderTimelineSegment(segment, rangeStart, rangeMs, caseId, defaultEvid
       data-sha256="${escapeHtml(segment.sha256 || '')}"
       data-notes="${escapeHtml(segment.notes || '')}"
       ${navAttrs('recordings', { caseId, evidenceId: evId, highlightSegmentId: segment.segment_id })}
-      style="left:${left}%; width:${width}%;"
+      data-left="${left}" data-width="${width}"
       aria-label="Camera ${escapeHtml(String(segment.camera))}: ${escapeHtml(timelineFormatUtc(segment.start_time))} to ${escapeHtml(timelineFormatUtc(segment.end_time))}, ${escapeHtml(status)}">
       <span class="timeline-segment-label">${status}</span>
     </div>`;
@@ -126,7 +134,7 @@ function renderTimelineGap(gap, rangeStart, rangeMs) {
   const label = gap.duration_seconds >= 60 ? timelineDuration(gap.duration_seconds) : '';
 
   return `
-    <div class="timeline-gap" style="left:${left}%; width:${width}%;" title="${timelineEscapeHtml(title)}">
+    <div class="timeline-gap" data-left="${left}" data-width="${width}" title="${timelineEscapeHtml(title)}">
       ${label ? `<span class="timeline-gap-label">Gap ${label}</span>` : ''}
     </div>`;
 }
@@ -154,7 +162,7 @@ function renderCorrelationCard(correlation) {
       <div class="card-title">
         <span>Cross-Camera Correlated Events</span>
       </div>
-      <p style="font-size:12px; color:var(--text-dim); margin:0 0 12px; line-height:1.6;">
+      <p class="lead-text-sm">
         Segments whose time windows overlap across 2 or more cameras, clustered purely by time proximity —
         this is not content analysis and does not claim the events are related; independently confirm relevance.
         ${correlation.any_evidence_normalized
@@ -162,7 +170,7 @@ function renderCorrelationCard(correlation) {
           : 'No evidence in this case has a confirmed device clock offset, so raw device-reported timestamps were used as-is — correlation across different devices may be unreliable if their clocks differ.'}
       </p>
       ${events.length === 0
-        ? `<div class="empty-state" style="padding:24px 0;">
+        ? `<div class="empty-state py-lg">
              <div class="empty-state-subtitle">No overlapping activity was found across different cameras.</div>
            </div>`
         : `<div class="table-container">
@@ -176,8 +184,8 @@ function renderCorrelationCard(correlation) {
                      <td>${timelineFormatUtc(ev.start_time)}</td>
                      <td>${timelineFormatUtc(ev.end_time)}</td>
                      <td>${timelineDuration(ev.duration_seconds)}</td>
-                     <td>${ev.cameras.map(c => `<span class="badge badge-verified" style="margin-right:4px;">Cam ${c}</span>`).join('')}</td>
-                     <td style="color:var(--text-dim); font-size:12px;">${ev.segment_ids.length} segment${ev.segment_ids.length === 1 ? '' : 's'}</td>
+                     <td>${ev.cameras.map(c => `<span class="badge badge-verified mr-xs">Cam ${c}</span>`).join('')}</td>
+                     <td class="text-dim text-sm">${ev.segment_ids.length} segment${ev.segment_ids.length === 1 ? '' : 's'}</td>
                    </tr>`).join('')}
                </tbody>
              </table>
@@ -283,7 +291,7 @@ async function renderTimelineScreen(params) {
           <div class="timeline-axis">
             <div class="timeline-axis-label">Recorder time</div>
             <div class="timeline-axis-track">
-              ${ticks.map(tick => `<span class="timeline-tick" style="left:${tick.left}%">${tick.label}</span>`).join('')}
+              ${ticks.map(tick => `<span class="timeline-tick" data-left="${tick.left}">${tick.label}</span>`).join('')}
             </div>
           </div>
           ${lanes.map(lane => renderTimelineLane(lane, rangeStart, rangeMs, caseId, params.evidenceId)).join('')}
@@ -291,7 +299,7 @@ async function renderTimelineScreen(params) {
       </div>
     </div>
 
-    <div id="timeline-hover-card" class="timeline-hover-card" style="display:none;" role="tooltip" aria-hidden="true"></div>
+    <div id="timeline-hover-card" class="timeline-hover-card hidden" role="tooltip" aria-hidden="true"></div>
 
     ${renderCorrelationCard(correlation)}
 
@@ -301,6 +309,8 @@ async function renderTimelineScreen(params) {
         <p>These recovered segments lack a valid start/end timestamp and are therefore excluded from the visual timeline. Review them in Recordings before relying on their chronology.</p>
       </div>` : ''}
   `;
+
+  applyTimelinePositions(root);
 
   // ── Hover card interaction ────────────────────────────────────────────────
   const hoverCard = document.getElementById('timeline-hover-card');
@@ -352,7 +362,7 @@ async function renderTimelineScreen(params) {
         <div class="hover-card-hash">SHA-256: ${shaShort}</div>
         ${notesHtml}
       `;
-      hoverCard.style.display = 'flex';
+      hoverCard.classList.remove('hidden');
       hoverCard.setAttribute('aria-hidden', 'false');
       updatePosition(seg);
     });
@@ -363,13 +373,13 @@ async function renderTimelineScreen(params) {
       if (seg.contains(e.relatedTarget)) return;
 
       activeSegment = null;
-      hoverCard.style.display = 'none';
+      hoverCard.classList.add('hidden');
       hoverCard.setAttribute('aria-hidden', 'true');
     });
 
     scrollArea.addEventListener('scroll', () => {
       if (activeSegment) {
-        hoverCard.style.display = 'none';
+        hoverCard.classList.add('hidden');
         hoverCard.setAttribute('aria-hidden', 'true');
         activeSegment = null;
       }
@@ -411,7 +421,8 @@ async function renderTimelineScreen(params) {
       timelineContent.style.minWidth = minWidth;
 
       const newTicks = timelineTicksForRange(timeline.start_time, timeline.end_time, zoom);
-      axisTrack.innerHTML = newTicks.map(tick => `<span class="timeline-tick" style="left:${tick.left}%">${tick.label}</span>`).join('');
+      axisTrack.innerHTML = newTicks.map(tick => `<span class="timeline-tick" data-left="${tick.left}">${tick.label}</span>`).join('');
+      applyTimelinePositions(axisTrack);
     });
   }
 }

@@ -6,9 +6,9 @@ security.py — Request-level hardening for the localhost forensic server.
                              state-changing requests whose Origin / Sec-Fetch-Site says cross-site (CSRF).
   ensure_path_allowed        Optional allow-list for server-side file paths the examiner can point the tool at.
 
-The front end uses no inline event handlers or inline scripts (clicks are delegated via data-nav / data-act),
-so script-src is strictly 'self'. Styles still allow 'unsafe-inline' because the UI sets style attributes; that
-is a much smaller risk (no script execution) and is the remaining CSP concession.
+The front end uses no inline event handlers, inline scripts or inline style attributes
+(clicks are delegated via data-nav / data-act, styling via classes), so both script-src
+and style-src are strictly 'self'.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ _UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 CSP = "; ".join([
     "default-src 'self'",
     "script-src 'self'",
-    "style-src 'self' 'unsafe-inline'",
+    "style-src 'self'",
     "img-src 'self' data: blob:",
     "media-src 'self' blob:",
     "font-src 'self' data:",

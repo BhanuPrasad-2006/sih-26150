@@ -23,7 +23,7 @@ Out of scope: an attacker with administrator rights on the workstation (memory, 
 | Network | Binds to `127.0.0.1` only; Host header must be a local name (DNS-rebinding defence); `SIH_ALLOWED_HOSTS` for deliberate exceptions | `main.py`, `security.py` |
 | **Transport** | Optional **HTTPS** (`SIH_TLS=1`): self-signed localhost certificate (or your own via `SIH_TLS_CERT`/`SIH_TLS_KEY`), `Secure` cookie and `Strict-Transport-Security` on HTTPS | `tls.py`, `serve.py`, `security.py` |
 | Cross-site | Cookie `HttpOnly` + `SameSite=Strict`; state-changing requests with a foreign `Origin`, `Origin: null` or `Sec-Fetch-Site: cross-site` are refused | `security.py` |
-| Browser hardening | CSP with `script-src 'self'` (no inline script anywhere in the UI, enforced by a test), `frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'none'`, `form-action 'self'`; `X-Frame-Options: DENY`, `nosniff`, no-referrer | `security.py` |
+| Browser hardening | CSP with `script-src 'self'`, `style-src 'self'` (no inline script or style attributes anywhere in the UI, enforced by automated tests), `frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'none'`, `form-action 'self'`; `X-Frame-Options: DENY`, `nosniff`, no-referrer | `security.py` |
 | Output escaping | Every server/user string is HTML-escaped before it reaches the page; tests fail if risky fields are interpolated raw | `frontend/js`, `test_security.py` |
 | Login | bcrypt password (12+ characters), 5 failures → 60 s lock (the count and lock time are saved in the database, so restarting the server does not reset them), 30-minute idle timeout **and a 12-hour absolute session lifetime** (`SESSION_MAX_HOURS`), identical error for every failure | `auth.py` |
 | **Two-factor** | Optional TOTP (RFC 6238, tested against the RFC vectors); a code works once (replay refused); wrong password and wrong code give the same reply; the code is only consumed after the password is right; secret encrypted in the database; every other session ends when it is switched on or off | `totp.py`, `auth.py` |
@@ -63,8 +63,7 @@ Back these up **separately from the case database**: if one place holds both the
 4. **Fuzzing is bounded evidence, not proof.** Native parsers inside FFmpeg/OpenCV were not fuzzed by us.
 5. **Self-signed certificates.** The PDF signature proves integrity and origin of the file, not a person's identity, and viewers show the signer as "unknown" until the certificate is trusted. A certificate from a public or organisational CA would fix that (bring your own key/certificate).
 6. **Single examiner.** No roles, no per-user attribution; adding them means a different data model, not a patch.
-7. **Style attributes** are still allowed by the CSP (`style-src 'unsafe-inline'`): the UI sets hundreds of `style=` attributes. This cannot run script.
-8. **No independent penetration test** has been done. Automated checks (tests, fuzzing, pip-audit, bandit) are not a substitute; commission one before high-stakes use.
+7. **No independent penetration test** has been done. Automated checks (tests, fuzzing, pip-audit, bandit) are not a substitute; commission one before high-stakes use.
 
 ## 5. Deployment checklist
 

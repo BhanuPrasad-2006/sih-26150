@@ -28,6 +28,8 @@ def test_security_headers_on_api_static_and_error_responses(auth_client):
         assert "object-src 'none'" in h["content-security-policy"]
         script_src = [d for d in h["content-security-policy"].split(";") if d.strip().startswith("script-src")][0]
         assert script_src.strip() == "script-src 'self'"                              # no inline script allowed
+        style_src = [d for d in h["content-security-policy"].split(";") if d.strip().startswith("style-src")][0]
+        assert style_src.strip() == "style-src 'self'"                                # no inline style allowed
 
 
 def test_headers_also_on_unauthenticated_rejection(isolated_app):
@@ -258,3 +260,14 @@ def test_frontend_has_no_inline_handlers_or_javascript_urls():
             if pattern.search(line) and not line.lstrip().startswith(("//", "*")):
                 offenders.append(f"{f.name}:{n}")
     assert not offenders, offenders
+
+
+def test_frontend_has_no_inline_styles():
+    """The strict CSP style-src 'self' only works if no template sets inline style attributes."""
+    pattern = re.compile(r'style="[^"]*"')
+    offenders = []
+    for f in list(_FRONTEND.rglob("*.js")) + [_FRONTEND.parent / "index.html"]:
+        for n, line in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
+            if pattern.search(line):
+                offenders.append(f"{f.name}:{n}")
+    assert not offenders, f"Found inline styles in: {offenders}"
