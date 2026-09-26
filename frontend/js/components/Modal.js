@@ -11,11 +11,11 @@ function showModal(title, bodyHtml, buttons = []) {
           <span>${title}</span>
           <button id="modal-close-btn" class="modal-close" aria-label="Close modal">${icon('x')}</button>
         </div>
-        <div class="modal-body" style="margin-bottom:20px; font-size:14px; line-height:1.6;">
+        <div class="modal-body">
           ${bodyHtml}
         </div>
         ${buttons.length > 0 ? `
-          <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:10px; flex-wrap:wrap;">
+          <div class="modal-footer">
             ${buttons.map((b, i) => `<button id="modal-btn-${i}" class="btn ${b.class || 'btn-secondary'}">${b.label}</button>`).join('')}
           </div>` : ''}
       </div>

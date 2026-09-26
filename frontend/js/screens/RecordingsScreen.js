@@ -111,7 +111,7 @@ async function renderRecordingsScreen(params) {
                   ${icon('sparkles')} Run all analytics on exported
                 </button>
               </div>
-              <div id="batch-progress-box" class="batch-progress-box" style="display:none;">
+              <div id="batch-progress-box" class="batch-progress-box hidden">
                 <div class="batch-progress-row">
                   <span id="batch-progress-label" class="batch-progress-text">
                     <span class="spinner spinner-sm"></span> Initialising batch...
@@ -121,8 +121,8 @@ async function renderRecordingsScreen(params) {
                     ${icon('x')} Cancel
                   </button>
                 </div>
-                <div class="progress-bar-container" style="margin:4px 0 0;">
-                  <div id="batch-progress-bar" class="progress-bar-fill" style="width:0%;"></div>
+                <div class="progress-bar-container mt-xs mb-0">
+                  <div id="batch-progress-bar" class="progress-bar-fill"></div>
                 </div>
               </div>
             </div>
@@ -194,17 +194,17 @@ async function renderRecordingsScreen(params) {
                     return `
                       <tr id="segment-row-${escapeHtml(s.segment_id)}" data-segment-id="${escapeHtml(s.segment_id)}">
                         <td><strong>Camera ${s.camera ?? s.camera_id ?? '?'}</strong></td>
-                        <td style="font-size:12px; font-family:var(--font-mono); color:var(--text-muted);">${startStr}<br>${endStr}</td>
+                        <td class="font-mono-sm text-muted">${startStr}<br>${endStr}</td>
                         <td>${s.frame_count}</td>
                         <td>
                           <span class="badge ${badgeClass}" data-tooltip="${escapeHtml(tooltip)}">${escapeHtml(s.status)}</span>
                         </td>
-                        <td style="font-size:12px; max-width:180px; color:var(--text-muted); line-height:1.5;">${escapeHtml(s.notes || s.status_rationale || '—')}</td>
+                        <td class="text-sm max-w-180 text-muted lh-base">${escapeHtml(s.notes || s.status_rationale || '—')}</td>
                         <td class="hash-font">${hashDisplay}</td>
                         <td>
                           ${isExported
-                            ? `<span class="badge badge-complete" style="font-size:10px;">Exported</span>`
-                            : `<span style="font-size:12px; color:var(--text-dim);">Not exported</span>`}
+                            ? `<span class="badge badge-complete text-xxs">Exported</span>`
+                            : `<span class="text-sm text-dim">Not exported</span>`}
                         </td>
                         <td>${aiDetectionsCell}</td>
                         <td>
@@ -225,28 +225,28 @@ async function renderRecordingsScreen(params) {
     ${segments.length > 0 ? `
     <div class="card">
       <div class="card-title"><span>Search for a Person Across Recordings</span></div>
-      <p style="font-size:12px; color:var(--text-dim); margin:0 0 12px; line-height:1.6;">
+      <p class="lead-text-sm">
         Optional: upload a reference photo to search for similar faces across every segment above that has
         already been checked with "Check Faces". <strong>Results are similarity candidates for human review,
         not confirmed identity matches</strong> — different people can score above the reference threshold
         shown in results. Always corroborate independently.
       </p>
-      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-        <input type="file" id="face-search-input" accept="image/*" class="form-control" style="max-width:320px;">
+      <div class="d-flex gap-10 items-center flex-wrap">
+        <input type="file" id="face-search-input" accept="image/*" class="form-control max-w-sm">
         <button id="face-search-btn" class="btn btn-primary btn-sm">${icon('search')} Search</button>
       </div>
-      <div id="face-search-results" style="margin-top:14px;"></div>
+      <div id="face-search-results" class="mt-14"></div>
     </div>
 
     <div class="card">
       <div class="card-title"><span>Accuracy Against Ground Truth</span></div>
-      <p style="font-size:12px; color:var(--text-dim); margin:0 0 12px; line-height:1.6;">
+      <p class="lead-text-sm">
         The tool cannot know how much footage there should have been, so it never states a recovery percentage on its
         own. To measure one, supply ground truth for a segment: a known-good video (e.g. exported by the recorder's own
         player), a recording log, and/or the <strong>original disk image from before the deletion</strong>.
         Anything you leave out is shown as <em>not measured</em>. Export the segment first for the video checks.
       </p>
-      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:12px;">
+      <div class="grid-fit-240">
         <div class="form-group">
           <label>Segment</label>
           <select id="acc-segment" class="form-control">
@@ -280,12 +280,12 @@ async function renderRecordingsScreen(params) {
           </select>
         </div>
       </div>
-      <p style="font-size:11px; color:var(--text-dim); margin:0 0 12px;">
+      <p class="text-xs text-dim mb-md">
         Log format: <code>{"recordings":[{"name":"front door","camera":1,"start":"2026-03-01T10:00:00Z","end":"2026-03-01T11:00:00Z"}]}</code>
       </p>
       <button id="acc-run" class="btn btn-primary btn-sm">${icon('ruler')} Measure</button>
-      <div id="acc-results" style="margin-top:14px;"></div>
-      <div id="acc-history" style="margin-top:14px;"></div>
+      <div id="acc-results" class="mt-14"></div>
+      <div id="acc-history" class="mt-14"></div>
     </div>` : ''}
   `;
 
@@ -321,7 +321,7 @@ async function renderRecordingsScreen(params) {
           btnBatchCancel.disabled = false;
           btnBatchCancel.innerHTML = `${icon('x')} Cancel`;
         }
-        if (progressBox) progressBox.style.display = 'flex';
+        if (progressBox) progressBox.classList.remove('hidden');
         if (progressBar) progressBar.style.width = '0%';
         if (progressPct) progressPct.textContent = '0%';
         if (progressLabel) progressLabel.innerHTML = '<span class="spinner spinner-sm"></span> Initialising export…';
@@ -377,7 +377,7 @@ async function renderRecordingsScreen(params) {
           btnBatchCancel.disabled = false;
           btnBatchCancel.innerHTML = `${icon('x')} Cancel`;
         }
-        if (progressBox) progressBox.style.display = 'flex';
+        if (progressBox) progressBox.classList.remove('hidden');
         if (progressBar) progressBar.style.width = '0%';
         if (progressPct) progressPct.textContent = '0%';
         if (progressLabel) progressLabel.innerHTML = '<span class="spinner spinner-sm"></span> Initialising analytics…';
@@ -433,7 +433,7 @@ function handleBatchResult(actionName, res, caseId, evidenceId) {
          <div>
            <h3>${icon('alert')} Some items could not be processed</h3>
            <p>${res.completed - res.failures.length} of ${res.total} completed successfully. The following ${res.failures.length} item(s) failed:</p>
-           <ul style="font-size:12px; margin-top:8px; line-height:1.6; padding-left:18px;">
+           <ul class="text-sm mt-sm lh-relaxed pl-18">
              ${res.failures.map(f => `<li>Camera ${escapeHtml(String(f.camera ?? '?'))}${f.type ? ' (' + escapeHtml(f.type) + ')' : ''}: ${escapeHtml(f.error)}</li>`).join('')}
            </ul>
          </div>
@@ -473,14 +473,14 @@ async function runFaceSearch(caseId) {
 
     if (matches.length === 0) {
       resultsEl.innerHTML = `
-        <div class="empty-state" style="padding:16px 0;">
+        <div class="empty-state py-16">
           <div class="empty-state-subtitle">No candidate faces found. Either no segments have been indexed yet
           (run "Check Faces" on exported segments below first), or none were similar enough to appear.</div>
         </div>`;
     } else {
       resultsEl.innerHTML = `
-        <div class="notice-card" style="margin-bottom:10px;">
-          <p style="margin:0; font-size:12px;">${escapeHtml(res.warning)}</p>
+        <div class="notice-card mb-10">
+          <p class="m-0 text-sm">${escapeHtml(res.warning)}</p>
         </div>
         <div class="table-container">
           <table>
@@ -488,7 +488,7 @@ async function runFaceSearch(caseId) {
             <tbody>
               ${matches.map(m => `
                 <tr>
-                  <td class="hash-font" style="font-size:11px;">${escapeHtml(m.segment_id.substring(0, 8))}…</td>
+                  <td class="hash-font text-xs">${escapeHtml(m.segment_id.substring(0, 8))}…</td>
                   <td>${m.frame_offset_seconds.toFixed(1)}s</td>
                   <td><strong>${(m.similarity * 100).toFixed(1)}%</strong></td>
                   <td>${m.above_reference_threshold
@@ -501,7 +501,7 @@ async function runFaceSearch(caseId) {
     }
   } catch (err) {
     resultsEl.innerHTML = `
-      <div class="error-banner" style="margin-top:0;">
+      <div class="error-banner mt-0">
         <div class="error-banner-icon">${icon('alert')}</div>
         <div class="error-banner-body">
           <div class="error-banner-title">Face search failed</div>
@@ -550,7 +550,7 @@ async function exportSegment(caseId, evidenceId, segmentId, btnEl) {
       exportBtn.innerHTML = `${icon('download')} Re-Export`;
       const row = exportBtn.closest('tr');
       if (row && row.children.length >= 7) {
-        row.children[6].innerHTML = `<span class="badge badge-complete" style="font-size:10px;">Exported</span>`;
+        row.children[6].innerHTML = `<span class="badge badge-complete text-xxs">Exported</span>`;
         if (detail.sha256 && row.children[5]) {
           row.children[5].innerHTML = `<span title="${escapeHtml(detail.sha256)}">${escapeHtml(detail.sha256.substring(0, 8))}…</span>`;
         }
@@ -575,13 +575,13 @@ async function runMotionDetection(caseId, evidenceId, segmentId, btnEl) {
     showModal(
       'Basic Motion Detection Results',
       `
-        <div class="${res.motion_detected ? 'notice-card' : 'success-inline'}" style="margin-bottom:12px;">
+        <div class="${res.motion_detected ? 'notice-card' : 'success-inline'} mb-md">
           <strong>${escapeHtml(res.label || 'Basic Motion Detection')}:</strong> ${escapeHtml(res.details)}
         </div>
-        <div style="font-size:13px; display:flex; flex-direction:column; gap:6px; color:var(--text-muted);">
-          <div><strong>Motion Detected:</strong> ${res.motion_detected ? '<span style="color:var(--status-partial); font-weight:700;">YES</span>' : '<span style="color:var(--status-complete); font-weight:700;">NO</span>'}</div>
+        <div class="flex-col gap-6 text-base text-muted">
+          <div><strong>Motion Detected:</strong> ${res.motion_detected ? '<span class="text-partial font-bold">YES</span>' : '<span class="text-complete font-bold">NO</span>'}</div>
           <div><strong>Motion Frames:</strong> ${res.motion_frames} / ${res.total_frames} (${((res.motion_ratio || 0) * 100).toFixed(1)}%)</div>
-          <div style="font-size:11px; color:var(--text-dim); margin-top:4px;">Decoupled post-export analysis via OpenCV frame differencing. Evidence hash and video container remain unaltered.</div>
+          <div class="text-xs text-dim mt-xs">Decoupled post-export analysis via OpenCV frame differencing. Evidence hash and video container remain unaltered.</div>
         </div>
       `,
       [{ label: 'OK', class: 'btn-primary', onClick: () => renderRecordingsScreen({ caseId, evidenceId }) }]
@@ -589,7 +589,7 @@ async function runMotionDetection(caseId, evidenceId, segmentId, btnEl) {
   } catch (err) {
     showModal(
       'Basic Motion Detection Error',
-      `<div class="error-banner" style="margin-top:0;">
+      `<div class="error-banner mt-0">
          <div class="error-banner-icon">${icon('alert')}</div>
          <div class="error-banner-body">
            <div class="error-banner-title">Motion detection failed</div>
@@ -623,13 +623,13 @@ async function runObjectDetection(caseId, evidenceId, segmentId, btnEl) {
     showModal(
       'Object Detection Results',
       `
-        <div class="${res.objects_detected ? 'notice-card' : 'success-inline'}" style="margin-bottom:12px;">
+        <div class="${res.objects_detected ? 'notice-card' : 'success-inline'} mb-md">
           <strong>${escapeHtml(res.label)}</strong><br>${escapeHtml(res.summary)}
         </div>
         ${rows ? `<div class="table-container"><table>
           <thead><tr><th>Object</th><th>Sampled frames</th><th>Max at once</th><th>First seen</th><th>Best score</th></tr></thead>
           <tbody>${rows}</tbody></table></div>` : ''}
-        <div style="font-size:11px; color:var(--text-dim); margin-top:10px; line-height:1.5;">
+        <div class="text-xs text-dim mt-10 lh-base">
           Automated detections for human review — not identification. Frames are sampled, so an object visible only in
           skipped frames is missed. Evidence hash and video container remain unaltered.
         </div>
@@ -639,7 +639,7 @@ async function runObjectDetection(caseId, evidenceId, segmentId, btnEl) {
   } catch (err) {
     showModal(
       'Object Detection Error',
-      `<div class="error-banner" style="margin-top:0;">
+      `<div class="error-banner mt-0">
          <div class="error-banner-icon">${icon('alert')}</div>
          <div class="error-banner-body">
            <div class="error-banner-title">Object detection failed</div>
@@ -665,14 +665,14 @@ async function runFaceDetection(caseId, evidenceId, segmentId, btnEl) {
     showModal(
       'AI-Based Face Detection Results',
       `
-        <div class="${res.faces_detected ? 'notice-card' : 'success-inline'}" style="margin-bottom:12px;">
+        <div class="${res.faces_detected ? 'notice-card' : 'success-inline'} mb-md">
           <strong>${escapeHtml(res.label || 'AI-Based Face Detection')}:</strong> ${escapeHtml(res.details)}
         </div>
-        <div style="font-size:13px; display:flex; flex-direction:column; gap:6px; color:var(--text-muted);">
-          <div><strong>Face(s) Detected:</strong> ${res.faces_detected ? '<span style="color:var(--status-partial); font-weight:700;">YES</span>' : '<span style="color:var(--status-complete); font-weight:700;">NO</span>'}</div>
+        <div class="flex-col gap-6 text-base text-muted">
+          <div><strong>Face(s) Detected:</strong> ${res.faces_detected ? '<span class="text-partial font-bold">YES</span>' : '<span class="text-complete font-bold">NO</span>'}</div>
           <div><strong>Frames with faces:</strong> ${res.frames_with_faces} / ${res.frames_sampled} sampled (of ${res.total_frames} total)</div>
           <div><strong>Max faces in one frame:</strong> ${res.max_faces_in_single_frame}</div>
-          <div style="font-size:11px; color:var(--text-dim); margin-top:4px;">
+          <div class="text-xs text-dim mt-xs">
             Decoupled post-export analysis via OpenCV's YuNet CNN. Detects the presence/location of faces only —
             no identity or recognition is attempted. Evidence hash and video container remain unaltered.
           </div>
@@ -683,7 +683,7 @@ async function runFaceDetection(caseId, evidenceId, segmentId, btnEl) {
   } catch (err) {
     showModal(
       'Face Detection Error',
-      `<div class="error-banner" style="margin-top:0;">
+      `<div class="error-banner mt-0">
          <div class="error-banner-icon">${icon('alert')}</div>
          <div class="error-banner-body">
            <div class="error-banner-title">Face detection failed</div>
@@ -703,10 +703,10 @@ async function runFaceDetection(caseId, evidenceId, segmentId, btnEl) {
 // ── Accuracy against ground truth ────────────────────────────────────────────
 
 function accTile(label, value, hint, tone) {
-  const color = tone === 'good' ? 'var(--status-complete)' : tone === 'bad' ? 'var(--status-error)'
-              : tone === 'warn' ? 'var(--status-partial)' : 'var(--text-main)';
+  const toneClass = tone === 'good' ? 'text-complete' : tone === 'bad' ? 'text-error'
+                  : tone === 'warn' ? 'text-partial' : 'text-main';
   return `<div class="acc-tile" title="${escapeHtml(hint || '')}">
-      <div class="acc-tile-value" style="color:${color};">${value}</div>
+      <div class="acc-tile-value ${toneClass}">${value}</div>
       <div class="acc-tile-label">${escapeHtml(label)}</div>
     </div>`;
 }
@@ -767,7 +767,7 @@ function renderAccuracyResult(r) {
     </tbody></table></div><p class="acc-note">${escapeHtml(r.log.meaning)}</p>`);
   }
   if (r.not_measured && r.not_measured.length) {
-    parts.push(`<div class="notice-card" style="margin-top:10px;"><p style="margin:0; font-size:12px;"><strong>Not measured:</strong> ${r.not_measured.map(escapeHtml).join(' · ')}</p></div>`);
+    parts.push(`<div class="notice-card mt-10"><p class="m-0 text-sm"><strong>Not measured:</strong> ${r.not_measured.map(escapeHtml).join(' · ')}</p></div>`);
   }
   if (r.measured_meaning) parts.push(`<p class="acc-note">${escapeHtml(r.measured_meaning)}</p>`);
   return parts.join('');
@@ -800,7 +800,7 @@ async function runAccuracyCheck(caseId) {
     resultsEl.innerHTML = renderAccuracyResult(res);
     loadAccuracyHistory(caseId);
   } catch (err) {
-    resultsEl.innerHTML = `<div class="error-banner" style="margin-top:0;"><div class="error-banner-icon">${icon('alert')}</div><div class="error-banner-body">
+    resultsEl.innerHTML = `<div class="error-banner mt-0"><div class="error-banner-icon">${icon('alert')}</div><div class="error-banner-body">
       <div class="error-banner-title">Measurement failed</div><div class="error-banner-msg">${escapeHtml(err.message)}</div></div></div>`;
   } finally {
     btn.disabled = false;
@@ -814,11 +814,11 @@ async function loadAccuracyHistory(caseId) {
   try {
     const items = await API.getAccuracy(caseId);
     if (!items.length) { el.innerHTML = ''; return; }
-    el.innerHTML = `<div class="card-title" style="font-size:13px;"><span>Earlier measurements (${items.length}) — included in the PDF report</span></div>
+    el.innerHTML = `<div class="card-title text-base"><span>Earlier measurements (${items.length}) — included in the PDF report</span></div>
       <div class="table-container"><table><thead><tr><th>When</th><th>Segment</th><th>Frames recovered</th><th>In order</th><th>Byte-identical</th><th>Original bytes recovered</th></tr></thead><tbody>
       ${items.map(r => `<tr>
         <td>${escapeHtml(formatIST(r.created_at))}</td>
-        <td class="hash-font" style="font-size:11px;">${escapeHtml((r.segment_id || '').substring(0, 8))}…</td>
+        <td class="hash-font text-xs">${escapeHtml((r.segment_id || '').substring(0, 8))}…</td>
         <td>${r.frames ? accFmt(r.frames.frame_recall_pct) : '—'}</td>
         <td>${r.frames ? accFmt(r.frames.in_order_pct) : '—'}</td>
         <td>${r.bytes ? (r.bytes.identical ? 'yes' : 'no') : '—'}</td>

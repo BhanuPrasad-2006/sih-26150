@@ -150,7 +150,7 @@ Analytics read the exported MP4 only: YuNet (faces), SFace (embeddings, similari
 | Brute force | 5 failures → 60 s lock (HTTP 429 with `retry_after`) |
 | Evidence integrity | Read-only mmap; hash on open, re-hash at end of scan and on `/verify` |
 | Path handling | Upload names sanitised; physical-device paths refused for scanning; imaging refuses device destinations and existing files; optional server-side allow-list (`FORENSIC_EVIDENCE_ROOTS`) for evidence, original-image and imaging-source paths, resolved through `..` and symlinks |
-| Web hardening | `security.py`: CSP with `script-src 'self'` (no inline script), `X-Frame-Options: DENY`, `nosniff`, no-referrer on every response; Host must be a local name; foreign `Origin` / cross-site fetches refused on POST/PUT/PATCH/DELETE; API docs and OpenAPI schema require a session |
+| Web hardening | `security.py`: CSP with `script-src 'self'` and `style-src 'self'` (no inline script or style attributes), `X-Frame-Options: DENY`, `nosniff`, no-referrer on every response; Host must be a local name; foreign `Origin` / cross-site fetches refused on POST/PUT/PATCH/DELETE; API docs and OpenAPI schema require a session |
 | Output escaping | All server/user strings pass `escapeHtml()` before `innerHTML`; a test fails if known risky fields are interpolated raw |
 | Model integrity | `model_integrity.py`: the three ONNX models are SHA-256 pinned; a mismatch disables the analytic |
 | Supply chain | `requirements.lock.txt` (exact versions) and `pip-audit`; `starlette` and `python-multipart` were upgraded after audit findings |

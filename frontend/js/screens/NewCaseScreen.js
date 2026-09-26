@@ -19,25 +19,25 @@ function renderNewCaseScreen() {
       <div class="page-subtitle">Enter chain-of-custody metadata before loading evidence disk images.</div>
     </div>
 
-    <div class="card" style="max-width: 660px;">
+    <div class="card max-w-card">
       <form id="new-case-form" novalidate>
         <div class="form-group">
-          <label for="input-case-number">Case Number / Reference ID <span style="color:var(--status-error);">*</span></label>
+          <label for="input-case-number">Case Number / Reference ID <span class="text-error">*</span></label>
           <input type="text" id="input-case-number" class="form-control"
             placeholder="e.g. FIR-2026-892" required autocomplete="off" maxlength="64" />
-          <div id="err-case-number" class="field-error" style="display:none;"></div>
+          <div id="err-case-number" class="field-error hidden"></div>
         </div>
         <div class="form-group">
-          <label for="input-investigator">Investigator Name <span style="color:var(--status-error);">*</span></label>
+          <label for="input-investigator">Investigator Name <span class="text-error">*</span></label>
           <input type="text" id="input-investigator" class="form-control"
             placeholder="e.g. Officer A. Sharma" required maxlength="128" />
-          <div id="err-investigator" class="field-error" style="display:none;"></div>
+          <div id="err-investigator" class="field-error hidden"></div>
         </div>
         <div class="form-group">
-          <label for="input-agency">Agency / Organization <span style="color:var(--status-error);">*</span></label>
+          <label for="input-agency">Agency / Organization <span class="text-error">*</span></label>
           <input type="text" id="input-agency" class="form-control"
             placeholder="e.g. Cyber Crime Unit, State Police" required />
-          <div id="err-agency" class="field-error" style="display:none;"></div>
+          <div id="err-agency" class="field-error hidden"></div>
         </div>
         <div class="form-group">
           <label for="input-notes">Notes / Case Summary</label>
@@ -46,12 +46,12 @@ function renderNewCaseScreen() {
         </div>
 
         <!-- inline error — hidden by default -->
-        <div id="case-error" style="display:none;" class="error-inline">
+        <div id="case-error" class="error-inline hidden">
           <span>${icon('alert')}</span>
           <span id="case-error-msg"></span>
         </div>
 
-        <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px;">
+        <div class="d-flex justify-end gap-md mt-24">
           <button type="button" class="btn btn-secondary" ${navAttrs('dashboard')}>${icon('arrow-left')} Cancel</button>
           <button type="submit" id="btn-submit-case" class="btn btn-primary">Create case &amp; continue ${icon('arrow-right')}</button>
         </div>
@@ -67,17 +67,17 @@ function renderNewCaseScreen() {
   /** Show a per-field error message. */
   function _fieldError(id, msg) {
     const el = document.getElementById(id);
-    if (el) { el.textContent = msg; el.style.display = 'block'; }
+    if (el) { el.textContent = msg; el.classList.remove('hidden'); }
   }
   /** Clear a per-field error. */
   function _fieldClear(id) {
     const el = document.getElementById(id);
-    if (el) { el.textContent = ''; el.style.display = 'none'; }
+    if (el) { el.textContent = ''; el.classList.add('hidden'); }
   }
   /** Clear all per-field errors. */
   function _clearAll() {
     ['err-case-number', 'err-investigator', 'err-agency'].forEach(_fieldClear);
-    errEl.style.display = 'none';
+    errEl.classList.add('hidden');
   }
 
   form.onsubmit = async (e) => {
