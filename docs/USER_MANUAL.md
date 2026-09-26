@@ -95,6 +95,7 @@ Each row is a segment: camera, time range (UTC when an offset was set), frame co
 The notes column states the basis (indexed / carved, whether timestamps came from the disk, anything unavailable). Actions per segment:
 
 - **Export MP4** — lossless stream copy (no re-encoding) with `ffprobe` validation and a file hash. Analytics require an export first.
+- **Play** — appears once a segment is exported. It plays the exported MP4 copy in a window inside the app (pause, seek, speed, full screen). Playing never changes the file or the evidence image. If your browser cannot decode the video, open the exported file in an external player.
 - **Check Motion** — frame differencing; shows *Basic Motion Detection*, not AI.
 - **Check Faces** — YuNet face detection (presence and count only, no identity) and indexing for search.
 - **Check Objects** — YOLOX object classes (or the person-only fallback) with sampled-frame counts, first-seen time and best score.
@@ -126,6 +127,7 @@ The timeline shows segments per camera on a common time axis, and groups segment
 
 ## 10. Report and audit log
 
+- **Certificate details** (top of the Report & Certificate screen): optional police station, FIR / crime reference, seizure officer name and rank, recorder make/model and serial number. They are saved for the case and printed on the §63(4) pages **exactly as you type them**, marked "as entered by the examiner" (the tool cannot verify them); any you leave blank are listed as not provided. Generating the report saves what is in the form first.
 - **Report & Certificate** generates the PDF (and a detached signature file beside it; see below): cover, integrity hashes, segments, cross-camera events, accuracy (or "NOT MEASURED"), object detection, method and limitations, the audit log, and the BSA 2023 §63(4) certificate template. Review it, complete the parts that need your declaration and signature, and keep it with the case file. It supports the examiner; it is not legal advice.
 - **Hash Audit Log** shows every recorded action with its chain hash and a **CHAIN VALID** or **TAMPERING DETECTED** banner. If tampering is shown, stop relying on the log, preserve the result and escalate per your procedure.
 

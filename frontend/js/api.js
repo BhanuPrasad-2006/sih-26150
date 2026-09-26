@@ -22,6 +22,11 @@
  * Attributes for a navigation control. Rendered pages must not use inline event handlers (the CSP forbids
  * inline script), so clicks on [data-nav] are handled by one delegated listener in app.js.
  */
+/** URL that streams an exported segment's MP4 for the <video> player (session cookie authenticates it). */
+function segmentVideoUrl(caseId, segmentId) {
+  return `/api/cases/${encodeURIComponent(caseId)}/video/${encodeURIComponent(segmentId)}`;
+}
+
 function navAttrs(screen, params) {
   return `data-nav="${escapeHtml(screen)}" data-params="${escapeHtml(JSON.stringify(params || {}))}"`;
 }
@@ -666,6 +671,24 @@ const API = {
    * The backend returns a FileResponse (binary PDF).
    * We trigger a browser download and return metadata for the UI.
    */
+  async getCertificate(caseId) {
+    const url = `/api/cases/${caseId}/certificate`;
+    const res = await fetch(url);
+    await this._checkOk(res, url);
+    return res.json();
+  },
+
+  async saveCertificate(caseId, values) {
+    const url = `/api/cases/${caseId}/certificate`;
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(values),
+    });
+    await this._checkOk(res, url);
+    return res.json();
+  },
+
   async generateReport(caseId) {
     const url = `/api/cases/${caseId}/report`;
     const res = await fetch(url);

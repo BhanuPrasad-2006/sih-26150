@@ -12,7 +12,7 @@
 ![FastAPI](https://img.shields.io/badge/FastAPI-backend-009688?logo=fastapi&logoColor=white)
 ![OpenCV](https://img.shields.io/badge/OpenCV-DNN-5C3EE8?logo=opencv&logoColor=white)
 ![FFmpeg](https://img.shields.io/badge/FFmpeg-remux%20%26%20probe-007808?logo=ffmpeg&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-329%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-365%20passing-brightgreen)
 ![Real hardware](https://img.shields.io/badge/real%20recorder%20disks-not%20yet%20tested-red)
 
 </div>
@@ -56,7 +56,7 @@ for unknown recorders, and forensic bookkeeping (hashes, audit chain, report, le
 | 🧭 | **Brand identification**: signature scoring across 8 OEM plugins; unknown disks fall back to generic carving | ✅ signatures from public sources |
 | 🧩 | **Parsing & carving**: Dahua DHFS 4.1 index + DHAV frames, Hikvision HIKBTREE index + H.264/PS blocks, Honeywell records, generic MPEG-PS/H.264 | ✅ synthetic disks · ⚠️ no real disks |
 | ♻️ | **Deleted footage**: carves regions the index no longer lists (e.g. after initialisation) | ✅ synthetic |
-| 🎞️ | **Export**: lossless FFmpeg stream copy to MP4, `ffprobe` decode validation | ✅ |
+| 🎞️ | **Export & playback**: lossless FFmpeg stream copy to MP4, `ffprobe` decode validation, and **play the exported video inside the app** | ✅ |
 | 🕒 | **Timeline & correlation**: per-camera timeline, cross-camera events, examiner-set clock offset to UTC | ✅ |
 | 🙂 | **Face detection & search**: YuNet detector + SFace embeddings, reference-photo search | ✅ |
 | 🧍 | **Object detection**: YOLOX (80 COCO classes) with a classical fallback | ✅ 3 real photos · ⚠️ no CCTV data |
@@ -64,7 +64,7 @@ for unknown recorders, and forensic bookkeeping (hashes, audit chain, report, le
 | 🧪 | **Validation kit**: one command turns a real recorder's disk images + the exported clip into a finished validation report (verdict, recall/precision/order, byte placement, evidence hashes) | ✅ tested on generated disks · ready for real ones |
 | 📏 | **Accuracy against ground truth**: frame recall / precision / order, byte placement, log coverage | ✅ new, honest "not measured" otherwise |
 | ⛓️ | **Hash-chained audit log** of every action, tamper-evident | ✅ |
-| 📄 | **PDF report** + **BSA 2023 §63(4)** certificate template | ✅ |
+| 📄 | **PDF report** + **BSA 2023 §63(4)** certificate template, with examiner-entered police station, FIR, seizure officer and recorder details (printed as entered, marked unverified, blanks listed) | ✅ |
 | 🔑 | Single-examiner login, optional 2FA, sessions, lockout that survives a restart; SQLite or Supabase/Postgres | ✅ |
 | 🎨 | **Interface**: light and dark themes, drag-and-drop evidence upload, inline SVG icons, audit and case times in IST | ✅ |
 
@@ -141,7 +141,7 @@ Because no real recorder disk was available, the tool is tested by building disk
 | Parsers checked against **known-answer values printed in the papers/specs** | ✅ |
 | Tamper test: change one byte of evidence → verification fails | ✅ |
 | Accuracy feature on real video: identical, truncated, and different videos give the expected recall/precision/order | ✅ |
-| **Automated suite** | **329 tests** (321 pass on a fresh clone; the other 8 need a live Supabase `DATABASE_URL`); GitHub Actions also runs `pip-audit` and `bandit` |
+| **Automated suite** | **365 tests** (357 pass on a fresh clone; the other 8 need a live Supabase `DATABASE_URL`); GitHub Actions also runs `pip-audit` and `bandit` |
 
 **A defect the accuracy check found:** on a synthetic Dahua disk with its index wiped, the carver found only 21 of 40 frames (byte recall 86.5 %).
 The cause was a minimum frame size (100 bytes) that rejected tiny P-frames of a quiet camera; at 40 bytes it finds all 40 (byte recall 92.1 %,
@@ -217,10 +217,10 @@ Open **http://127.0.0.1:8000**. On first run you create an examiner password (12
 1. **Create a case** (case number, examiner, notes).
 2. **Add disk image** (three ways, one window): **drag and drop** a file onto the upload area or browse for it; give the **path** of a file already on this machine (best for multi-GB images); or **image a drive** (requires the setting above and your write-blocker confirmation). The window shows the file name and size before you start, and a progress bar while it uploads.
 3. **Scan**: hashes → brand detection → index → carving → reconstruction → final re-hash, with live progress. When it finishes you stay on the page and press **View recordings**; nothing redirects on its own. The file type shown comes from the file itself, and brands that are unverified or detection-only get an amber badge.
-4. **Recordings**: review segments, export MP4, run faces / objects / motion, search a person by photo.
+4. **Recordings**: review segments, export MP4 and **Play** it in the app, run faces / objects / motion, search a person by photo.
 5. **Accuracy** *(test scenarios)*: compare a segment with ground truth.
 6. **Timeline**: per-camera timeline and cross-camera correlation.
-7. **Report**: PDF with hashes, segments, correlation, accuracy, object detection, audit chain and the BSA §63(4) certificate.
+7. **Report**: fill in the **Certificate details** (police station, FIR, seizure officer, recorder make/model/serial; optional, saved per case), then generate the PDF with hashes, segments, correlation, accuracy, object detection, audit chain and the BSA §63(4) certificate.
 
 **Interface notes**
 
@@ -239,9 +239,9 @@ All routes except login/setup require the session cookie. Interactive docs at `/
 | Cases & evidence | `POST/GET /api/cases` · `POST /api/cases/{id}/evidence` · `…/evidence/upload` · `GET …/verify` |
 | Imaging | `GET /api/acquisition/drives` · `POST …/acquire` · `GET …/acquire/status` |
 | Scan | `POST …/scan` · `GET …/status` (SSE) · `GET …/segments` |
-| Export & analytics | `POST …/export/{seg}` · `…/motion/{seg}` · `…/face-detect/{seg}` · `…/object-detect/{seg}` · `POST …/face-search` |
+| Export & analytics | `POST …/export/{seg}` · `GET …/video/{seg}` (plays the exported MP4; range requests) · `…/motion/{seg}` · `…/face-detect/{seg}` · `…/object-detect/{seg}` · `POST …/face-search` |
 | Analysis | `GET …/timeline` · `GET …/correlation` · `POST/GET …/accuracy` |
-| Output | `GET …/report` · `GET …/audit` |
+| Output | `GET/PUT …/certificate` (details printed on the §63(4) pages) · `GET …/report` · `GET …/audit` |
 
 ## 🔒 Security
 
@@ -306,7 +306,7 @@ sih-26150/
 │   ├── cv_models/            YuNet, SFace, YOLOX (ONNX)
 │   ├── plugins/              dahua · dahua_dhfs · hikvision · hikvision_index · honeywell · cpplus
 │   │                         tplink · godrej · uniview · matrix · unknown · generic · stream_carver · registry
-│   └── tests/                329 automated tests (+ manual real-video end-to-end scripts)
+│   └── tests/                365 automated tests (+ manual real-video end-to-end scripts)
 ├── docs/                     SOP · format_verification · oem_comparison · accuracy_measurement · format_sheets/
 ├── frontend/                 vanilla HTML/CSS/JS single-page app (no build step); css/style.css design system, js/icons.js icon set
 ├── install.* / run.*         one-click setup and launch

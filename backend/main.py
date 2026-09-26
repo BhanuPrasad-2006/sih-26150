@@ -99,6 +99,7 @@ from backend import audit_seal
 from backend import pdf_signing
 from backend import report_signing
 from backend import case_package
+from backend import certificate_meta
 from backend import security_status
 from backend import model_integrity
 from backend import totp as totp_mod
@@ -1562,6 +1563,36 @@ async def acquisition_status(case_id: str):
     return job
 
 
+class CertificateDetailsRequest(BaseModel):
+    """Examiner-entered details for the Section 63(4) pages; every field is optional."""
+    police_station: Optional[str] = None
+    fir_number: Optional[str] = None
+    seizure_officer: Optional[str] = None
+    seizure_officer_rank: Optional[str] = None
+    device_make_model: Optional[str] = None
+    device_serial: Optional[str] = None
+
+
+@app.get("/api/cases/{case_id}/certificate")
+async def get_certificate_details(case_id: str):
+    """The saved certificate details for this case (empty strings when nothing was entered)."""
+    if not await asyncio.to_thread(db.get_case, case_id):
+        raise HTTPException(404, "Case not found")
+    return {"fields": [{"key": k, "label": label} for k, label in certificate_meta.FIELDS],
+            "values": await asyncio.to_thread(certificate_meta.load, db, case_id)}
+
+
+@app.put("/api/cases/{case_id}/certificate")
+async def save_certificate_details(case_id: str, req: CertificateDetailsRequest):
+    """Save the details printed on the certificate pages of the PDF report. Stored as entered; not verified."""
+    if not await asyncio.to_thread(db.get_case, case_id):
+        raise HTTPException(404, "Case not found")
+    values = await asyncio.to_thread(certificate_meta.save, db, case_id, req.model_dump())
+    filled = [k for k in certificate_meta.FIELD_KEYS if values[k]]
+    _audit(case_id, "certificate_details_saved", f"fields_filled={','.join(filled) or 'none'}")
+    return {"values": values, "missing": certificate_meta.missing_labels(values)}
+
+
 @app.get("/api/cases/{case_id}/report")
 async def get_report(case_id: str):
     case = await asyncio.to_thread(db.get_case, case_id)
@@ -1593,6 +1624,7 @@ async def get_report(case_id: str):
         generate_report, pdf, case, ev, segments, log_evts, audit_entries, chain_ok,
         correlated_events, _load_accuracy_results(case_id), _load_object_results(case_id),
         {"status": seal_status, "message": seal_msg, "head": audit_log.last_hash(), "count": len(audit_log)},
+        await asyncio.to_thread(certificate_meta.load, db, case_id),
     )
     await asyncio.to_thread(pdf_signing.embed_signature, pdf)          # signature inside the PDF (viewers show it)
     signature = await asyncio.to_thread(report_signing.sign_report, pdf, case_id)   # detached, over the final bytes
