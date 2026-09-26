@@ -138,9 +138,7 @@ async function renderRecordingsScreen(params) {
                    <th>Rationale / Gaps</th>
                    <th>SHA-256 (prefix)</th>
                    <th>Export</th>
-                   <th>Basic Motion Detection</th>
-                   <th>AI-Based Face Detection</th>
-                   <th>Object Detection</th>
+                   <th>AI Detections</th>
                    <th>Action</th>
                  </tr>
                </thead>
@@ -151,76 +149,72 @@ async function renderRecordingsScreen(params) {
                    const endStr   = s.end_time   ? new Date(s.end_time).toISOString().replace('T', ' ').substring(0, 19) : '—';
                    const isExported = !!s.export_path;
                    const hashDisplay = s.sha256 ? s.sha256.substring(0, 12) + '…' : '—';
+                    let aiDetectionsCell = '';
+                    if (!isExported) {
+                      aiDetectionsCell = `<div class="ai-pills"><span class="ai-pill ai-pill-disabled" data-tooltip="Export MP4 first to analyze video">${icon('film')} Export required</span></div>`;
+                    } else {
+                      // Motion Pill
+                      let motionPill = '';
+                      if (s.motion_detected === true) {
+                        motionPill = `<button type="button" class="ai-pill ai-pill-active" ${actAttrs('motion', caseId, evidenceId, s.segment_id)} data-tooltip="${escapeHtml(s.motion_details || 'Basic Motion Detection: Motion detected')}">${icon('activity')} Motion</button>`;
+                      } else if (s.motion_detected === false) {
+                        motionPill = `<button type="button" class="ai-pill ai-pill-muted" ${actAttrs('motion', caseId, evidenceId, s.segment_id)} data-tooltip="${escapeHtml(s.motion_details || 'Basic Motion Detection: No significant motion detected')}">${icon('activity')} No motion</button>`;
+                      } else {
+                        motionPill = `<button type="button" class="ai-pill" ${actAttrs('motion', caseId, evidenceId, s.segment_id)} data-tooltip="Run Basic Motion Detection">${icon('play')} Motion</button>`;
+                      }
 
-                   let motionCell = `<span style="font-size:11px; color:var(--text-dim);">Export required</span>`;
-                   if (isExported) {
-                     if (s.motion_detected === true) {
-                       motionCell = `<span class="badge badge-partial" data-tooltip="${escapeHtml(s.motion_details || 'Basic Motion Detection: Motion detected')}">Motion Detected</span>`;
-                     } else if (s.motion_detected === false) {
-                       motionCell = `<span class="badge badge-pending" data-tooltip="${escapeHtml(s.motion_details || 'Basic Motion Detection: No significant motion detected')}">No Motion</span>`;
-                     } else {
-                       motionCell = `<button id="motion-btn-${s.segment_id}" class="btn btn-secondary btn-sm" style="font-size:11px; padding:3px 8px;"
-                         ${actAttrs('motion', caseId, evidenceId, s.segment_id)}>
-                         Check Motion
-                       </button>`;
-                     }
-                   }
+                      // Face Pill
+                      let facePill = '';
+                      if (s.face_detected === true) {
+                        facePill = `<button type="button" class="ai-pill ai-pill-active" ${actAttrs('face', caseId, evidenceId, s.segment_id)} data-tooltip="${escapeHtml(s.face_detection_details || 'AI-Based Face Detection: Face(s) detected')}">${icon('scan-face')} Faces</button>`;
+                      } else if (s.face_detected === false) {
+                        facePill = `<button type="button" class="ai-pill ai-pill-muted" ${actAttrs('face', caseId, evidenceId, s.segment_id)} data-tooltip="${escapeHtml(s.face_detection_details || 'AI-Based Face Detection: No faces detected')}">${icon('scan-face')} No faces</button>`;
+                      } else {
+                        facePill = `<button type="button" class="ai-pill" ${actAttrs('face', caseId, evidenceId, s.segment_id)} data-tooltip="Run AI-Based Face Detection">${icon('play')} Faces</button>`;
+                      }
 
-                   let faceCell = `<span style="font-size:11px; color:var(--text-dim);">Export required</span>`;
-                   if (isExported) {
-                     if (s.face_detected === true) {
-                       faceCell = `<span class="badge badge-partial" data-tooltip="${escapeHtml(s.face_detection_details || 'AI-Based Face Detection: Face(s) detected')}">Face(s) Detected</span>`;
-                     } else if (s.face_detected === false) {
-                       faceCell = `<span class="badge badge-pending" data-tooltip="${escapeHtml(s.face_detection_details || 'AI-Based Face Detection: No faces detected')}">No Faces</span>`;
-                     } else {
-                       faceCell = `<button id="face-btn-${s.segment_id}" class="btn btn-secondary btn-sm" style="font-size:11px; padding:3px 8px;"
-                         ${actAttrs('face', caseId, evidenceId, s.segment_id)}>
-                         Check Faces
-                       </button>`;
-                     }
-                   }
+                      // Object Pill
+                      let objectPill = '';
+                      const o = objectResults[s.segment_id];
+                      if (o) {
+                        const names = Object.keys(o.classes || {});
+                        if (names.length > 0) {
+                          const objLabel = names.slice(0, 2).join(', ') + (names.length > 2 ? '…' : '');
+                          objectPill = `<button type="button" class="ai-pill ai-pill-active" ${actAttrs('object', caseId, evidenceId, s.segment_id)} data-tooltip="${escapeHtml(o.summary || '')}">${icon('box')} ${escapeHtml(objLabel)}</button>`;
+                        } else {
+                          objectPill = `<button type="button" class="ai-pill ai-pill-muted" ${actAttrs('object', caseId, evidenceId, s.segment_id)} data-tooltip="${escapeHtml(o.summary || 'None found')}">${icon('box')} No objects</button>`;
+                        }
+                      } else {
+                        objectPill = `<button type="button" class="ai-pill" ${actAttrs('object', caseId, evidenceId, s.segment_id)} data-tooltip="Run Object Detection">${icon('play')} Objects</button>`;
+                      }
 
-                   let objectCell = `<span style="font-size:11px; color:var(--text-dim);">Export required</span>`;
-                   if (isExported) {
-                     const o = objectResults[s.segment_id];
-                     if (o) {
-                       const names = Object.keys(o.classes || {});
-                       objectCell = names.length
-                         ? `<span class="badge badge-partial" data-tooltip="${escapeHtml(o.summary || '')}">${escapeHtml(names.slice(0, 3).join(', '))}${names.length > 3 ? '…' : ''}</span>`
-                         : `<span class="badge badge-pending" data-tooltip="${escapeHtml(o.summary || '')}">None found</span>`;
-                     } else {
-                       objectCell = `<button id="obj-btn-${s.segment_id}" class="btn btn-secondary btn-sm" style="font-size:11px; padding:3px 8px;"
-                         ${actAttrs('object', caseId, evidenceId, s.segment_id)}>
-                         Check Objects
-                       </button>`;
-                     }
-                   }
+                      aiDetectionsCell = `<div class="ai-pills">${motionPill}${facePill}${objectPill}</div>`;
+                    }
 
-                   return `
-                     <tr>
-                       <td><strong>Camera ${s.camera ?? s.camera_id ?? '?'}</strong></td>
-                       <td style="font-size:12px; font-family:var(--font-mono); color:var(--text-muted);">${startStr}<br>${endStr}</td>
-                       <td>${s.frame_count}</td>
-                       <td>
-                         <span class="badge ${badgeClass}" data-tooltip="${escapeHtml(tooltip)}">${escapeHtml(s.status)}</span>
-                       </td>
-                       <td style="font-size:12px; max-width:180px; color:var(--text-muted); line-height:1.5;">${escapeHtml(s.notes || s.status_rationale || '—')}</td>
-                       <td class="hash-font">${hashDisplay}</td>
-                       <td>
-                         ${isExported
-                           ? `<span class="badge badge-complete" style="font-size:10px;">Exported MP4</span>`
-                           : `<span style="font-size:12px; color:var(--text-dim);">Not exported</span>`}
-                       </td>
-                       <td>${motionCell}</td>
-                       <td>${faceCell}</td>
-                       <td>${objectCell}</td>
-                       <td>
-                         <button id="export-btn-${s.segment_id}" class="btn btn-secondary btn-sm"
-                           ${actAttrs('export', caseId, evidenceId, s.segment_id)}>
-                           ${isExported ? 'Re-Export MP4' : 'Export MP4'}
-                         </button>
-                       </td>
-                     </tr>`;
+                    return `
+                      <tr>
+                        <td><strong>Camera ${s.camera ?? s.camera_id ?? '?'}</strong></td>
+                        <td style="font-size:12px; font-family:var(--font-mono); color:var(--text-muted);">${startStr}<br>${endStr}</td>
+                        <td>${s.frame_count}</td>
+                        <td>
+                          <span class="badge ${badgeClass}" data-tooltip="${escapeHtml(tooltip)}">${escapeHtml(s.status)}</span>
+                        </td>
+                        <td style="font-size:12px; max-width:180px; color:var(--text-muted); line-height:1.5;">${escapeHtml(s.notes || s.status_rationale || '—')}</td>
+                        <td class="hash-font">${hashDisplay}</td>
+                        <td>
+                          ${isExported
+                            ? `<span class="badge badge-complete" style="font-size:10px;">Exported</span>`
+                            : `<span style="font-size:12px; color:var(--text-dim);">Not exported</span>`}
+                        </td>
+                        <td>${aiDetectionsCell}</td>
+                        <td>
+                          <button id="export-btn-${s.segment_id}" class="btn btn-secondary btn-sm btn-compact"
+                            ${actAttrs('export', caseId, evidenceId, s.segment_id)}
+                            title="${isExported ? 'Re-Export MP4 container' : 'Export video to MP4 container'}">
+                            ${icon('download')} ${isExported ? 'Re-Export' : 'Export'}
+                          </button>
+                        </td>
+                      </tr>`;
                  }).join('')}
                </tbody>
              </table>
