@@ -77,10 +77,10 @@ async function renderEvidenceScanScreen(params) {
     <div class="page-header">
       <div class="page-header-row">
         <div>
-          <div class="page-title">Acquisition &amp; Scan: <span style="color:var(--accent-cyan);">${evLabel}</span></div>
-          <div class="page-subtitle" style="font-family:var(--font-mono); font-size:12px;">${evPath}</div>
+          <div class="page-title">Acquisition &amp; Scan: <span class="text-primary">${evLabel}</span></div>
+          <div class="page-subtitle font-mono-sm">${evPath}</div>
         </div>
-        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+        <div class="d-flex gap-10 flex-wrap items-center">
           <button id="btn-verify-integrity" class="btn btn-secondary">${icon('fingerprint')} Verify Image Hashes</button>
           <button id="btn-start-scan" class="btn btn-primary"
             ${isScanning ? 'disabled title="A scan is already running on this image"' : ''}>
@@ -90,20 +90,20 @@ async function renderEvidenceScanScreen(params) {
       </div>
     </div>
 
-    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 0;">
+    <div class="scan-grid">
       <!-- Hashes card -->
-      <div class="card" style="margin-bottom:0;">
+      <div class="card mb-0">
         <div class="card-title">Acquisition Hashes</div>
-        <div style="display: flex; flex-direction: column; gap: 14px; font-size: 13px;">
+        <div class="flex-col gap-14 text-base">
           <div>
             <div class="meta-label">SHA-256</div>
-            <div class="hash-font" style="margin-top:4px; word-break:break-all;">${sha256}</div>
+            <div class="hash-font mt-xs word-break-all">${sha256}</div>
           </div>
           <div>
             <div class="meta-label">MD5</div>
-            <div class="hash-font" style="margin-top:4px; word-break:break-all;">${md5}</div>
+            <div class="hash-font mt-xs word-break-all">${md5}</div>
           </div>
-          <div style="display:flex; gap:32px; margin-top:4px;">
+          <div class="d-flex gap-32 mt-xs">
             <div>
               <div class="meta-label">File Size</div>
               <div class="meta-value">${sizeMB} MB</div>
@@ -117,12 +117,12 @@ async function renderEvidenceScanScreen(params) {
       </div>
 
       <!-- Brand detection card -->
-      <div class="card" style="margin-bottom:0;">
+      <div class="card mb-0">
         <div class="card-title">Brand Detection</div>
-        <div style="text-align:center; padding:12px 0;">
-          <div style="font-size:26px; font-weight:700; color:var(--accent-cyan); margin-bottom:6px;">${escapeHtml(detBrand)}</div>
-          <div style="font-size:13px; color:var(--text-muted);">Confidence: <strong>${brandConf}%</strong></div>
-          <div style="margin-top:12px;">
+        <div class="text-center py-12">
+          <div class="stat-big">${escapeHtml(detBrand)}</div>
+          <div class="text-base text-muted">Confidence: <strong>${brandConf}%</strong></div>
+          <div class="mt-md">
             <span class="badge ${brandBadge(detBrand).cls}" data-tooltip="${escapeHtml(brandBadge(detBrand).tip)}">${escapeHtml(detBrand)}</span>
           </div>
         </div>
@@ -130,31 +130,31 @@ async function renderEvidenceScanScreen(params) {
     </div>
 
     <!-- Live scan progress -->
-    <div id="scan-progress-card" class="card" style="margin-top:20px; display:${isScanning ? 'block' : 'none'};">
+    <div id="scan-progress-card" class="card mt-xl ${isScanning ? '' : 'hidden'}">
       <div class="card-title">
-        <span style="display:flex; align-items:center; gap:10px;">
+        <span class="d-flex items-center gap-10">
           <span id="scan-title-spinner" class="spinner spinner-sm"></span>
           Scanning &amp; Frame Carving
         </span>
-        <span id="scan-percentage" style="color:var(--accent-cyan); font-size:18px; font-weight:700;">0%</span>
+        <span id="scan-percentage" class="stat-medium">0%</span>
       </div>
       <div class="progress-bar-container">
         <div id="scan-progress-bar" class="progress-bar-fill"></div>
       </div>
-      <p id="scan-status-text" style="font-size:13px; color:var(--text-muted); margin-top:6px;">Initialising scanner…</p>
+      <p id="scan-status-text" class="text-base text-muted mt-6">Initialising scanner…</p>
     </div>
 
     <!-- Scan results summary -->
-    <div class="card" style="margin-top:20px;">
+    <div class="card mt-xl">
       <div class="card-title">
         <span>Scan Results &amp; Segments</span>
         ${isCompleted ? `<button class="btn btn-secondary btn-sm" ${navAttrs('recordings', { caseId: caseId, evidenceId: evidenceId })}>View Recordings ${icon('arrow-right')}</button>` : ''}
       </div>
-      <div style="display:flex; align-items:center; gap:12px; font-size:14px;">
-        <span style="color:var(--text-muted);">Current status:</span>
+      <div class="d-flex items-center gap-md text-lg">
+        <span class="text-muted">Current status:</span>
         <span class="badge ${statusBadgeClass}">${ev.scan_status || 'PENDING'}</span>
-        ${isCompleted ? '<span style="font-size:13px; color:var(--text-muted);">— Scan complete. Navigate to Recordings to review carved segments.</span>' : ''}
-        ${!isCompleted && !isScanning ? '<span style="font-size:13px; color:var(--text-muted);">— Click "Start Carving Scan" to begin forensic acquisition.</span>' : ''}
+        ${isCompleted ? '<span class="text-base text-muted">— Scan complete. Navigate to Recordings to review carved segments.</span>' : ''}
+        ${!isCompleted && !isScanning ? '<span class="text-base text-muted">— Click "Start Carving Scan" to begin forensic acquisition.</span>' : ''}
       </div>
     </div>
   `;
@@ -194,7 +194,7 @@ async function renderEvidenceScanScreen(params) {
       // Disable button immediately
       btnScan.disabled = true;
       btnScan.innerHTML = '<span class="btn-spinner"></span> Starting…';
-      progressCard.style.display = 'block';
+      progressCard.classList.remove('hidden');
 
       try {
         await API.startScan(caseId, evidenceId);
@@ -220,8 +220,8 @@ async function renderEvidenceScanScreen(params) {
             progressPct.innerText = '100%';
             progressBar.style.width = '100%';
             statusText.innerHTML = `
-              <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
-                <span style="color:var(--status-complete);">${icon('check-circle')} ${escapeHtml(comp.message || 'Scan complete.')}</span>
+              <div class="d-flex items-center gap-14 flex-wrap">
+                <span class="text-complete">${icon('check-circle')} ${escapeHtml(comp.message || 'Scan complete.')}</span>
                 <button class="btn btn-primary btn-sm" ${navAttrs('recordings', { caseId: caseId, evidenceId: evidenceId })}>View recordings ${icon('arrow-right')}</button>
               </div>`;
             btnScan.disabled = false;
@@ -230,7 +230,7 @@ async function renderEvidenceScanScreen(params) {
           // onError
           (errMsg) => {
             statusText.innerHTML = `
-              <div class="error-inline" style="margin-top:8px;">
+              <div class="error-inline mt-sm">
                 <span>${icon('alert')}</span>
                 <span>Scan failed: ${escapeHtml(errMsg)}</span>
               </div>`;
@@ -241,7 +241,7 @@ async function renderEvidenceScanScreen(params) {
       } catch (err) {
         // Could not even start the scan
         statusText.innerHTML = `
-          <div class="error-inline" style="margin-top:8px;">
+          <div class="error-inline mt-sm">
             <span>${icon('alert')}</span>
             <span>Failed to initiate scan: ${escapeHtml(err.message)}</span>
           </div>`;

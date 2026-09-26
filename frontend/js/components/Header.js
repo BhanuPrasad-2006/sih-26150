@@ -21,7 +21,7 @@ function renderHeader(breadcrumbs = []) {
       </div>
     </div>
     <div class="header-meta">
-      <div id="case-context-pill" class="case-context-pill" style="display:none;" role="region" aria-label="Case context"></div>
+      <div id="case-context-pill" class="case-context-pill hidden" role="region" aria-label="Case context"></div>
       <div class="host-pill" data-tooltip="This tool is served from this machine. Nothing leaves it unless you export."><span class="dot"></span><span class="label">${escapeHtml(hostLabel)}</span></div>
       <button type="button" id="theme-toggle" class="icon-btn" aria-label="Switch light or dark theme" title="Switch light / dark theme">${icon(themeIcon)}</button>
     </div>
@@ -79,7 +79,7 @@ async function updateHeaderContext(caseId, evidenceId = null) {
   if (!pill) return;
 
   if (!caseId) {
-    pill.style.display = 'none';
+    pill.classList.add('hidden');
     activeHeaderCaseId = null;
     activeHeaderEvidenceId = null;
     return;
@@ -153,7 +153,7 @@ async function updateHeaderContext(caseId, evidenceId = null) {
         ${icon(integrityIcon)} ${escapeHtml(integrityText)}
       </button>
     `;
-    pill.style.display = 'inline-flex';
+    pill.classList.remove('hidden');
 
     const verifyBtn = document.getElementById('btn-pill-verify');
     if (verifyBtn && currentEvidence) {
@@ -178,6 +178,6 @@ async function updateHeaderContext(caseId, evidenceId = null) {
       };
     }
   } catch (_) {
-    pill.style.display = 'none';
+    pill.classList.add('hidden');
   }
 }
