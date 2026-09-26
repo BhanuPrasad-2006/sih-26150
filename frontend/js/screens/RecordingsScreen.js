@@ -192,7 +192,7 @@ async function renderRecordingsScreen(params) {
                     }
 
                     return `
-                      <tr>
+                      <tr id="segment-row-${escapeHtml(s.segment_id)}" data-segment-id="${escapeHtml(s.segment_id)}">
                         <td><strong>Camera ${s.camera ?? s.camera_id ?? '?'}</strong></td>
                         <td style="font-size:12px; font-family:var(--font-mono); color:var(--text-muted);">${startStr}<br>${endStr}</td>
                         <td>${s.frame_count}</td>
@@ -408,6 +408,20 @@ async function renderRecordingsScreen(params) {
         }
       };
     }
+  }
+
+  if (params.highlightSegmentId) {
+    setTimeout(() => {
+      const targetRow = document.getElementById(`segment-row-${params.highlightSegmentId}`)
+        || document.querySelector(`tr[data-segment-id="${params.highlightSegmentId}"]`);
+      if (targetRow) {
+        targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        targetRow.classList.add('row-highlight');
+        setTimeout(() => {
+          targetRow.classList.remove('row-highlight');
+        }, 3000);
+      }
+    }, 100);
   }
 }
 
