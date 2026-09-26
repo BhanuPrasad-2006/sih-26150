@@ -18,6 +18,7 @@ Scan flow:
   GET  /api/cases/{id}/status    → SSE stream of ScanProgress events
   GET  /api/cases/{id}/segments  → list recovered segments
   POST /api/cases/{id}/export/{seg_id} → export one segment to MP4
+  GET  /api/cases/{id}/video/{seg_id}  → stream the exported MP4 for playback
   GET  /api/cases/{id}/verify    → re-hash evidence, compare
   GET  /api/cases/{id}/report    → generate PDF and return it
   GET  /api/cases/{id}/audit     → return full audit log as JSON
@@ -1076,6 +1077,38 @@ async def export_one_segment(case_id: str, segment_id: str):
     await asyncio.to_thread(db.save_segment, seg)
     _audit(case_id, "export", json.dumps(detail))
     return {"segment": seg, "detail": detail}
+
+
+@app.get("/api/cases/{case_id}/video/{segment_id}")
+async def play_exported_segment(case_id: str, segment_id: str):
+    """
+    Stream an exported MP4 for in-browser playback (supports Range requests, so seeking works).
+
+    Read-only: it serves the exported copy, never the evidence image. The file must be the one recorded
+    for this segment and must sit inside this case's exports folder; anything else is refused.
+    """
+    evs = await asyncio.to_thread(db.list_evidence_for_case, case_id)
+    seg = None
+    for ev in evs:
+        segments = await asyncio.to_thread(db.list_segments_for_evidence, ev.evidence_id)
+        seg = next((s for s in segments if s.segment_id == segment_id), None)
+        if seg:
+            break
+    if not seg:
+        raise HTTPException(404, "Segment not found")
+    if not seg.export_path:
+        raise HTTPException(400, "Segment has not been exported yet. Export it to MP4 before playing it.")
+
+    export_dir = get_case_export_dir(case_id).resolve()
+    path = Path(seg.export_path).resolve()
+    if export_dir not in path.parents:
+        raise HTTPException(403, "The exported file is outside this case's exports folder.")
+    if not path.is_file():
+        raise HTTPException(404, "The exported file is missing from disk. Export the segment again.")
+    return FileResponse(
+        str(path), media_type="video/mp4",
+        headers={"Content-Disposition": "inline", "Cache-Control": "no-store"},
+    )
 
 
 @app.post("/api/cases/{case_id}/motion/{segment_id}")

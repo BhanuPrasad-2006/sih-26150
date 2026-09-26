@@ -1281,3 +1281,10 @@ tbody tr:hover td { background: var(--primary-soft); }
 
 
 
+
+/* Brand detection card */
+.brand-mode { text-align: center; padding: 12px 0; }
+.brand-mode-name { font-size: 24px; font-weight: 800; letter-spacing: -0.3px; color: var(--accent-cyan); margin-bottom: 6px; }
+.brand-mode-sub { font-size: 13px; color: var(--text-muted); margin-top: 8px; }
+.brand-mode .notice-card { margin: 14px 0 0; text-align: left; }
+.brand-mode .notice-card h3 { font-size: 13px; }

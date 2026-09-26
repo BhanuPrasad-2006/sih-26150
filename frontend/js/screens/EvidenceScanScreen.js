@@ -15,6 +15,51 @@ function evidenceFormatLabel(path) {
   return `Raw image (.${ext})`;
 }
 
+/** True when the scan fell back to standards-based stream carving instead of a vendor parser. */
+function isGenericCarving(brand) {
+  const b = String(brand || '').toLowerCase();
+  return b.includes('generic') || b.includes('unidentified');
+}
+
+/** The Brand Detection card body: a mode indicator instead of a bare "0%" when no vendor matched. */
+function brandCardHtml(brand, confidencePct, scanStatus) {
+  const b = String(brand || '');
+  const notScanned = (!b || b.toLowerCase() === 'unknown') && scanStatus === 'PENDING';
+  if (notScanned) {
+    return `
+      <div class="brand-mode">
+        <div class="brand-mode-name">Not scanned yet</div>
+        <div class="brand-mode-sub">The recorder brand is worked out when you start the scan.</div>
+      </div>`;
+  }
+  if (isGenericCarving(b)) {
+    const hint = b.includes(' \u2014 ') ? b.split(' \u2014 ')[0] : '';
+    return `
+      <div class="brand-mode">
+        <span class="badge badge-verified">${icon('layers')} Generic stream carving active</span>
+        <div class="brand-mode-sub">No vendor signature matched, so no brand is claimed.</div>
+        <div class="notice-card info">
+          <div>
+            <h3>What this means</h3>
+            <p>No proprietary file-system header was recognised (Dahua, Hikvision, Honeywell). The tool falls back to
+            signature-based carving of standard MPEG-PS and H.264 streams. Results stay UNCERTAIN until the exported video
+            decodes, and camera numbers and times are only available if the stream itself carries them.</p>
+            ${hint ? `<p class="mt-sm">A weak hint of <strong>${escapeHtml(hint)}</strong> was seen but not enough to trust.</p>` : ''}
+          </div>
+        </div>
+      </div>`;
+  }
+  const bb = brandBadge(b);
+  return `
+    <div class="brand-mode">
+      <div class="brand-mode-name">${escapeHtml(b)}</div>
+      <div class="brand-mode-sub">Signature match confidence: <strong>${escapeHtml(String(confidencePct))}%</strong></div>
+      <div class="mt-md">
+        <span class="badge ${bb.cls}" data-tooltip="${escapeHtml(bb.tip)}">${escapeHtml(b)}</span>
+      </div>
+    </div>`;
+}
+
 /** Badge style for the detected brand: only recognised, described layouts look "verified". */
 function brandBadge(brand) {
   const b = String(brand || '').toLowerCase();
@@ -119,13 +164,7 @@ async function renderEvidenceScanScreen(params) {
       <!-- Brand detection card -->
       <div class="card mb-0">
         <div class="card-title">Brand Detection</div>
-        <div class="text-center py-12">
-          <div class="stat-big">${escapeHtml(detBrand)}</div>
-          <div class="text-base text-muted">Confidence: <strong>${brandConf}%</strong></div>
-          <div class="mt-md">
-            <span class="badge ${brandBadge(detBrand).cls}" data-tooltip="${escapeHtml(brandBadge(detBrand).tip)}">${escapeHtml(detBrand)}</span>
-          </div>
-        </div>
+        <div id="brand-card-body">${brandCardHtml(detBrand, brandConf, scanStatus)}</div>
       </div>
     </div>
 
@@ -226,6 +265,14 @@ async function renderEvidenceScanScreen(params) {
               </div>`;
             btnScan.disabled = false;
             btnScan.innerHTML = icon('refresh') + ' Re-Run Forensic Scan';
+            // Show the brand the scan just decided on (was left at the pre-scan value).
+            API.getEvidence(caseId, evidenceId).then((fresh) => {
+              const card = document.getElementById('brand-card-body');
+              if (card) {
+                const pct = fresh.confidence != null ? (fresh.confidence * 100).toFixed(0) : '—';
+                card.innerHTML = brandCardHtml(fresh.brand || 'Unknown', pct, fresh.scan_status || 'COMPLETED');
+              }
+            }).catch(() => { /* the card keeps its previous content */ });
           },
           // onError
           (errMsg) => {
