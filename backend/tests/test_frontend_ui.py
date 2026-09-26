@@ -116,3 +116,21 @@ def test_batch_bar_css_classes_defined():
                      ".batch-progress-row", ".batch-progress-text", ".batch-progress-pct"):
         assert cls_name in CSS, f"Missing CSS class: {cls_name}"
 
+
+def test_recordings_screen_has_compact_ai_detections_column():
+    rec_text = (ROOT / "js" / "screens" / "RecordingsScreen.js").read_text(encoding="utf-8")
+    assert "<th>AI Detections</th>" in rec_text
+    assert "<th>Basic Motion Detection</th>" not in rec_text
+    assert "<th>AI-Based Face Detection</th>" not in rec_text
+    assert "<th>Object Detection</th>" not in rec_text
+    assert "ai-pills" in rec_text
+    assert "ai-pill" in rec_text
+    assert "btn-compact" in rec_text
+
+
+def test_ai_pills_css_classes_defined():
+    for cls_name in (".ai-pills", ".ai-pill", ".ai-pill-active", ".ai-pill-muted",
+                     ".ai-pill-disabled", ".btn-compact"):
+        assert cls_name in CSS, f"Missing CSS class: {cls_name}"
+
+
