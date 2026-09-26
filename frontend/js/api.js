@@ -421,6 +421,171 @@ const API = {
     return res.json();
   },
 
+  /**
+   * Batch export segments with limited concurrency (max 2).
+   * Continues past individual failures, supports cancellation,
+   * reports progress via onProgress({ done, total, message }).
+   */
+  async batchExport(caseId, evidenceId, segments, { onProgress, shouldCancel } = {}) {
+    const list = segments || [];
+    const total = list.length;
+    let completed = 0;
+    let nextIndex = 0;
+    const failures = [];
+    let cancelled = false;
+
+    if (total === 0) {
+      return { total: 0, completed: 0, cancelled: false, failures: [] };
+    }
+
+    async function worker() {
+      while (nextIndex < total) {
+        if (shouldCancel && shouldCancel()) {
+          cancelled = true;
+          break;
+        }
+        const idx = nextIndex++;
+        const seg = list[idx];
+        if (onProgress) {
+          onProgress({
+            done: completed,
+            total,
+            message: `Exporting segment ${completed + 1} of ${total} (Camera ${seg.camera ?? '?'})`,
+          });
+        }
+        try {
+          const res = await API.exportSegment(caseId, evidenceId, seg.segment_id);
+          const detail = (res && res.detail) || {};
+          if (detail.error) {
+            failures.push({
+              segment_id: seg.segment_id,
+              camera: seg.camera,
+              error: detail.error,
+            });
+          }
+        } catch (err) {
+          failures.push({
+            segment_id: seg.segment_id,
+            camera: seg.camera,
+            error: err.message || 'Export request failed',
+          });
+        }
+        completed++;
+        if (onProgress) {
+          onProgress({
+            done: completed,
+            total,
+            message: `${completed} of ${total} done`,
+          });
+        }
+      }
+    }
+
+    const workers = [worker()];
+    if (total > 1) {
+      workers.push(worker());
+    }
+    await Promise.all(workers);
+
+    return { total, completed, cancelled, failures };
+  },
+
+  /**
+   * Run motion, face, and object detection for every exported segment with limited concurrency (max 2).
+   * Continues past individual failures, supports cancellation,
+   * reports progress via onProgress({ done, total, message }).
+   */
+  async batchAnalytics(caseId, exportedSegments, { onProgress, shouldCancel } = {}) {
+    const list = exportedSegments || [];
+    const total = list.length;
+    let completed = 0;
+    let nextIndex = 0;
+    const failures = [];
+    let cancelled = false;
+
+    if (total === 0) {
+      return { total: 0, completed: 0, cancelled: false, failures: [] };
+    }
+
+    async function worker() {
+      while (nextIndex < total) {
+        if (shouldCancel && shouldCancel()) {
+          cancelled = true;
+          break;
+        }
+        const idx = nextIndex++;
+        const seg = list[idx];
+        if (onProgress) {
+          onProgress({
+            done: completed,
+            total,
+            message: `Analyzing segment ${completed + 1} of ${total} (Camera ${seg.camera ?? '?'})`,
+          });
+        }
+
+        // 1. Motion detection
+        if (!shouldCancel || !shouldCancel()) {
+          try {
+            await API.detectMotion(caseId, seg.segment_id);
+          } catch (err) {
+            failures.push({
+              segment_id: seg.segment_id,
+              camera: seg.camera,
+              type: 'Motion',
+              error: err.message || 'Motion detection failed',
+            });
+          }
+        }
+
+        // 2. Face detection
+        if (!shouldCancel || !shouldCancel()) {
+          try {
+            await API.detectFaces(caseId, seg.segment_id);
+          } catch (err) {
+            failures.push({
+              segment_id: seg.segment_id,
+              camera: seg.camera,
+              type: 'Face',
+              error: err.message || 'Face detection failed',
+            });
+          }
+        }
+
+        // 3. Object detection
+        if (!shouldCancel || !shouldCancel()) {
+          try {
+            await API.detectObjects(caseId, seg.segment_id);
+          } catch (err) {
+            failures.push({
+              segment_id: seg.segment_id,
+              camera: seg.camera,
+              type: 'Object',
+              error: err.message || 'Object detection failed',
+            });
+          }
+        }
+
+        completed++;
+        if (onProgress) {
+          onProgress({
+            done: completed,
+            total,
+            message: `${completed} of ${total} done`,
+          });
+        }
+      }
+    }
+
+    const workers = [worker()];
+    if (total > 1) {
+      workers.push(worker());
+    }
+    await Promise.all(workers);
+
+    return { total, completed, cancelled, failures };
+  },
+
+
   /** Drive imaging (only enabled when the server runs locally with FORENSIC_ALLOW_LOCAL_ACQUISITION=1). */
   async getDrives() {
     const url = '/api/acquisition/drives';
