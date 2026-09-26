@@ -1,0 +1,24 @@
+# Render Blueprint: one web service (FastAPI backend + the frontend it serves) built from the Dockerfile.
+# A DEMO deployment, not a production forensic workstation: see docs/DEPLOY.md before using it.
+# Not tested by the authors on Render (no Docker in the development environment): treat the first deploy as a trial.
+services:
+  - type: web
+    name: sih-forensic-demo
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    envVars:
+      - key: SIH_PORT
+        value: "10000"                # Render's default port
+      - key: FORWARDED_ALLOW_IPS
+        value: "*"                    # trust Render's proxy, so the session cookie is marked Secure
+      - key: SIH_ALLOWED_HOSTS
+        sync: false                   # you enter your Render hostname, e.g. sih-forensic-demo.onrender.com
+      - key: DATABASE_URL
+        sync: false                   # a SEPARATE demo Postgres/Supabase database (never your real case database)
+      - key: SIH_MAX_UPLOAD_GB
+        value: "0.5"                  # small uploads only on a demo server
+      - key: FORENSIC_CASE_DIR
+        value: /data/cases
+      - key: SIH_KEY_DIR
+        value: /data/keys

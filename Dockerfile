@@ -6,7 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Non-root user with no login shell
-RUN useradd --system --create-home --uid 10001 --shell /usr/sbin/nologin sih
+RUN useradd --system --create-home --uid 10001 --shell /usr/sbin/nologin sih \n    && mkdir -p /data/cases /data/keys && chown -R sih /data
 WORKDIR /app
 
 COPY requirements.lock.txt ./
