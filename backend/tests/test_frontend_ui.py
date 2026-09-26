@@ -134,3 +134,28 @@ def test_ai_pills_css_classes_defined():
         assert cls_name in CSS, f"Missing CSS class: {cls_name}"
 
 
+def test_timeline_has_zoom_presets_and_hover_card():
+    tl_text = (ROOT / "js" / "screens" / "TimelineScreen.js").read_text(encoding="utf-8")
+    assert "timeline-zoom-controls" in tl_text
+    assert "timeline-zoom-btn" in tl_text
+    for preset in ("1h", "6h", "24h", "all"):
+        assert f'data-zoom="{preset}"' in tl_text
+    assert "timelineTicksForRange" in tl_text
+    assert "timeline-hover-card" in tl_text
+    assert "highlightSegmentId" in tl_text
+
+
+def test_recordings_screen_has_highlight_handler():
+    rec_text = (ROOT / "js" / "screens" / "RecordingsScreen.js").read_text(encoding="utf-8")
+    assert "highlightSegmentId" in rec_text
+    assert "row-highlight" in rec_text
+    assert "segment-row-" in rec_text
+
+
+def test_timeline_improvements_css_classes_defined():
+    for cls_name in (".timeline-hover-card", ".timeline-zoom-controls",
+                     ".timeline-zoom-btn", ".row-highlight"):
+        assert cls_name in CSS, f"Missing CSS class: {cls_name}"
+
+
+
