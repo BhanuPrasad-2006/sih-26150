@@ -244,3 +244,13 @@ def test_scan_screen_refreshes_hashes_size_and_brand_when_the_scan_finishes():
     text = (ROOT / "js" / "screens" / "EvidenceScanScreen.js").read_text(encoding="utf-8")
     for element_id in ("acq-sha256", "acq-md5", "acq-size", "brand-card-body"):
         assert f'id="{element_id}"' in text and f"'{element_id}'" in text or f'getElementById(\'{element_id}\')' in text, element_id
+
+
+def test_scan_screen_shows_a_real_status_and_a_clear_failure_panel():
+    text = (ROOT / "js" / "screens" / "EvidenceScanScreen.js").read_text(encoding="utf-8")
+    for state in ("NO_VIDEO", "FAILED", "COMPLETED", "SCANNING"):
+        assert f"'{state}'" in text
+    assert "Not scanned yet" in text and "No video found" in text and "No video was recovered" in text
+    assert "function showScanFailure" in text and "scan-title-spinner" in text
+    assert "Scan failed: ${escapeHtml(errMsg)}" not in text, "the raw technical message must not be the only thing shown"
+    assert "escapeHtml(evLabel)" in text and "escapeHtml(evPath)" in text     # file names are user-controlled

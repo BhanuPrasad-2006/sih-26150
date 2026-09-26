@@ -90,6 +90,9 @@ class Evidence(BaseModel):
     # by main.py's get_case() from whether segments exist / a scan is running
     # for this evidence — never written to or read from the database directly.
     scan_status: Optional[str] = None
+    # Computed, not persisted in the evidence table: a plain-language reason when the last scan found no
+    # video (scan_status NO_VIDEO) or failed (FAILED). Read from the saved scan outcome.
+    scan_message: Optional[str] = None
 
 
 class DiskOffset(BaseModel):

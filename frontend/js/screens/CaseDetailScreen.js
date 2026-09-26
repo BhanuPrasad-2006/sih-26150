@@ -414,26 +414,28 @@ function renderEvidenceTable(evidence, caseId) {
         <tbody>
           ${evidence.map(ev => {
             const brand = ev.brand || ev.detected_brand || 'Unknown';
-            const confidence = ev.confidence != null ? ` (${(ev.confidence * 100).toFixed(0)}%)` : '';
-            const brandBadge = brand.toLowerCase().includes('unverified') ? 'badge-uncertain' : 'badge-verified';
+            const confidence = (ev.confidence != null && !isGenericCarving(brand)) ? ` (${(ev.confidence * 100).toFixed(0)}%)` : '';
+            const brandBadgeCls = brandBadge(brand).cls;
             const scanStatus = ev.scan_status || 'PENDING';
-            const badgeClass = scanStatus === 'COMPLETED' ? 'badge-complete'
-                             : scanStatus === 'SCANNING'  ? 'badge-scanning'
-                             : 'badge-pending';
-            const scanLabel = scanStatus === 'COMPLETED' ? 'View Scan Results' : 'Scan Disk Image';
+            const statusMeta = scanStatusMeta(scanStatus);
+            const scanLabel = scanStatus === 'COMPLETED' ? 'View Scan Results' : (scanStatus === 'NO_VIDEO' || scanStatus === 'FAILED') ? 'View Scan Result' : 'Scan Disk Image';
             const scanTitle = scanStatus === 'COMPLETED'
               ? 'Scan complete — click to view carved segments'
               : scanStatus === 'SCANNING'
               ? 'Scan currently in progress'
+              : scanStatus === 'NO_VIDEO'
+              ? 'Scanned, but no video was recovered — click for details'
+              : scanStatus === 'FAILED'
+              ? 'The scan could not finish — click for details'
               : 'No scan run yet — click to start acquisition scan';
 
             return `
               <tr>
                 <td><strong>${escapeHtml(ev.evidence_label || ev.evidence_id)}</strong></td>
                 <td class="font-mono-xs text-muted max-w-200 text-truncate">${escapeHtml(ev.path || ev.file_path || '')}</td>
-                <td><span class="badge ${brandBadge}">${escapeHtml(brand)}${confidence}</span></td>
+                <td><span class="badge ${brandBadgeCls}">${escapeHtml(brand)}${confidence}</span></td>
                 <td class="hash-font">${ev.sha256_before ? ev.sha256_before.substring(0, 16) + '…' : '—'}</td>
-                <td><span class="badge ${badgeClass}">${scanStatus}</span></td>
+                <td><span class="badge ${statusMeta.cls}">${statusMeta.label}</span></td>
                 <td>
                   <button class="btn btn-secondary btn-sm" title="${scanTitle}"
                     ${navAttrs('evidence-scan', { caseId: caseId, evidenceId: ev.evidence_id })}>

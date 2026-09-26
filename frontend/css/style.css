@@ -1305,3 +1305,10 @@ tbody tr:hover td { background: var(--primary-soft); }
 .cert-details > .card-lead { margin-top: 16px; }
 .cert-details > .d-flex { margin-bottom: 22px; }
 .cert-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+
+/* Scan result panel */
+.scan-title-icon { display: inline-flex; width: 22px; height: 22px; color: var(--accent-cyan); }
+.scan-title-icon .icon { width: 22px; height: 22px; vertical-align: 0; }
+.scan-title-icon.text-error { color: var(--status-error); }
+.notice-card.notice-error { background: var(--status-error-soft); border-color: color-mix(in srgb, var(--status-error) 35%, transparent); }
+.notice-card.notice-error h3 { color: var(--status-error); }

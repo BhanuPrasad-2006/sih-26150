@@ -159,6 +159,30 @@ _scan_tasks: dict[str, asyncio.Task] = {}
 _active_scan_evidence: dict[str, str] = {}
 
 
+# What the last scan of an evidence item concluded when it did NOT produce segments. Without this, an item that was
+# scanned (and found nothing, or failed) looked identical to one never scanned ("PENDING"). Kept in the same key/value
+# table as the certificate details so it survives a restart on both SQLite and Postgres.
+def _outcome_key(evidence_id: str) -> str:
+    return f"scan_outcome:{evidence_id}"
+
+
+def _save_scan_outcome(evidence_id: str, state: str, message: str) -> None:
+    """state is "NO_VIDEO" (scan ran, nothing recoverable) or "FAILED" (scan could not run to the end); "" clears it."""
+    value = json.dumps({"state": state, "message": message}) if state else ""
+    db.set_auth_value(_outcome_key(evidence_id), value)
+
+
+def _load_scan_outcome(evidence_id: str) -> Optional[dict]:
+    raw = db.get_auth_value(_outcome_key(evidence_id))
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+        return data if data.get("state") in ("NO_VIDEO", "FAILED") else None
+    except (ValueError, AttributeError):
+        return None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global db, auth
@@ -347,6 +371,7 @@ async def _run_scan(case_id: str, evidence_id: str) -> None:
 
         # ── Step 1: open image ─────────────────────────────────────────────
         await push(ScanPhase.HASHING, 0, "Opening image and computing SHA-256 + MD5…")
+        await asyncio.to_thread(_save_scan_outcome, evidence_id, "", "")      # a new scan replaces the old verdict
         _audit(case_id, "scan_start", f"evidence_id={evidence_id}")
 
         def _progress_cb(done, total):
@@ -381,10 +406,13 @@ async def _run_scan(case_id: str, evidence_id: str) -> None:
 
         generic_fallback = False
         unidentified_msg = (
-            f"Brand confidence {confidence:.0%} is below threshold "
-            f"({MIN_PLUGIN_CONFIDENCE:.0%}) and generic stream carving found no "
-            f"recoverable MPEG-PS / H.264 video. Disk may be unsupported, encrypted, "
-            f"or not a DVR/NVR disk. Details: {plugin.version_hint()}"
+            "No video could be recovered from this file. The tool did not recognise it as any supported "
+            "recorder and found no standard MPEG-PS or H.264 video streams in it. It may not be a DVR/NVR disk "
+            "image, it may be encrypted, or it may use a format this tool cannot read (for example H.265 video)."
+        )
+        unidentified_detail = (
+            f"best brand confidence {confidence:.0%} (needs {MIN_PLUGIN_CONFIDENCE:.0%}); "
+            f"generic carving found no MPEG-PS / H.264 streams; {plugin.version_hint()}"
         )
         if confidence < MIN_PLUGIN_CONFIDENCE:
             # No brand plugin recognised the disk. Rather than give up, try generic
@@ -437,6 +465,8 @@ async def _run_scan(case_id: str, evidence_id: str) -> None:
         _audit(case_id, "carving_done", carve_note)
 
         if generic_fallback and not carved_frames:
+            _audit(case_id, "scan_no_video", unidentified_detail)
+            await asyncio.to_thread(_save_scan_outcome, evidence_id, "NO_VIDEO", unidentified_msg)
             await push(ScanPhase.ERROR, message=unidentified_msg)
             return
 
@@ -456,6 +486,10 @@ async def _run_scan(case_id: str, evidence_id: str) -> None:
             await asyncio.to_thread(db.save_segment, seg)
         _audit(case_id, "reconstruction_done",
                f"{len(segments)} segments across {len({s.camera for s in segments})} cameras")
+        if not segments:
+            await asyncio.to_thread(
+                _save_scan_outcome, evidence_id, "NO_VIDEO",
+                "The scan finished but no recordings were found in this image (nothing readable was left on it).")
 
         # ── Step 6: re-verify ──────────────────────────────────────────────
         await push(ScanPhase.RECONSTRUCTING, 95, "Re-verifying evidence hash…")
@@ -470,11 +504,13 @@ async def _run_scan(case_id: str, evidence_id: str) -> None:
 
     except AcquisitionError as exc:
         _audit(case_id, "acquisition_error", str(exc))
+        await asyncio.to_thread(_save_scan_outcome, evidence_id, "FAILED", f"The image could not be opened: {exc}")
         await push(ScanPhase.ERROR, message=f"Acquisition error: {exc}")
     except Exception as exc:
         tb = traceback.format_exc()
         log.error("Scan error in case %s: %s\n%s", case_id, exc, tb)
         _audit(case_id, "scan_error", str(exc))
+        await asyncio.to_thread(_save_scan_outcome, evidence_id, "FAILED", f"The scan stopped because of an error: {exc}")
         await push(ScanPhase.ERROR, message=f"Unexpected error: {exc}")
     finally:
         _active_scan_evidence.pop(case_id, None)
@@ -850,13 +886,18 @@ async def get_case(case_id: str):
         les = await asyncio.to_thread(db.list_log_events, ev.evidence_id)
         log_events.extend(les)
 
+        message = None
         if segs:
             status = "COMPLETED"
         elif ev.evidence_id == active_evidence_id:
             status = "SCANNING"
         else:
-            status = "PENDING"
-        enriched_evidence.append(ev.model_copy(update={"scan_status": status}))
+            outcome = await asyncio.to_thread(_load_scan_outcome, ev.evidence_id)
+            if outcome:
+                status, message = outcome["state"], outcome.get("message")
+            else:
+                status = "PENDING"
+        enriched_evidence.append(ev.model_copy(update={"scan_status": status, "scan_message": message}))
     evidence = enriched_evidence
 
     # Audit entries from in-memory log (re-hydrate from DB if server was restarted)

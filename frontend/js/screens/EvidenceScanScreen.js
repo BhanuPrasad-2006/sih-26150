@@ -15,6 +15,48 @@ function evidenceFormatLabel(path) {
   return `Raw image (.${ext})`;
 }
 
+/** Label and badge style for an evidence item's scan state (PENDING really means "never scanned"). */
+function scanStatusMeta(status) {
+  switch (status) {
+    case 'COMPLETED': return { label: 'Completed', cls: 'badge-complete' };
+    case 'SCANNING':  return { label: 'Scanning', cls: 'badge-scanning' };
+    case 'NO_VIDEO':  return { label: 'No video found', cls: 'badge-uncertain' };
+    case 'FAILED':    return { label: 'Scan failed', cls: 'badge-error' };
+    default:          return { label: 'Not scanned yet', cls: 'badge-pending' };
+  }
+}
+
+/** The line next to the status badge. */
+function scanStatusNote(status) {
+  if (status === 'COMPLETED') return 'Scan complete. Open Recordings to review the recovered segments.';
+  if (status === 'NO_VIDEO') return 'The scan ran but recovered no video. See the explanation above.';
+  if (status === 'FAILED') return 'The scan could not finish. See the explanation above.';
+  if (status === 'SCANNING') return 'A scan is running.';
+  return 'Click "Start Carving Scan" to begin.';
+}
+
+/** Turn the progress card into a clear "nothing recovered / scan failed" panel (no spinner, no 0%). */
+function showScanFailure(state, message) {
+  const card = document.getElementById('scan-progress-card');
+  if (!card) return;
+  card.classList.remove('hidden');
+  const noVideo = state !== 'FAILED';
+  document.getElementById('scan-title-spinner').innerHTML = icon(noVideo ? 'info' : 'x-circle');
+  document.getElementById('scan-title-spinner').className = noVideo ? 'scan-title-icon' : 'scan-title-icon text-error';
+  document.getElementById('scan-title-text').textContent = noVideo ? 'No video was recovered' : 'The scan could not finish';
+  document.getElementById('scan-percentage').classList.add('hidden');
+  card.querySelector('.progress-bar-container').classList.add('hidden');
+  const box = document.getElementById('scan-status-text');
+  box.innerHTML = `
+    <div class="notice-card ${noVideo ? '' : 'notice-error'}">
+      <div>
+        <h3>${noVideo ? 'What happened' : 'What went wrong'}</h3>
+        <p>${escapeHtml(message || 'The scan produced no result.')}</p>
+        <p class="mt-sm">You can try again, or load a different disk image. Nothing on the evidence file was changed.</p>
+      </div>
+    </div>`;
+}
+
 /** True when the scan fell back to standards-based stream carving instead of a vendor parser. */
 function isGenericCarving(brand) {
   const b = String(brand || '').toLowerCase();
@@ -114,16 +156,15 @@ async function renderEvidenceScanScreen(params) {
   const isCompleted = scanStatus === 'COMPLETED';
   const scanBtnLabel = isCompleted ? icon('refresh') + ' Re-Run Forensic Scan' : icon('rocket') + ' Start Carving Scan';
 
-  const statusBadgeClass = isCompleted ? 'badge-complete'
-                         : isScanning  ? 'badge-scanning'
-                         : 'badge-pending';
+  const statusMeta = scanStatusMeta(scanStatus);
+  const lastScanFailed = scanStatus === 'NO_VIDEO' || scanStatus === 'FAILED';
 
   root.innerHTML = `
     <div class="page-header">
       <div class="page-header-row">
         <div>
-          <div class="page-title">Acquisition &amp; Scan: <span class="text-primary">${evLabel}</span></div>
-          <div class="page-subtitle font-mono-sm">${evPath}</div>
+          <div class="page-title">Acquisition &amp; Scan: <span class="text-primary">${escapeHtml(evLabel)}</span></div>
+          <div class="page-subtitle font-mono-sm">${escapeHtml(evPath)}</div>
         </div>
         <div class="d-flex gap-10 flex-wrap items-center">
           <button id="btn-verify-integrity" class="btn btn-secondary">${icon('fingerprint')} Verify Image Hashes</button>
@@ -169,11 +210,11 @@ async function renderEvidenceScanScreen(params) {
     </div>
 
     <!-- Live scan progress -->
-    <div id="scan-progress-card" class="card mt-xl ${isScanning ? '' : 'hidden'}">
+    <div id="scan-progress-card" class="card mt-xl ${isScanning || lastScanFailed ? '' : 'hidden'}">
       <div class="card-title">
         <span class="d-flex items-center gap-10">
           <span id="scan-title-spinner" class="spinner spinner-sm"></span>
-          Scanning &amp; Frame Carving
+          <span id="scan-title-text">Scanning &amp; Frame Carving</span>
         </span>
         <span id="scan-percentage" class="stat-medium">0%</span>
       </div>
@@ -191,9 +232,8 @@ async function renderEvidenceScanScreen(params) {
       </div>
       <div class="d-flex items-center gap-md text-lg">
         <span class="text-muted">Current status:</span>
-        <span class="badge ${statusBadgeClass}">${ev.scan_status || 'PENDING'}</span>
-        ${isCompleted ? '<span class="text-base text-muted">— Scan complete. Navigate to Recordings to review carved segments.</span>' : ''}
-        ${!isCompleted && !isScanning ? '<span class="text-base text-muted">— Click "Start Carving Scan" to begin forensic acquisition.</span>' : ''}
+        <span id="scan-status-badge" class="badge ${statusMeta.cls}">${statusMeta.label}</span>
+        <span id="scan-status-note" class="text-base text-muted">— ${scanStatusNote(scanStatus)}</span>
       </div>
     </div>
   `;
@@ -223,6 +263,37 @@ async function renderEvidenceScanScreen(params) {
 
   // ── Start scan ─────────────────────────────────────────────────────────────
   const btnScan = document.getElementById('btn-start-scan');
+  if (lastScanFailed) showScanFailure(scanStatus, ev.scan_message);
+
+  // Keep the badge and the note under "Scan Results" in step with the scan that just ran.
+  const refreshScanStatus = async () => {
+    try {
+      const fresh = await API.getEvidence(caseId, evidenceId);
+      const meta = scanStatusMeta(fresh.scan_status);
+      const badge = document.getElementById('scan-status-badge');
+      if (badge) { badge.className = `badge ${meta.cls}`; badge.textContent = meta.label; }
+      const note = document.getElementById('scan-status-note');
+      if (note) note.textContent = '— ' + scanStatusNote(fresh.scan_status);
+      return fresh;
+    } catch (_) {
+      return null;
+    }
+  };
+
+  // Fill in what the scan worked out: hashes, size and the detected brand.
+  const applyFreshEvidence = (fresh) => {
+    if (!fresh) return;
+    const setText = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+    setText('acq-sha256', fresh.sha256_before || fresh.sha256_after || '—');
+    setText('acq-md5', fresh.md5_before || '—');
+    if (fresh.size_bytes != null) setText('acq-size', (fresh.size_bytes / (1024 * 1024)).toFixed(2) + ' MB');
+    const card = document.getElementById('brand-card-body');
+    if (card) {
+      const pct = fresh.confidence != null ? (fresh.confidence * 100).toFixed(0) : '—';
+      card.innerHTML = brandCardHtml(fresh.brand || 'Unknown', pct, fresh.scan_status || 'COMPLETED');
+    }
+  };
+
   if (!isScanning) {
     btnScan.onclick = async () => {
       const progressCard = document.getElementById('scan-progress-card');
@@ -266,27 +337,20 @@ async function renderEvidenceScanScreen(params) {
             btnScan.disabled = false;
             btnScan.innerHTML = icon('refresh') + ' Re-Run Forensic Scan';
             // Show what the scan just worked out (hashes, size and brand were left at their pre-scan values).
-            API.getEvidence(caseId, evidenceId).then((fresh) => {
-              const setText = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
-              setText('acq-sha256', fresh.sha256_before || fresh.sha256_after || '—');
-              setText('acq-md5', fresh.md5_before || '—');
-              if (fresh.size_bytes != null) setText('acq-size', (fresh.size_bytes / (1024 * 1024)).toFixed(2) + ' MB');
-              const card = document.getElementById('brand-card-body');
-              if (card) {
-                const pct = fresh.confidence != null ? (fresh.confidence * 100).toFixed(0) : '—';
-                card.innerHTML = brandCardHtml(fresh.brand || 'Unknown', pct, fresh.scan_status || 'COMPLETED');
-              }
-            }).catch(() => { /* the card keeps its previous content */ });
+            refreshScanStatus().then(applyFreshEvidence);
           },
           // onError
           (errMsg) => {
-            statusText.innerHTML = `
-              <div class="error-inline mt-sm">
-                <span>${icon('alert')}</span>
-                <span>Scan failed: ${escapeHtml(errMsg)}</span>
-              </div>`;
+            showScanFailure('FAILED', errMsg);                 // immediately, from the message we already have
             btnScan.disabled = false;
             btnScan.innerHTML = icon('rocket') + ' Retry Carving Scan';
+            refreshScanStatus().then((fresh) => {              // then use the saved verdict (no video vs error)
+              if (!fresh) return;
+              applyFreshEvidence(fresh);
+              if (fresh.scan_status === 'NO_VIDEO' || fresh.scan_status === 'FAILED') {
+                showScanFailure(fresh.scan_status, fresh.scan_message || errMsg);
+              }
+            });
           }
         );
       } catch (err) {
