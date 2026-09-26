@@ -101,9 +101,14 @@ async function renderExportReportScreen(params) {
     msg.textContent = 'Encrypting…';
     try {
       const r = await API.downloadCasePackage(caseId, pass);
-      msg.textContent = `Downloaded (${(r.size_bytes / 1024).toFixed(0)} KB). Keep the passphrase safe.`;
+      const sizeStr = `${(r.size_bytes / 1024).toFixed(0)} KB`;
+      msg.textContent = `Downloaded (${sizeStr}). Keep the passphrase safe.`;
       document.getElementById('pkg-pass').value = '';
-    } catch (e) { msg.textContent = e.message; }
+      showToast(`Forensic package downloaded (${sizeStr})`, 'success');
+    } catch (e) {
+      msg.textContent = e.message;
+      showToast(`Package creation failed: ${escapeHtml(e.message)}`, 'error');
+    }
   };
 
   // ── Generate PDF ───────────────────────────────────────────────────────────
@@ -117,6 +122,7 @@ async function renderExportReportScreen(params) {
 
     try {
       const res = await API.generateReport(caseId, evidenceId);
+      showToast(`PDF report generated: ${escapeHtml(res.filename)}`, 'success');
 
       // Success — show inline result card
       const resultCard = document.getElementById('report-result-card');
@@ -143,6 +149,7 @@ async function renderExportReportScreen(params) {
       genBtn.innerHTML = icon('file-text') + ' Regenerate PDF Report';
 
     } catch (err) {
+      showToast(`Report generation failed: ${escapeHtml(err.message)}`, 'error');
       const errCard = document.getElementById('report-error-card');
       errCard.innerHTML = `
         <div class="error-banner">
