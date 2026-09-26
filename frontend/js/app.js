@@ -98,6 +98,12 @@ function navigateTo(screen, params = {}) {
       renderHeader([]);
       renderDashboardScreen();
   }
+
+  if (params.caseId && screen !== 'login' && screen !== 'setup' && screen !== 'dashboard' && screen !== 'new-case') {
+    updateHeaderContext(params.caseId, params.evidenceId);
+  } else {
+    updateHeaderContext(null);
+  }
 }
 
 // ── Delegated click handling ──────────────────────────────────────────────────

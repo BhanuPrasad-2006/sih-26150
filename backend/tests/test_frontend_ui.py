@@ -191,5 +191,21 @@ def test_screens_use_toasts_for_transient_confirmations():
     assert "PDF report generated:" in rep_text
 
 
+def test_header_has_case_context_pill():
+    hdr_text = (ROOT / "js" / "components" / "Header.js").read_text(encoding="utf-8")
+    assert "case-context-pill" in hdr_text
+    assert "updateHeaderContext" in hdr_text
+    assert "btn-pill-verify" in hdr_text
+
+    app_text = (ROOT / "js" / "app.js").read_text(encoding="utf-8")
+    assert "updateHeaderContext(" in app_text
+
+    css = (ROOT / "css" / "style.css").read_text(encoding="utf-8")
+    for cls_name in (".case-context-pill", ".case-pill-info", ".case-pill-id",
+                     ".case-pill-evidence", ".case-pill-integrity"):
+        assert cls_name in css, f"Missing CSS class: {cls_name}"
+
+
+
 
 
