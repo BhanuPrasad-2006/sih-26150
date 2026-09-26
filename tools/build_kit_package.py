@@ -27,7 +27,7 @@ FIXED_TIME = (2026, 1, 1, 0, 0, 0)          # constant timestamps make the archi
 
 # backend modules the kit imports (verified by tests/test_kit_package.py: the kit runs with no web dependencies)
 BACKEND_FILES = [
-    "__init__.py", "accuracy.py", "acquisition.py", "exporter.py", "models.py", "pipeline.py",
+    "__init__.py", "accuracy.py", "acquisition.py", "exporter.py", "models.py", "parameter_sets.py", "pipeline.py",
     "reconstructor.py", "sandbox.py", "validation_kit.py",
 ]
 PLUGIN_FILES = [p.name for p in sorted((ROOT / "backend" / "plugins").glob("*.py"))]

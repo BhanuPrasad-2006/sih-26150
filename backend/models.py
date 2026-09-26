@@ -173,6 +173,9 @@ class RawFrame:
     # Block-level, NOT per-frame: every frame in the block shares it. None when no index was read.
     window_start: Optional[datetime] = None
     window_end:   Optional[datetime] = None
+    # A frame that was NOT contiguous on disk (it straddled interleaved clusters and was stitched back together):
+    # disk_offset/frame_size describe its first piece, these are the remaining (start, end) pieces in stream order.
+    extra_ranges: tuple = ()
 
     @property
     def disk_offset_end(self) -> int:

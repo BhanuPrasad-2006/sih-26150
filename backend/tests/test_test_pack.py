@@ -73,12 +73,14 @@ def test_tplink_has_no_times_and_is_one_generic_segment(pack):
     assert len(segs) == 1 and segs[0]["start"] == "None"
 
 
-def test_stress_image_looks_recovered_but_the_accuracy_check_exposes_it(pack):
+def test_stress_image_recovers_most_frames_and_the_accuracy_check_measures_the_rest(pack):
     _, info = pack
     from testpack import verify  # noqa: F401  (imported by the fixture's sys.path)
     acc = __import__("json").loads((pack[0] / "expected_results.json").read_text())["_accuracy"]
     assert acc["deleted_vs_camera1_clip"]["frame_recall"] > 80
-    assert acc["stress_vs_camera1_clip"]["frame_recall"] < acc["deleted_vs_camera1_clip"]["frame_recall"] / 2
+    # tiny interleaved clusters lose the frames whose header is split; the rest is stitched back (it was ~3% before stitching)
+    assert acc["stress_vs_camera1_clip"]["frame_recall"] > 60
+    assert acc["stress_vs_camera1_clip"]["frame_recall"] < acc["deleted_vs_camera1_clip"]["frame_recall"] + 0.01
 
 
 def test_the_guide_quotes_the_measured_numbers(pack):

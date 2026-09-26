@@ -42,6 +42,7 @@ from typing import Callable, Optional, TYPE_CHECKING
 from backend.models import LogEvent, RawFrame
 from backend.plugins.base import BrandPlugin
 from backend.plugins.dahua_dhfs import iter_recordings, read_partitions
+from backend.plugins.dahua_stitch import OpenFrame, stitch
 from backend.plugins.constants import (
     CPPLUS_IDENTIFYING_MARKERS,
     DHAV_DATE_YEAR_MIN,
@@ -181,6 +182,13 @@ class DahuaPlugin(BrandPlugin):
         search_from = 0
         indexed = _indexed_ranges(img)
         skipped_indexed = 0
+        # Cluster geometry (from the DHFS boot sector, which survives deletion) lets us put back frames that straddle
+        # interleaved clusters; without it such frames simply stay rejected.
+        try:
+            parts = read_partitions(mm, total)
+        except Exception:
+            parts = []
+        open_frames: list[OpenFrame] = []
 
         try:
             while search_from < total:
@@ -197,6 +205,10 @@ class DahuaPlugin(BrandPlugin):
                     search_from = pos + frame.frame_size
                 else:
                     rejected_count += 1
+                    if parts and not _in_ranges(indexed, pos):
+                        header = _parse_dhav_header(mm, pos, total)
+                        if header is not None:                      # valid header, trailer missing: maybe straddling
+                            open_frames.append(header)
                     search_from = pos + len(DHAV_HEADER_MAGIC)
 
                 if progress_cb and (len(frames) + rejected_count) % 500 == 0:
@@ -209,9 +221,21 @@ class DahuaPlugin(BrandPlugin):
             log.warning(note)
             return frames, note
 
+        stitch_note = ""
+        if open_frames:
+            stitched, st = stitch(mm, total, parts, frames, open_frames, _parse_dhav_header)
+            frames.extend(stitched)
+            frames.sort(key=lambda f: f.disk_offset)
+            stitch_note = (
+                f" {st.stitched} frame(s) that straddled interleaved clusters were put back together"
+                f" ({st.ambiguous} left alone because the continuation was ambiguous, "
+                f"{st.unresolved} with no continuation found)."
+            )
+            if st.skipped_for_time:
+                stitch_note += f" {st.skipped_for_time} candidate(s) were not attempted because the time budget for stitching ran out."
         note = (
             f"Dahua carving complete: {len(frames)} valid DHAV frames found, "
-            f"{rejected_count} candidates rejected."
+            f"{rejected_count} candidates rejected.{stitch_note}"
         )
         if indexed:
             note += (
@@ -270,70 +294,73 @@ def _decode_dhav_date(raw: int) -> Optional[datetime]:
         return None
 
 
-def _validate_dhav_frame(mm: object, pos: int, image_size: int) -> Optional[RawFrame]:
+def _parse_dhav_header(mm: object, pos: int, image_size: int) -> Optional[OpenFrame]:
     """
-    Validate a DHAV candidate at byte offset *pos*.
-
-    Checks (per docs/format_sheets/dahua.md §2, PRD §5.6.1):
-      1. Enough bytes remain for the minimum (non-partial) header.
-      2. Frame type byte ∈ DHAV_VALID_FRAME_TYPES, and not the "partial"
-         continuation type (0xF1), which carries no independent payload.
-      3. Channel number ≤ DHAV_MAX_CHANNEL.
-      4. Total frame length is plausible (DHAV_MIN_FRAME_BYTES – DHAV_MAX_FRAME_BYTES).
-      5. Frame does not extend past the end of the image.
-      6. Packed date bitfield decodes to a sane calendar timestamp
-         (not before DHAV_DATE_YEAR_MIN, not more than 1 day in the future).
-      7. Trailer b'dhav' + repeated length is at the expected position
-         (carving-precision heuristic — see constants.py DHAV_TRAILER_MAGIC).
-
-    Returns a RawFrame on success, None on any failure.
+    Checks 1-6 of _validate_dhav_frame (everything except the trailer): a plausible DHAV header at *pos* whose frame
+    would fit in the image. Used both by the validator and by the stitcher, which continues frames whose trailer is
+    not where their length says.
     """
     try:
-        # Bounds: we need at least the minimum (non-partial) header
         if pos + DHAV_MIN_HEADER_SIZE > image_size:
             return None
-
         header = mm[pos : pos + DHAV_MIN_HEADER_SIZE]
-
-        # 1. Magic already matched by mmap.find — double-check for safety
         if header[:4] != DHAV_HEADER_MAGIC:
             return None
-
-        # 2. Frame type — reject the partial/continuation marker (no payload)
         frame_type = header[DHAV_OFF_FRAME_TYPE]
         if frame_type not in DHAV_VALID_FRAME_TYPES or frame_type == DHAV_TYPE_PARTIAL:
             return None
-
-        # 3. Channel (1 byte — NOT 2, corrected 2026-09)
         channel = header[DHAV_OFF_CHANNEL]
         if channel > DHAV_MAX_CHANNEL:
             return None
-
-        # 4. Total frame size
         total_size = struct.unpack_from("<I", header, DHAV_OFF_TOTAL_SIZE)[0]
         if not (DHAV_MIN_FRAME_BYTES <= total_size <= DHAV_MAX_FRAME_BYTES):
             return None
         ext_length = header[DHAV_OFF_EXT_LENGTH]
         if DHAV_MIN_HEADER_SIZE + ext_length + DHAV_TRAILER_SIZE > total_size:
             return None
-
-        # 5. Frame fits in image
         if pos + total_size > image_size:
             return None
-
-        # 6. Packed date/time sanity
         date_raw = struct.unpack_from("<I", header, DHAV_OFF_DATE)[0]
         timestamp = _decode_dhav_date(date_raw)
-        if timestamp is None:
-            return None
-        if timestamp.year < DHAV_DATE_YEAR_MIN:
+        if timestamp is None or timestamp.year < DHAV_DATE_YEAR_MIN:
             return None
         if timestamp > datetime.now(tz=timezone.utc) + timedelta(days=1):
             return None
-        # Sub-second field (offset 0x14): meaning is approximate (not
-        # strictly milliseconds) — clamp so datetime.replace() never raises.
+        # Sub-second field (offset 0x14): approximate meaning; clamp so replace() never raises.
         subsecond = struct.unpack_from("<H", header, DHAV_FIXED_HEADER_SIZE)[0]
         timestamp = timestamp.replace(microsecond=min(subsecond, 999) * 1000)
+        return OpenFrame(
+            pos=pos, channel=channel, sequence=struct.unpack_from("<I", header, DHAV_OFF_SEQUENCE)[0],
+            total=total_size, timestamp=timestamp, frame_type=frame_type,
+            is_keyframe=frame_type == DHAV_TYPE_VIDEO_KEYFRAME,
+        )
+    except Exception:
+        return None
+
+
+def _validate_dhav_frame(mm: object, pos: int, image_size: int) -> Optional[RawFrame]:
+    """
+    Validate a DHAV candidate at byte offset *pos*.
+
+    Checks (per docs/format_sheets/dahua.md section 2, PRD 5.6.1):
+      1. Enough bytes remain for the minimum (non-partial) header.
+      2. Frame type byte in DHAV_VALID_FRAME_TYPES, and not the "partial"
+         continuation type (0xF1), which carries no independent payload.
+      3. Channel number <= DHAV_MAX_CHANNEL.
+      4. Total frame length is plausible (DHAV_MIN_FRAME_BYTES - DHAV_MAX_FRAME_BYTES).
+      5. Frame does not extend past the end of the image.
+      6. Packed date bitfield decodes to a sane calendar timestamp
+         (not before DHAV_DATE_YEAR_MIN, not more than 1 day in the future).
+      7. Trailer b'dhav' + repeated length is at the expected position
+         (carving-precision heuristic, see constants.py DHAV_TRAILER_MAGIC).
+
+    Returns a RawFrame on success, None on any failure. (Checks 1-6 live in _parse_dhav_header.)
+    """
+    try:
+        hdr = _parse_dhav_header(mm, pos, image_size)
+        if hdr is None:
+            return None
+        total_size = hdr.total
 
         # 7. Trailer validation (carving-precision heuristic)
         trailer_pos = pos + total_size - DHAV_TRAILER_SIZE
@@ -346,18 +373,15 @@ def _validate_dhav_frame(mm: object, pos: int, image_size: int) -> Optional[RawF
         if trailer_length != total_size:
             return None
 
-        sequence = struct.unpack_from("<I", header, DHAV_OFF_SEQUENCE)[0]
-        is_keyframe = frame_type == DHAV_TYPE_VIDEO_KEYFRAME
-
         return RawFrame(
             brand="dahua",
-            camera=channel,
-            sequence=sequence,
-            timestamp=timestamp,
+            camera=hdr.channel,
+            sequence=hdr.sequence,
+            timestamp=hdr.timestamp,
             disk_offset=pos,
             frame_size=total_size,
-            frame_type=frame_type,
-            is_keyframe=is_keyframe,
+            frame_type=hdr.frame_type,
+            is_keyframe=hdr.is_keyframe,
         )
 
     except Exception:

@@ -1128,6 +1128,28 @@ async def case_correlation(case_id: str, window_seconds: float = 5.0):
     }
 
 
+async def _donor_provider(ev, seg: Segment, mm):
+    """A function that returns the H.264 (SPS, PPS) of another piece of this camera's footage, computed only if needed."""
+    others = [s for s in await asyncio.to_thread(db.list_segments_for_evidence, ev.evidence_id)
+              if s.segment_id != seg.segment_id and s.camera == seg.camera] + \
+             [s for s in await asyncio.to_thread(db.list_segments_for_evidence, ev.evidence_id)
+              if s.segment_id != seg.segment_id and s.camera != seg.camera]
+
+    def provide() -> Optional[tuple[bytes, bytes]]:
+        from backend.parameter_sets import dhav_video_payloads, find_sps_pps
+        for other in others:
+            data = bytearray()
+            for o in other.disk_offsets:
+                data += mm[o.start:min(o.end, o.start + 2 * 1024 * 1024)]
+                if len(data) >= 2 * 1024 * 1024:
+                    break
+            found = find_sps_pps(b"".join(dhav_video_payloads(bytes(data))))
+            if found:
+                return found
+        return None
+    return provide
+
+
 @app.post("/api/cases/{case_id}/export/{segment_id}")
 async def export_one_segment(case_id: str, segment_id: str):
     ev, seg = await _find_segment(case_id, segment_id)
@@ -1137,7 +1159,8 @@ async def export_one_segment(case_id: str, segment_id: str):
         raise HTTPException(400, "Evidence image is not loaded; re-run scan first")
 
     out_dir = get_case_export_dir(case_id)
-    seg, detail = await asyncio.to_thread(export_segment, img.mm, seg, out_dir)
+    donor = await _donor_provider(ev, seg, img.mm)
+    seg, detail = await asyncio.to_thread(export_segment, img.mm, seg, out_dir, donor)
     await asyncio.to_thread(db.save_segment, seg)
     _audit(case_id, "export", json.dumps(detail))
     return {"segment": seg, "detail": detail}

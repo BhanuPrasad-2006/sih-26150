@@ -173,6 +173,24 @@ demux correctly; the extension block must be present too.
 
 ---
 
+### 3a. Frames that straddle interleaved clusters (added 2026-09)
+
+A frame near the end of a cluster continues in one of the same camera's LATER clusters, with other cameras' clusters in
+between, so its trailer is not where its length says. `dahua_stitch.py` puts such a frame back together only when:
+
+1. the cluster size is known from the DHFS boot sector (it survives deletion of the descriptors; without it nothing is stitched);
+2. the last cluster holds `b"dhav"` + the frame's length at exactly the position the length implies (an 8-byte exact match);
+3. that cluster continues with the SAME camera's next frame (frame number within +3), preferred over a bare trailer match;
+4. any clusters in between are unambiguous: exactly as many unclaimed, header-less, non-empty clusters as needed. More candidates
+   than needed means the frame stays rejected (never guessed).
+
+Measured on generated disks (`tools/make_test_pack.py`): 4 KiB clusters, index wiped, camera 1 clip: **3.33 % of frames right before, 89.17 % after**;
+64 KiB clusters: 96.67 % before, 100 % after. Every stitched frame in the tests is byte-identical to the original. Still lost: a frame whose
+24-byte HEADER is split across two clusters, and every frame depending on it until the next keyframe. Not validated on a real disk.
+The method (channel + frame-number continuity, ±3) follows MDPI Information 17(5):493; the checks above are ours.
+
+---
+
 ## 4. Adaptive time-gap segmentation
 
 When the time difference between two consecutive frames of the same channel exceeds T_gap, a new
@@ -211,7 +229,7 @@ Status: ❓ TO VERIFY when a CP Plus disk is available (KAT-04 extended).
 
 ## 6. Known limitations
 
-- DHFS index parsing is not implemented in v1. Recovery relies entirely on carving.
+- The DHFS 4.1 index is read when present (section 1); after deletion, recovery relies on carving plus the stitching in section 3a.
 - The timestamp epoch and timezone are assumed but not verified with a known recording.
 - Exact meaning of bytes at offsets 0x05, 0x16–0x27 is unknown.
 - Frame length plausibility bounds (100 bytes – 10 MB) are proposed, not derived from data.

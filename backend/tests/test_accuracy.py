@@ -244,7 +244,9 @@ def test_deleted_dhfs_disk_measured_against_the_original_index(temp_dir):
     c, i = results["contiguous"], results["interleaved"]
     assert c["placement_precision_pct"] == 100.0 and i["placement_precision_pct"] == 100.0   # nothing recovered from the wrong place
     assert c["byte_recall_pct"] >= 90.0                                                      # only the 512-byte DHII sectors are not video
-    assert i["byte_recall_pct"] < c["byte_recall_pct"]                                       # frames split across foreign clusters are lost
+    # Frames split across another camera's clusters used to be lost (interleaved < contiguous). They are now stitched back
+    # from their trailer and continuation, so interleaving costs nothing here (see test_dahua_stitch.py).
+    assert i["byte_recall_pct"] >= c["byte_recall_pct"] - 0.01
     assert 0 < i["byte_recall_pct"]
 
 

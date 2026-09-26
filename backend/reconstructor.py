@@ -158,6 +158,24 @@ def split_on_gaps(frames: list[RawFrame]) -> list[list[RawFrame]]:
     return sessions
 
 
+def _missing_frame_numbers(session: list[RawFrame]) -> tuple[int, int]:
+    """
+    (jumps, missing) from the frame numbers stored in Dahua frame headers: how many times the numbering skips, and by
+    how many frames in total. Only for pieces made of carved frames (index fragments carry no frame numbers); a jump
+    bigger than 10,000 is treated as a counter restart, not as missing frames.
+    """
+    if any(f.stream_id or f.frame_type not in (0xF0, 0xFC, 0xFD) for f in session):
+        return 0, 0
+    numbers = sorted({f.sequence for f in session})
+    jumps = missing = 0
+    for a, b in zip(numbers, numbers[1:]):
+        gap = b - a - 1
+        if 0 < gap <= 10_000:
+            jumps += 1
+            missing += gap
+    return jumps, missing
+
+
 def _label_session(session: list[RawFrame], evidence_id: str) -> Segment:
     """
     Build a Segment from one session of frames and assign a status label.
@@ -168,11 +186,13 @@ def _label_session(session: list[RawFrame], evidence_id: str) -> Segment:
     offsets: list[DiskOffset] = []
     for frame in session:
         if frame.frame_size > 4:  # ignore placeholder entries
-            # Coalesce byte-contiguous ranges: identical export bytes, far fewer rows.
-            if offsets and offsets[-1].end == frame.disk_offset:
-                offsets[-1] = DiskOffset(start=offsets[-1].start, end=frame.disk_offset_end)
-            else:
-                offsets.append(DiskOffset(start=frame.disk_offset, end=frame.disk_offset_end))
+            # A stitched frame contributes its pieces in stream order; ordinary frames one range.
+            for start, end in ((frame.disk_offset, frame.disk_offset_end), *frame.extra_ranges):
+                # Coalesce byte-contiguous ranges: identical export bytes, far fewer rows.
+                if offsets and offsets[-1].end == start:
+                    offsets[-1] = DiskOffset(start=offsets[-1].start, end=end)
+                else:
+                    offsets.append(DiskOffset(start=start, end=end))
 
     # Timestamps
     timestamps = [f.timestamp for f in session if f.timestamp is not None]
@@ -245,6 +265,14 @@ def _label_session(session: list[RawFrame], evidence_id: str) -> Segment:
                 "number and fragment order come from the disk index. Awaiting ffprobe validation "
                 "(then PARTIAL is kept; COMPLETE needs ground truth)."
             )
+
+    missing = _missing_frame_numbers(session) if brand in ("dahua", "cpplus") else (0, 0)
+    if missing[0]:
+        notes += (
+            f" | The recorder's own frame numbers jump {missing[0]} time(s): about {missing[1]} frame(s) are absent from "
+            "this piece (based on frame numbering that has not been verified on real disks). Frames that depend on an "
+            "absent frame may not decode until the next keyframe."
+        )
 
     if windowed:
         notes += (

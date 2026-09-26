@@ -23,6 +23,9 @@ def write(out: Path, r: dict, seconds: int, sims: dict, own_photos: bool) -> Non
     thr = r["_threshold"]
     segs = r["dahua_deleted.dd"]["segments"]
     t0, t1 = min(x["start"] for x in segs)[11:19], max(x["end"] for x in segs)[11:19]
+    import re as _re
+    m = _re.search(r"(\d+) frame\(s\) that straddled", r['dahua_deleted_stress_tiny_clusters.dd']['carve_note'])
+    stitched = m.group(1) if m else '0'
     acc = r["_accuracy"]
     people_note = ("Persons A and B are **your own photos**." if own_photos else
                    "Persons A and B are **cartoon avatars drawn by the generator** (not real people, not photographs).")
@@ -92,12 +95,15 @@ Brand shown as **{r['tplink_deleted.dd']['brand']}**. No vendor parser exists, s
 - This is the honest result for an unsupported brand. It is **not** a bug.
 
 ### Test 6: the stress image (`dahua_deleted_stress_tiny_clusters.dd`)
-The recordings are chopped into 4 KiB pieces and interleaved, far smaller than any real disk. The tool still finds frames, but
-most are stitched from the wrong pieces:
+The recordings are chopped into 4 KiB pieces and interleaved, far smaller than any real disk, so keyframes (the big frames)
+are spread over several pieces with the other camera's pieces in between. The tool now puts such frames back together when
+the pieces are unambiguous: the scan note says "{stitched} frame(s) that straddled interleaved clusters were put back together".
 
 {_seg_lines(r['dahua_deleted_stress_tiny_clusters.dd'])}
 
-Use this one with the **accuracy** test below: the tool looks fine until you compare it with the original video.
+What is still lost: a frame whose 24-byte **header** is itself split across two pieces (the tool does not guess), and then every
+frame that depends on it until the next keyframe. That is why this image does not reach 100%. Real disks use pieces of megabytes,
+where this is rare.
 
 ## Face search (find a person across the recordings)
 
@@ -125,8 +131,8 @@ Expected for the deleted Dahua disk against the Camera 1 clip: **{acc['deleted_v
 ({acc['deleted_vs_camera1_clip']['in_order']}% in the right order, byte recall {acc['deleted_vs_camera1_clip']['byte_recall']}%).
 Against the Camera 2 clip: **{acc['deleted_vs_camera2_clip']['frame_recall']}%** (the report also lists the other camera's frames as "extra", which is why precision reads about {acc['deleted_vs_camera2_clip']['frame_precision']}%).
 
-For the stress image against the Camera 1 clip the tool reports only **{acc['stress_vs_camera1_clip']['frame_recall']}%**: this is the accuracy feature catching frames that
-*look* recovered but are wrong. The same numbers come from the command line: `python -m backend.validation_kit --after disks/dahua_deleted.dd --before disks/dahua_before_deletion.dd --clip truth_videos/camera1_persons_A_and_B.mp4`.
+For the stress image against the Camera 1 clip the tool reports **{acc['stress_vs_camera1_clip']['frame_recall']}%**: the accuracy feature measures exactly
+what the stitching could not save (see test 6). The same numbers come from the command line: `python -m backend.validation_kit --after disks/dahua_deleted.dd --before disks/dahua_before_deletion.dd --clip truth_videos/camera1_persons_A_and_B.mp4`.
 
 ## Cross-camera timeline
 

@@ -27,10 +27,11 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from backend.sandbox import FFMPEG_SAFE_INPUT, run_limited
 from backend.models import Segment, SegmentStatus
+from backend import parameter_sets
 
 log = logging.getLogger(__name__)
 
@@ -167,10 +168,53 @@ def remux_h264_to_mp4(raw_path: Path, mp4_path: Path) -> tuple[bool, str]:
         return False, str(exc)
 
 
+# A piece bigger than this is not repaired in memory (the repair reads the whole piece); it is exported as it is.
+MAX_REPAIR_BYTES = 256 * 1024 * 1024
+
+
+def _repair_with_borrowed_parameter_sets(
+    raw_path: Path,
+    output_dir: Path,
+    segment: Segment,
+    donor_provider: Callable[[], Optional[tuple[bytes, bytes]]],
+) -> Optional[Path]:
+    """
+    A Dahua piece whose first keyframe lost its SPS/PPS does not play. If another piece of the same camera still has
+    them, put those settings in front and remux. Returns the new MP4, or None when nothing was repaired (no donor,
+    piece already has its own settings, piece too large, or the result still does not probe as video).
+    """
+    try:
+        if raw_path.stat().st_size > MAX_REPAIR_BYTES:
+            return None
+        donor = donor_provider()
+        if not donor:
+            return None
+        stream = parameter_sets.repair_stream(raw_path.read_bytes(), donor)
+        if stream is None:
+            return None
+        h264_path = output_dir / f"{segment.segment_id}_repaired.h264"
+        h264_path.write_bytes(stream)
+        mp4_path = output_dir / f"{segment.segment_id}.mp4"
+        ok, err = remux_h264_to_mp4(h264_path, mp4_path)
+        h264_path.unlink(missing_ok=True)
+        if not ok:
+            mp4_path.unlink(missing_ok=True)
+            return None
+        probe_ok, _ = ffprobe_check(mp4_path)
+        if not probe_ok:
+            mp4_path.unlink(missing_ok=True)
+            return None
+        return mp4_path
+    except Exception as exc:
+        log.warning("Parameter-set repair failed for %s: %s", segment.segment_id, exc)
+        return None
+
+
 def export_segment(
     mm,
     segment: Segment,
     output_dir: Path,
+    donor_provider: Optional[Callable[[], Optional[tuple[bytes, bytes]]]] = None,
 ) -> tuple[Segment, dict]:
     """
     Full export pipeline for one segment:
@@ -227,6 +271,18 @@ def export_segment(
 
     # Step 3: ffprobe check
     probe_ok, probe_info = ffprobe_check(mp4_path)
+
+    # Step 3b: a Dahua piece that will not play may only be missing its parameter sets (SPS/PPS): borrow them.
+    if not probe_ok and not brand and donor_provider is not None and raw_path.exists():
+        repaired = _repair_with_borrowed_parameter_sets(raw_path, output_dir, segment, donor_provider)
+        if repaired is not None:
+            mp4_path = repaired
+            probe_ok, probe_info = ffprobe_check(mp4_path)
+            detail["parameter_sets_borrowed"] = True
+            segment.notes = (segment.notes or "") + (
+                " | Video settings (H.264 SPS/PPS) were missing in front of this piece's first keyframe and were "
+                "borrowed from another piece of the same camera; frames before that keyframe were dropped."
+            )
     detail["ffprobe"] = probe_info
     detail["ffprobe_valid"] = probe_ok
     if probe_ok and segment.status == SegmentStatus.UNCERTAIN:

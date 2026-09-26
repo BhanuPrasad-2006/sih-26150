@@ -9,7 +9,7 @@ SIH26150 · DVR/NVR Forensic Analysis Tool · state of `main` after the last com
 | Has the tool been validated on a **real DVR/NVR disk**? | **No.** No real recorder disk was available. |
 | What was validated, then? | The software's behaviour on **disk images we built ourselves** from published format descriptions and from **real ffmpeg-encoded video**, plus the forensic bookkeeping (hashing, audit, reports, auth). |
 | Can any recovery rate or accuracy be quoted for real recorders? | **No.** Numbers from synthetic disks describe our test disks, not recorders. |
-| Automated tests | **389 passing** (381 without a live Supabase connection; the other 8 exercise the Postgres backend). 79 of them are security tests (headers, strict CSP, Host/Origin, audit seals, encryption, 2FA and recovery codes, signing, encrypted packages, HTTPS, sandbox, parser fuzzing). |
+| Automated tests | **410 passing** (402 without a live Supabase connection; the other 8 exercise the Postgres backend). 79 of them are security tests (headers, strict CSP, Host/Origin, audit seals, encryption, 2FA and recovery codes, signing, encrypted packages, HTTPS, sandbox, parser fuzzing). |
 | Trust level of every vendor format (see `format_verification.md`) | **L2 at best** (corroborated by sources and tested on synthetic data). **None is L3** (validated on a real disk). |
 
 This report therefore documents *verification* (does the code do what it is specified to do) and does **not** claim *validation* (does it work on the real thing). Section 7 gives the protocol for turning it into real validation.
@@ -82,8 +82,10 @@ Independence caveat: the disk builders and the parsers were written by the same 
 | test_certificate_meta.py | 12 | Certificate details: cleaning, per-case storage, API, audit entry without values, what the PDF prints |
 | test_scan_outcome.py | 5 | A scanned image that yielded nothing reports NO_VIDEO/FAILED with a plain reason (not "pending"); a later scan replaces it |
 | test_test_pack.py | 9 | The test-pack generator: files, people told apart, brands, recovery, face search per camera, accuracy check |
+| test_dahua_stitch.py | 13 | Stitching of straddling frames (byte-exact, refuses ambiguity/overwrite), frame-number gap notes, whole-disk checks |
+| test_parameter_sets.py | 8 | Borrowing SPS/PPS: byte-level helpers, a piece that will not play on its own now plays, intact pieces untouched |
 | test_multi_evidence.py | 4 | Several images in one case: scan, export, analytics, verify and report act on the image asked about, not the newest |
-| **Total** | **389** (includes parametrised cases) | |
+| **Total** | **410** (includes parametrised cases) | |
 
 ## 5. Defects found by testing
 
@@ -95,6 +97,8 @@ Independence caveat: the disk builders and the parsers were written by the same 
 | Old Honeywell stub tests contradicted a real implementation | Test failures after the rewrite | Tests rewritten with the paper's known-answer bytes |
 | **Real 1 TB Hikvision disk (third-party parse) showed: master sector at 0x210 (file system shifted 16 bytes), a page-structured index, 7 of 852 entries with end before start.** Our code assumed 0x200, a flat index and rejected such entries, so this disk would have been reported as unknown | Reading a real disk's published analysis output (`github.com/vishwajitsarnobat/HIKVISION-DVR-Tool`) | Signature search + shift applied to all pointers; page-list read with blind-scan fallback; entries kept without a window. 19 tests from the disk's values |
 | **Tiny P-frames of static scenes were rejected (`DHAV_MIN_FRAME_BYTES = 100`), so only 21 of 40 frames were carved (byte recall 86.5 %)** | Placement/recall check against ground truth | Lowered to 40: 40 of 40 frames carved, byte recall 92.1 %, placement precision 100 % |
+| **Frames straddling interleaved clusters were lost**: on a generated disk with the index wiped and 4 KiB clusters only 3.33 % of the clip's frames came back right (keyframes straddle most, and without a keyframe the rest cannot decode) | Test-pack stress image + accuracy check against ground truth | `dahua_stitch.py`: stitched back by trailer + same-camera continuation, never guessed. 4 KiB: 3.33 % -> 89.17 %; 64 KiB: 96.67 % -> 100 % (generated disks only) |
+| A piece whose first keyframe lost its SPS/PPS did not play although its picture data was intact | Overwritten-disk test | `parameter_sets.py`: borrow the settings from another piece of the same camera (noted in the segment); pieces that start mid-group are left alone |
 | Test suite once wrote fixture rows into a live Supabase project | Reviewing the database | `DATABASE_URL=""` forced in `conftest.py`; a guard asserts the real case folder is never used |
 | Format sheet mislabelled paper-derived facts as "AI report" | Reading the paper in full | Sheet corrected; MDPI "HKVI" frame format rejected as uncorroborated |
 

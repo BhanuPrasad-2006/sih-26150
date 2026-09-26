@@ -50,7 +50,7 @@ def verify(pack: Path) -> dict:
                         row["best_similarity"][name] = round(max(sims), 2) if sims else None
                 segs.append(row)
         out[disk] = dict(brand=res.brand, confidence=round(res.confidence, 2), generic=res.generic_fallback,
-                         unidentified=res.unidentified, index_note=res.index_note, sha256=sha, segments=segs)
+                         unidentified=res.unidentified, index_note=res.index_note, carve_note=res.carve_note, sha256=sha, segments=segs)
     out["_threshold"] = face_search.REFERENCE_MATCH_THRESHOLD
     out["_accuracy"] = _accuracy(pack)
     return out
