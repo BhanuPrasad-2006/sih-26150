@@ -803,3 +803,63 @@ tbody tr:hover td { background: var(--primary-soft); }
   color: var(--accent-cyan);
 }
 
+/* AI Detections compact column */
+.ai-pills {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 170px;
+}
+.ai-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-surface-2);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s var(--ease-smooth);
+  text-decoration: none;
+  line-height: 1.3;
+}
+.ai-pill .icon {
+  width: 12px;
+  height: 12px;
+}
+.ai-pill:hover {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  background: var(--primary-soft);
+}
+.ai-pill-active {
+  background: var(--status-partial-soft);
+  border-color: var(--status-partial);
+  color: var(--status-partial);
+}
+.ai-pill-active:hover {
+  background: var(--status-partial-soft);
+  filter: brightness(1.08);
+}
+.ai-pill-muted {
+  background: var(--bg-surface-3);
+  border-color: var(--border-color);
+  color: var(--text-dim);
+}
+.ai-pill-disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  background: transparent;
+  border-style: dashed;
+}
+.btn-compact {
+  white-space: nowrap;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+
