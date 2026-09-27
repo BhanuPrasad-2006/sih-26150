@@ -138,6 +138,7 @@ function renderSetupScreen() {
       await API.setupPassword(pw);
       _restoreChromeAfterAuth();
       navigateTo('dashboard');
+      initUpdateBanner();
     } catch (err) {
       const isAlreadySet = err.message && err.message.toLowerCase().includes('already set');
       if (isAlreadySet) {
@@ -273,6 +274,7 @@ function renderLoginScreen() {
 
       _restoreChromeAfterAuth();
       navigateTo('dashboard');
+      initUpdateBanner();
 
     } catch (err) {
       // Check if the error is a lockout (429)

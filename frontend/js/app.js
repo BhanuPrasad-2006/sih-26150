@@ -140,6 +140,12 @@ window.addEventListener('auth:expired', () => {
 // ── App Initialization ────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   try {
+    const firstRun = await (await fetch('/api/setup/first-run-status')).json();
+    if (!firstRun.complete) {
+      renderFirstRunScreen(firstRun);
+      return;
+    }
+
     const status = await API.authStatus();
     if (!status.password_set) {
       navigateTo('setup');
@@ -147,6 +153,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       navigateTo('login');
     } else {
       navigateTo('dashboard');
+      initUpdateBanner();
     }
   } catch (_) {
     // If the status check itself fails (server down?), show login
