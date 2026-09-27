@@ -154,6 +154,8 @@ _open_images: dict[str, EvidenceImage] = {}
 _audit_logs: dict[str, AuditLog] = {}
 # Per-case scan tasks (for pause/resume via simple event)
 _scan_tasks: dict[str, asyncio.Task] = {}
+# Serializes concurrent lazy re-opens of the same case's evidence image (see _get_open_image).
+_reopen_locks: dict[str, asyncio.Lock] = {}
 # Per-case: evidence_id currently being scanned (drives the evidence table's
 # "SCANNING" badge in get_case() — cleared when _run_scan() finishes/errors).
 _active_scan_evidence: dict[str, str] = {}
@@ -1058,6 +1060,41 @@ async def case_correlation(case_id: str, window_seconds: float = 5.0):
     }
 
 
+async def _get_open_image(case_id: str, ev) -> EvidenceImage:
+    """
+    Return the case's already-open EvidenceImage, re-opening it from its stored path when the
+    in-memory handle is gone (e.g. the server process restarted between scan and export — the
+    evidence bytes on disk are untouched, so there is no reason to force a full re-scan for this).
+
+    Raises HTTPException(400) only when the evidence file itself is no longer on disk (it was on
+    a location that did not survive a restart) — that case genuinely needs a re-scan, because the
+    bytes to export are gone, not just the handle.
+    """
+    img = _open_images.get(case_id)
+    if img is not None and img.mm is not None:
+        return img
+
+    lock = _reopen_locks.setdefault(case_id, asyncio.Lock())
+    async with lock:
+        img = _open_images.get(case_id)  # re-check: another request may have reopened it already
+        if img is not None and img.mm is not None:
+            return img
+
+        if not Path(ev.path).is_file():
+            raise HTTPException(
+                400,
+                "Evidence image is not loaded and its file is no longer on disk; re-run scan "
+                "(re-upload the evidence if needed).",
+            )
+        try:
+            img = await asyncio.to_thread(EvidenceImage.open, Path(ev.path))
+        except AcquisitionError as exc:
+            raise HTTPException(400, f"Could not reopen the evidence image; re-run scan. ({exc})")
+        _open_images[case_id] = img
+        _audit(case_id, "evidence_reopened", f"evidence_id={ev.evidence_id} (handle lost, reopened from disk)")
+        return img
+
+
 @app.post("/api/cases/{case_id}/export/{segment_id}")
 async def export_one_segment(case_id: str, segment_id: str):
     evs = await asyncio.to_thread(db.list_evidence_for_case, case_id)
@@ -1069,9 +1106,7 @@ async def export_one_segment(case_id: str, segment_id: str):
     if not seg:
         raise HTTPException(404, "Segment not found")
 
-    img = _open_images.get(case_id)
-    if not img or img.mm is None:
-        raise HTTPException(400, "Evidence image is not loaded; re-run scan first")
+    img = await _get_open_image(case_id, ev)
 
     out_dir = get_case_export_dir(case_id)
     seg, detail = await asyncio.to_thread(export_segment, img.mm, seg, out_dir)
