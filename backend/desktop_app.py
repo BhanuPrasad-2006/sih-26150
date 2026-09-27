@@ -37,13 +37,17 @@ def _server_url() -> tuple[str, str, int, bool]:
 
 def _run_server(host: str, port: int, tls: bool) -> None:
     import uvicorn
+    # The app object is imported and passed directly (not the "backend.main:app" string form)
+    # so this also works inside a frozen PyInstaller build, where a dynamic import-by-string at
+    # runtime is not reliably discovered by PyInstaller's static analysis.
+    from backend.main import app as fastapi_app
 
     kwargs: dict = {}
     if tls:
         from backend.tls import ensure_cert
         cert, key = ensure_cert()
         kwargs.update(ssl_certfile=str(cert), ssl_keyfile=str(key))
-    uvicorn.run("backend.main:app", host=host, port=port, log_level="warning", **kwargs)
+    uvicorn.run(fastapi_app, host=host, port=port, log_level="warning", **kwargs)
 
 
 def _wait_until_ready(url: str, timeout: float = 25.0) -> bool:
@@ -93,7 +97,30 @@ def _fall_back_to_browser(url: str) -> None:
     subprocess.Popen([sys.executable, str(repo_root / "tools" / "open_when_ready.py"), url])
 
 
+def _ensure_ffmpeg_on_path() -> None:
+    """
+    If ffmpeg/ffprobe are not already on PATH, add a bundled copy's folder to PATH for this
+    process (a packaged installer ships one at <app>/ffmpeg/). Every ffmpeg/ffprobe call in this
+    codebase already goes through PATH lookup (shutil.which / bare "ffmpeg" in subprocess argv),
+    so this one check is all that is needed to make a bundled copy usable everywhere, with no
+    other code path aware of where the binaries actually came from.
+    """
+    import shutil
+    if shutil.which("ffmpeg") and shutil.which("ffprobe"):
+        return
+
+    meipass = getattr(sys, "_MEIPASS", None)
+    candidates = [Path(meipass) / "ffmpeg"] if meipass else []
+    candidates.append(Path(__file__).resolve().parent.parent / "packaging" / "vendor" / "ffmpeg")
+    for candidate in candidates:
+        if (candidate / "ffmpeg.exe").is_file() if os.name == "nt" else (candidate / "ffmpeg").is_file():
+            os.environ["PATH"] = str(candidate) + os.pathsep + os.environ.get("PATH", "")
+            print(f"Using bundled ffmpeg/ffprobe from {candidate}")
+            return
+
+
 def main() -> None:
+    _ensure_ffmpeg_on_path()
     url, host, port, tls = _server_url()
 
     server_thread = threading.Thread(target=_run_server, args=(host, port, tls), daemon=True)
