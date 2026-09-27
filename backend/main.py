@@ -32,6 +32,8 @@ import threading
 import logging
 import os
 import re
+import subprocess
+import time
 from uuid import uuid4
 import sys
 import traceback
@@ -52,6 +54,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 # A no-op when no .env file exists, so this is safe on any deployment target.
 load_dotenv()
 
+from backend import local_config
 from backend.acquisition import AcquisitionError, EvidenceImage, verify_disk_image_integrity
 from backend.audit import AuditLog
 from backend.auth import AuthManager
@@ -127,6 +130,9 @@ _AUTH_EXEMPT_PATHS = {
     "/api/auth/status-with-session",
     "/api/auth/login",
     "/api/auth/setup",
+    "/api/setup/first-run-status",     # first-run wizard runs before any password exists
+    "/api/setup/first-run-complete",
+    "/api/version",                    # shown on the login/setup screens too, before a session exists
 }   # API docs / openapi.json are deliberately NOT exempt: they need a session like everything else
 
 # ── Global state ──────────────────────────────────────────────────────────────
@@ -235,7 +241,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
 app = FastAPI(
     title="SIH26150 DVR/NVR Forensic Tool",
-    version="1.0.0-dev",
+    version=local_config.get_version(),
     docs_url="/api/docs",
     openapi_url="/api/openapi.json",   # under /api/ so the auth middleware protects it (default /openapi.json was open)
     redoc_url=None,
@@ -510,6 +516,91 @@ class SetupRequest(BaseModel):
         if len(v) < 12:
             raise ValueError("Password must be at least 12 characters long.")
         return v
+
+
+@app.get("/api/version")
+async def get_app_version():
+    """Unauthenticated: the running app's version, shown in the UI and used for update checks."""
+    return {"version": local_config.get_version()}
+
+
+@app.get("/api/update/check")
+async def check_for_update():
+    """
+    Authenticated (shown inside the app, not on the login screen). Compares this install's
+    version against the VERSION file on GitHub's main branch. Never raises — an update check
+    that fails (offline, GitHub unreachable) just reports no update available.
+    """
+    from backend.update_check import check_for_update as _check
+    return await asyncio.to_thread(_check, local_config.get_version())
+
+
+@app.post("/api/update/apply")
+async def apply_update():
+    """
+    Authenticated. Best-effort self-update: spawns a detached helper (tools/apply_update.py)
+    that pulls the latest code, reinstalls dependencies, and relaunches the app — then this
+    process's window is closed so the helper's relaunch is the only copy running.
+
+    This only makes sense for an install run from a git checkout (the normal 'installed like an
+    app' path via install.bat/install.sh). A frozen/installer build has no repository to pull —
+    it reports that plainly instead of trying and failing confusingly.
+    """
+    repo_root = Path(__file__).resolve().parent.parent
+    if not (repo_root / ".git").exists():
+        raise HTTPException(400, "This build was not installed from a git checkout, so it cannot self-update this way.")
+
+    _global_audit_event("update_requested", "")
+    subprocess.Popen(
+        [sys.executable, str(repo_root / "tools" / "apply_update.py")],
+        cwd=repo_root,
+        creationflags=(subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0),
+    )
+
+    # Ask the desktop window (if any) to close shortly after responding, so the frontend's
+    # fetch has time to receive this response before the connection is torn down.
+    def _close_soon():
+        time.sleep(1.5)
+        try:
+            import webview
+            if webview.windows:
+                webview.windows[0].destroy()
+        except Exception:
+            pass
+
+    threading.Thread(target=_close_soon, daemon=True).start()
+    return {"ok": True, "message": "Updating and restarting — this window will close shortly."}
+
+
+class FirstRunCompleteRequest(BaseModel):
+    case_dir: str
+    accept_terms: bool
+
+
+@app.get("/api/setup/first-run-status")
+async def first_run_status():
+    """
+    Unauthenticated — checked before even the password-setup screen. Tells the frontend whether
+    to show the first-run wizard (choose a data folder, accept the terms) first.
+    """
+    return {
+        "complete": local_config.is_first_run_complete(),
+        "terms_version": local_config.TERMS_VERSION,
+        "default_case_dir": local_config.default_case_dir_suggestion(),
+    }
+
+
+@app.post("/api/setup/first-run-complete")
+async def first_run_complete(req: FirstRunCompleteRequest):
+    """Unauthenticated — records the chosen data folder and that the current terms were accepted."""
+    if not req.accept_terms:
+        raise HTTPException(400, "You must accept the terms to continue.")
+    try:
+        await asyncio.to_thread(local_config.complete_first_run, req.case_dir)
+    except Exception as exc:
+        raise HTTPException(400, f"Could not use that folder: {exc}")
+    _global_audit_event("first_run_setup_complete", f"case_dir={req.case_dir}")
+    return {"ok": True}
 
 
 @app.get("/api/auth/status")

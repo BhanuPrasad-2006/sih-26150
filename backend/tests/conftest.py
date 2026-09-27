@@ -56,6 +56,10 @@ os.environ["DATABASE_URL"] = ""
 # The audit-seal key must never land in the developer's real home folder during tests.
 os.environ["SIH_KEY_DIR"] = tempfile.mkdtemp(prefix="sih_keys_")
 
+# The first-run wizard's saved choices (local_config.py) must never read/write the developer's
+# real ~/.sih_forensic_tool — same reasoning as SIH_KEY_DIR above.
+os.environ["SIH_CONFIG_DIR"] = tempfile.mkdtemp(prefix="sih_config_")
+
 # ── Now it is safe to import backend modules ──────────────────────────────────
 import pytest
 import asyncio

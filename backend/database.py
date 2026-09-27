@@ -56,14 +56,20 @@ def warn_if_onedrive(path: Path | str) -> Optional[str]:
 def _get_case_dir() -> Path:
     """
     Return the root directory for all case data.
-    Configurable via the FORENSIC_CASE_DIR environment variable.
-    Defaults to C:\\sih_cases (Windows) or ~/sih_cases (Linux/macOS), strictly outside OneDrive.
+    Configurable via the FORENSIC_CASE_DIR environment variable (wins over everything, so a
+    Docker/server deployment behaves exactly as before); otherwise the folder chosen in the
+    first-run wizard (see local_config.py), if one was completed; otherwise the same
+    C:\\sih_cases / ~/sih_cases default as always, strictly outside OneDrive.
     """
     env = os.environ.get("FORENSIC_CASE_DIR", "")
     if env:
         d = Path(env)
     else:
-        if os.name == "nt":
+        from backend.local_config import configured_case_dir
+        wizard_choice = configured_case_dir()
+        if wizard_choice:
+            d = Path(wizard_choice)
+        elif os.name == "nt":
             d = Path("C:/sih_cases")
         else:
             d = Path.home() / "sih_cases"

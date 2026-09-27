@@ -67,10 +67,22 @@ def _wait_until_ready(url: str, timeout: float = 25.0) -> bool:
     return False
 
 
+class _DesktopBridge:
+    """Exposed to the page as window.pywebview.api.* — lets the first-run wizard open a real
+    native folder-picker dialog instead of a plain text field (only possible in this desktop
+    window; a plain browser tab has no such access and falls back to typing the path)."""
+
+    def pick_folder(self) -> str | None:
+        import webview
+        window = webview.windows[0]
+        result = window.create_file_dialog(webview.FileDialog.FOLDER)
+        return result[0] if result else None
+
+
 def _run_desktop_window(url: str) -> None:
     import webview
 
-    webview.create_window(APP_TITLE, url, width=1440, height=900, min_size=(1024, 700))
+    webview.create_window(APP_TITLE, url, width=1440, height=900, min_size=(1024, 700), js_api=_DesktopBridge())
     webview.start()
 
 
