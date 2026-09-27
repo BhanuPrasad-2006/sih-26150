@@ -1,8 +1,19 @@
 /**
  * Sidebar component.
  */
+let _sidebarAppVersion = null;   // fetched once, cached — renderSidebar() runs on every navigation
+
 function renderSidebar(activeScreen = 'dashboard', currentCaseId = null, currentEvidenceId = null) {
   const root = document.getElementById('sidebar-root');
+
+  if (_sidebarAppVersion === null) {
+    _sidebarAppVersion = '';   // avoid firing a fetch per navigation while the first one is in flight
+    fetch('/api/version').then((r) => r.json()).then((body) => {
+      _sidebarAppVersion = body.version || '';
+      const el = document.getElementById('sidebar-version');
+      if (el && _sidebarAppVersion) el.textContent = `v${_sidebarAppVersion}`;
+    }).catch(() => {});
+  }
 
   const globalItems = [
     { id: 'dashboard', icon: 'dashboard', label: 'Cases Dashboard', action: () => navigateTo('dashboard') },
@@ -37,6 +48,7 @@ function renderSidebar(activeScreen = 'dashboard', currentCaseId = null, current
       ${renderItems(caseItems)}
     ` : ''}
     <div class="sidebar-foot"><b>Evidence stays read-only.</b><br>Every action is hashed into a tamper-evident audit log.</div>
+    <div class="sidebar-version" id="sidebar-version">${_sidebarAppVersion ? `v${_sidebarAppVersion}` : ''}</div>
   `;
 
   const allItems = [...globalItems, ...caseItems];
