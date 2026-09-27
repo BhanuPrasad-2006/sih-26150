@@ -1,0 +1,27 @@
+SIH26150 DVR/NVR Forensic Analysis Tool - Terms and Conditions
+
+This tool reads a CCTV recorder's disk image or drive, recovers video from it, and analyses
+that recovered video, entirely on this computer.
+
+1. Local by design. Evidence images, recovered video and reports are stored in the folder you
+   choose on first run. Nothing is uploaded anywhere by this tool. If you configure it to use a
+   remote database (an optional setting, not required), case records are stored there instead of
+   the local default - that is your choice to make, not something this tool does on its own.
+
+2. No warranty of forensic or legal outcome. This is a prototype built for the Smart India
+   Hackathon. It does not guarantee that recovered evidence is complete, that any report meets a
+   particular legal standard, or that it will be accepted by any court or authority. Results
+   marked PARTIAL or UNCERTAIN mean exactly that - always corroborate independently and have a
+   qualified examiner review the output before relying on it for any real investigation.
+
+3. You are responsible for how you use it. Only use this tool on evidence you are authorised to
+   examine. You are responsible for complying with the law that applies to you, including rules
+   about handling seized evidence and personal data.
+
+4. No liability. This software is provided "as is", without warranty of any kind. The authors
+   are not liable for any loss or damage arising from its use.
+
+5. This is a summary for a hackathon prototype, not a substitute for your organisation's own
+   legal review before using this tool on a real case.
+
+By clicking "I accept the agreement" below, you confirm you have read and accept these terms.
