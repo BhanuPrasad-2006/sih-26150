@@ -33,8 +33,12 @@ def _unverified_context() -> ssl.SSLContext:
 
 
 def _server_is_up(status_url: str, ctx: ssl.SSLContext) -> bool:
+    if not status_url.startswith(("http://127.0.0.1:", "https://127.0.0.1:")):
+        # Only ever called with our own server's URL (see main()) — never attacker input — but
+        # urlopen is only ever reached once the scheme and host have been checked, right here.
+        return False
     try:
-        with urllib.request.urlopen(status_url, timeout=1, context=ctx) as resp:
+        with urllib.request.urlopen(status_url, timeout=1, context=ctx) as resp:  # nosec B310: scheme and host checked just above
             return resp.status == 200
     except Exception:
         return False
