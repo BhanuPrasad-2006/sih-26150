@@ -33,16 +33,26 @@ def test_ffmpeg_already_on_path_is_left_alone(desktop_app_module):
 
 
 def test_bundled_ffmpeg_is_added_to_path_when_missing(desktop_app_module):
-    """Simulates a frozen PyInstaller build (sys._MEIPASS) shipping ffmpeg.exe alongside the app,
-    on a machine with no ffmpeg on PATH — the exact situation this exists for."""
+    """
+    Simulates a frozen PyInstaller build (sys._MEIPASS) shipping ffmpeg alongside the app, on a
+    machine with no ffmpeg on PATH — the exact situation this exists for.
+
+    Creates both possible binary names (ffmpeg.exe and ffmpeg) so this test passes regardless of
+    which OS actually runs it, and deliberately does NOT mock os.name to force one branch: on
+    Python 3.12+, pathlib.Path() itself dispatches to WindowsPath/PosixPath based on the REAL
+    os.name at construction time, so mocking it to "nt" on a Linux CI runner makes the very first
+    Path(...) call raise NotImplementedError, before this function's own os.name check is ever
+    reached. This actually happened once in CI (Linux) after a change that passed locally
+    (Windows) — this comment is here so it is not reintroduced.
+    """
     bundle = Path(tempfile.mkdtemp())
     (bundle / "ffmpeg").mkdir()
     (bundle / "ffmpeg" / "ffmpeg.exe").write_text("fake")
+    (bundle / "ffmpeg" / "ffmpeg").write_text("fake")
     before = os.environ.get("PATH", "")
     try:
         with mock.patch("shutil.which", return_value=None), \
-             mock.patch.object(desktop_app_module.sys, "_MEIPASS", str(bundle), create=True), \
-             mock.patch.object(desktop_app_module.os, "name", "nt"):
+             mock.patch.object(desktop_app_module.sys, "_MEIPASS", str(bundle), create=True):
             desktop_app_module._ensure_ffmpeg_on_path()
         assert str(bundle / "ffmpeg") in os.environ.get("PATH", "")
     finally:
