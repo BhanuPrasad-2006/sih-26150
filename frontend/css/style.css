@@ -351,6 +351,7 @@ body {
   border-top: 1px solid var(--nav-border);
 }
 .sidebar-foot b { color: var(--nav-text); font-weight: 600; }
+.sidebar-version { padding: 0 14px 12px; font-size: 10.5px; color: var(--nav-dim); text-align: right; }
 
 /* Content */
 .content-root { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 30px 36px 64px; min-width: 0; }
