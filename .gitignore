@@ -51,3 +51,11 @@ reports/
 scratch/
 tmp/
 backend/tests/manual/_scratch/
+
+# Windows installer build: downloaded/generated locally by packaging/fetch_ffmpeg.py and
+# PyInstaller/Inno Setup — never committed (the ffmpeg binaries alone are ~200 MB).
+packaging/vendor/
+packaging/build/
+packaging/dist/
+*.spec.bak
+Output/
