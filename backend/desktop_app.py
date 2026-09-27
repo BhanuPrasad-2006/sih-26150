@@ -51,10 +51,14 @@ def _wait_until_ready(url: str, timeout: float = 25.0) -> bool:
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
     status_url = url.rstrip("/") + "/api/auth/status"
+    if not status_url.startswith(("http://127.0.0.1:", "https://127.0.0.1:")):
+        # This is our own server's URL, built two lines above from SIH_PORT/SIH_TLS — never
+        # attacker input — but urlopen is only ever called with that fixed, checked scheme+host.
+        return False
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
-            with urllib.request.urlopen(status_url, timeout=1, context=ctx) as resp:
+            with urllib.request.urlopen(status_url, timeout=1, context=ctx) as resp:  # nosec B310: scheme and host checked just above
                 if resp.status == 200:
                     return True
         except Exception:
