@@ -14,19 +14,25 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo [1/4] Creating virtual environment...
+echo [1/5] Creating virtual environment...
 python -m venv .venv
 if errorlevel 1 ( echo FAILED & pause & exit /b 1 )
 
-echo [2/4] Installing dependencies...
+echo [2/5] Installing dependencies...
 .venv\Scripts\pip install --upgrade pip -q
 .venv\Scripts\pip install -r requirements.txt
 if errorlevel 1 ( echo FAILED & pause & exit /b 1 )
 
-echo [3/4] Running startup check...
+echo [3/5] Installing the desktop-window component (optional)...
+.venv\Scripts\pip install pywebview -q
+if errorlevel 1 (
+    echo   (Could not install it - the tool will still work, opening in your browser instead)
+)
+
+echo [4/5] Running startup check...
 .venv\Scripts\python backend\startup_check.py
 
-echo [4/4] Creating a Desktop shortcut...
+echo [5/5] Creating a Desktop shortcut...
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$ws = New-Object -ComObject WScript.Shell;" ^
   "$lnk = $ws.CreateShortcut((Join-Path $ws.SpecialFolders('Desktop') 'SIH Forensic Tool.lnk'));" ^
@@ -43,4 +49,5 @@ if errorlevel 1 (
 
 echo.
 echo Done. Double-click the "SIH Forensic Tool" Desktop shortcut, or run  run.bat  to start it.
+echo It opens as its own app window - no browser, no address bar.
 pause

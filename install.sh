@@ -13,15 +13,23 @@ if ! command -v python3 &>/dev/null; then
   exit 1
 fi
 
-echo "[1/3] Creating virtual environment..."
+echo "[1/4] Creating virtual environment..."
 python3 -m venv .venv
 
-echo "[2/3] Installing dependencies..."
+echo "[2/4] Installing dependencies..."
 .venv/bin/pip install --upgrade pip -q
 .venv/bin/pip install -r requirements.txt
 
-echo "[3/3] Running startup check..."
+echo "[3/4] Installing the desktop-window component (optional)..."
+if .venv/bin/pip install pywebview -q; then
+  echo "  Installed. On Linux it also needs GTK + WebKit2 (e.g. 'sudo apt install python3-gi gir1.2-webkit2-4.1'"
+  echo "  on Debian/Ubuntu); on macOS it works out of the box. Without it, the tool opens in your browser instead."
+else
+  echo "  (Could not install it - the tool will still work, opening in your browser instead)"
+fi
+
+echo "[4/4] Running startup check..."
 .venv/bin/python backend/startup_check.py
 
 echo
-echo "Done. Run  ./run.sh  to start the server."
+echo "Done. Run  ./run.sh  to start the tool."
