@@ -13,6 +13,7 @@ WORKDIR /app
 COPY requirements.lock.txt ./
 RUN pip install --no-cache-dir -r requirements.lock.txt pyhanko
 
+COPY VERSION ./
 COPY backend ./backend
 COPY frontend ./frontend
 
