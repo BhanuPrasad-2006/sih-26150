@@ -189,7 +189,11 @@ chmod +x install.sh run.sh
 ./install.sh && ./run.sh
 ```
 
-Open **http://127.0.0.1:8000**. On first run you create an examiner password (12+ characters).
+`install.bat` also adds a **"SIH Forensic Tool" shortcut to your Desktop** — after the first install, just double-click
+it. Either way, `run.bat` / `run.sh` open your browser to **http://127.0.0.1:8000** automatically once the server is
+ready (like Jupyter Notebook does); it also runs entirely **locally, like Wireshark or Autopsy** — nothing is uploaded
+anywhere unless you configure a remote database yourself. On first run you create an examiner password (12+ characters).
+Keep the terminal window open while you work; closing it (or Ctrl+C) stops the tool.
 
 <details>
 <summary><b>Optional settings</b></summary>

@@ -122,3 +122,59 @@ def test_playback_needs_a_session(auth_client, exported):
     case_id, seg, _ = exported
     with TestClient(m.app) as anonymous:                      # a client with no session cookie
         assert anonymous.get(f"/api/cases/{case_id}/video/{seg['segment_id']}").status_code == 401
+
+
+@pytest.fixture()
+def scanned(auth_client, temp_dir):
+    """A case with one carved-but-not-yet-exported segment; returns (case_id, segment dict)."""
+    h264 = os.path.join(temp_dir, "clip2.h264")
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=duration=1:size=320x240:rate=10",
+                    "-c:v", "libx264", "-profile:v", "baseline", "-pix_fmt", "yuv420p", "-f", "h264", h264], check=True)
+    with open(h264, "rb") as fh:
+        stream = fh.read()
+    img = bytearray(HIKV_MASTER_SECTOR_OFFSET)
+    img += HIKV_MASTER_SECTOR_MAGIC + b"\x00" * (512 - len(HIKV_MASTER_SECTOR_MAGIC))
+    img += b"\xCC" * 4096 + stream + b"\xCC" * 4096
+    disk = os.path.join(temp_dir, "reopen.dd")
+    with open(disk, "wb") as fh:
+        fh.write(bytes(img))
+
+    case_id = auth_client.post("/api/cases", json={"case_number": "REOPEN-001", "examiner": "Tester", "notes": ""}).json()["case_id"]
+    assert auth_client.post(f"/api/cases/{case_id}/evidence", json={"path": disk}).status_code == 200
+    assert auth_client.post(f"/api/cases/{case_id}/scan").json()["status"] == "started"
+    segments = []
+    for _ in range(100):
+        segments = auth_client.get(f"/api/cases/{case_id}/segments").json()
+        if segments:
+            break
+        time.sleep(0.1)
+    return case_id, segments[0], disk
+
+
+def test_export_reopens_the_evidence_image_when_the_server_restarted(auth_client, scanned):
+    """
+    Simulates a server restart between scan and export: the in-memory handle is dropped, but the
+    evidence file is untouched on disk. Export must reopen it rather than force a full re-scan.
+    """
+    import backend.main as m
+    case_id, seg, _disk = scanned
+    del m._open_images[case_id]                                # simulate the handle being lost
+
+    r = auth_client.post(f"/api/cases/{case_id}/export/{seg['segment_id']}")
+    assert r.status_code == 200, r.text
+    assert "error" not in r.json()["detail"]
+    assert case_id in m._open_images                           # reopened and cached for next time
+
+
+def test_export_gives_a_clear_error_when_the_evidence_file_is_also_gone(auth_client, scanned):
+    """When the handle is lost AND the underlying evidence file no longer exists (e.g. an
+    ephemeral disk was wiped), export must fail clearly rather than crash — a real re-scan
+    (with a fresh upload) is genuinely required in that case."""
+    import backend.main as m
+    case_id, seg, disk = scanned
+    del m._open_images[case_id]
+    os.remove(disk)
+
+    r = auth_client.post(f"/api/cases/{case_id}/export/{seg['segment_id']}")
+    assert r.status_code == 400
+    assert "no longer on disk" in r.json()["detail"]
