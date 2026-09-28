@@ -1991,9 +1991,16 @@ async def get_audit(case_id: str):
                      "count": len(audit_log)}}
 
 
-# ── Serve frontend static files ───────────────────────────────────────────────
+def _get_frontend_dir() -> Path:
+    meipass = getattr(__import__("sys"), "_MEIPASS", None)
+    if meipass:
+        candidate = Path(meipass) / "frontend"
+        if candidate.is_dir():
+            return candidate
+    return Path(__file__).resolve().parent.parent / "frontend"
 
-_FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
+
+_FRONTEND_DIR = _get_frontend_dir()
 
 if _FRONTEND_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(_FRONTEND_DIR)), name="static")
