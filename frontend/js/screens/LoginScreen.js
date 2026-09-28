@@ -63,7 +63,7 @@ function _brandPanelHtml() {
 
 // A password rule string shown on both the first-run and "add examiner" forms — kept as one
 // constant so the two can never describe different rules.
-const _PASSWORD_RULE_TEXT = 'At least 12 characters, with an uppercase letter, a lowercase letter, a digit, and a special character.';
+const _PASSWORD_RULE_TEXT = 'At least 8 characters, with an uppercase letter, a lowercase letter, a digit, and a special character.';
 
 function renderSetupScreen() {
   const root = document.getElementById('content-root');
@@ -99,7 +99,7 @@ function renderSetupScreen() {
               type="password"
               id="setup-password"
               class="form-control"
-              placeholder="Minimum 12 characters"
+              placeholder="Minimum 8 characters"
               autocomplete="new-password"
               required
             />

@@ -70,7 +70,7 @@ _USERNAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _.\-]{1,30}[A-Za-z0-9]$|^[A-Z
 
 # Strong-password rule, shared by signup, "add another examiner", and the CLI reset tool, so the
 # requirement can never drift between the three entry points.
-MIN_PASSWORD_LENGTH = 12
+MIN_PASSWORD_LENGTH = 8
 
 
 def _norm_recovery(code: str) -> str:

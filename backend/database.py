@@ -242,6 +242,35 @@ class Database:
                 conn.execute("ALTER TABLE segments ADD COLUMN face_detection_details TEXT")
             except Exception:
                 pass
+            for col, typ in [
+                ("case_title", "TEXT"),
+                ("created_by", "TEXT"),
+                ("agency", "TEXT"),
+                ("fir_number", "TEXT"),
+                ("incident_date", "TEXT"),
+                ("seizure_officer", "TEXT"),
+                ("seizure_location", "TEXT"),
+                ("priority", "TEXT DEFAULT 'MEDIUM'"),
+                ("status", "TEXT DEFAULT 'ACTIVE'"),
+                ("target_device", "TEXT"),
+                ("updated_at", "TEXT"),
+            ]:
+                try:
+                    conn.execute(f"ALTER TABLE cases ADD COLUMN {col} {typ}")
+                except Exception:
+                    pass
+            for col, typ in [
+                ("device_type", "TEXT"),
+                ("make_model", "TEXT"),
+                ("serial_number", "TEXT"),
+                ("capacity", "TEXT"),
+                ("write_blocker", "TEXT"),
+                ("evidence_tag", "TEXT"),
+            ]:
+                try:
+                    conn.execute(f"ALTER TABLE evidence ADD COLUMN {col} {typ}")
+                except Exception:
+                    pass
 
     # ── Cases ─────────────────────────────────────────────────────────────────
 
@@ -249,9 +278,16 @@ class Database:
         try:
             with self._connect() as conn:
                 conn.execute(
-                    "INSERT INTO cases(case_id, case_number, examiner, created_at, notes) "
-                    "VALUES (?,?,?,?,?)",
-                    (case.case_id, case.case_number, case.examiner, case.created_at, case.notes),
+                    "INSERT INTO cases(case_id, case_number, examiner, created_at, notes, "
+                    " case_title, created_by, agency, fir_number, incident_date, "
+                    " seizure_officer, seizure_location, priority, status, target_device, updated_at) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (
+                        case.case_id, case.case_number, case.examiner, case.created_at, case.notes,
+                        case.case_title, case.created_by, case.agency, case.fir_number, case.incident_date,
+                        case.seizure_officer, case.seizure_location, case.priority, case.status,
+                        case.target_device, case.updated_at
+                    ),
                 )
         except sqlite3.IntegrityError:
             raise DuplicateCaseNumberError(case.case_number)
@@ -264,9 +300,15 @@ class Database:
             ).fetchone()
         return Case(**dict(row)) if row else None
 
-    def list_cases(self) -> list[Case]:
+    def list_cases(self, examiner: Optional[str] = None) -> list[Case]:
         with self._connect() as conn:
-            rows = conn.execute("SELECT * FROM cases ORDER BY created_at DESC").fetchall()
+            if examiner:
+                rows = conn.execute(
+                    "SELECT * FROM cases WHERE created_by=? OR examiner=? ORDER BY created_at DESC",
+                    (examiner, examiner),
+                ).fetchall()
+            else:
+                rows = conn.execute("SELECT * FROM cases ORDER BY created_at DESC").fetchall()
         return [Case(**dict(r)) for r in rows]
 
     # ── Evidence ──────────────────────────────────────────────────────────────
@@ -277,14 +319,17 @@ class Database:
                 "INSERT OR REPLACE INTO evidence "
                 "(evidence_id, case_id, path, size_bytes, sha256_before, md5_before, "
                 " sha256_after, brand, brand_version, confidence, is_synthetic, created_at, "
-                " device_utc_offset_minutes) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                " device_utc_offset_minutes, device_type, make_model, serial_number, "
+                " capacity, write_blocker, evidence_tag) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     ev.evidence_id, ev.case_id, ev.path, ev.size_bytes,
                     ev.sha256_before, ev.md5_before, ev.sha256_after,
                     ev.brand, ev.brand_version, ev.confidence,
                     int(ev.is_synthetic), ev.created_at,
                     ev.device_utc_offset_minutes,
+                    ev.device_type, ev.make_model, ev.serial_number,
+                    ev.capacity, ev.write_blocker, ev.evidence_tag,
                 ),
             )
         return ev

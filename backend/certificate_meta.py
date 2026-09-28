@@ -51,12 +51,27 @@ def clean(data: Optional[dict]) -> dict[str, str]:
 
 def load(db, case_id: str) -> dict[str, str]:
     raw = db.get_auth_value(_key(case_id))
-    if not raw:
-        return clean({})
+    saved = {}
+    if raw:
+        try:
+            saved = json.loads(raw)
+        except (ValueError, TypeError):
+            saved = {}
     try:
-        return clean(json.loads(raw))
-    except (ValueError, TypeError):
-        return clean({})
+        case = db.get_case(case_id)
+        if case:
+            defaults = {
+                "police_station": case.agency or "",
+                "fir_number": case.fir_number or "",
+                "seizure_officer": case.seizure_officer or "",
+                "device_make_model": case.target_device or "",
+            }
+            for k, v in defaults.items():
+                if not saved.get(k) and v:
+                    saved[k] = v
+    except Exception:
+        pass
+    return clean(saved)
 
 
 def save(db, case_id: str, data: dict) -> dict[str, str]:

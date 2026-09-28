@@ -64,8 +64,19 @@ class SupabaseDatabase:
         data = {
             "case_id": case.case_id,
             "case_number": case.case_number,
+            "case_title": getattr(case, "case_title", None),
+            "created_by": getattr(case, "created_by", None),
             "examiner": case.examiner,
+            "agency": getattr(case, "agency", None),
+            "fir_number": getattr(case, "fir_number", None),
+            "incident_date": getattr(case, "incident_date", None),
+            "seizure_officer": getattr(case, "seizure_officer", None),
+            "seizure_location": getattr(case, "seizure_location", None),
+            "priority": getattr(case, "priority", "MEDIUM"),
+            "status": getattr(case, "status", "ACTIVE"),
+            "target_device": getattr(case, "target_device", None),
             "created_at": case.created_at,
+            "updated_at": getattr(case, "updated_at", None),
             "notes": case.notes,
         }
         try:
@@ -85,9 +96,12 @@ class SupabaseDatabase:
             return None
         return Case(**res.data[0])
 
-    def list_cases(self) -> list:
+    def list_cases(self, examiner: Optional[str] = None) -> list:
         from backend.models import Case
-        res = self._table("cases").select("*").order("created_at", desc=True).execute()
+        query = self._table("cases").select("*").order("created_at", desc=True)
+        if examiner:
+            query = query.or_(f"created_by.eq.{examiner},examiner.eq.{examiner}")
+        res = query.execute()
         return [Case(**r) for r in (res.data or [])]
 
     # ── Evidence ──────────────────────────────────────────────────────────────
@@ -97,6 +111,12 @@ class SupabaseDatabase:
             "evidence_id": ev.evidence_id,
             "case_id": ev.case_id,
             "path": ev.path,
+            "device_type": getattr(ev, "device_type", None),
+            "make_model": getattr(ev, "make_model", None),
+            "serial_number": getattr(ev, "serial_number", None),
+            "capacity": getattr(ev, "capacity", None),
+            "write_blocker": getattr(ev, "write_blocker", None),
+            "evidence_tag": getattr(ev, "evidence_tag", None),
             "size_bytes": ev.size_bytes,
             "sha256_before": ev.sha256_before,
             "md5_before": ev.md5_before,

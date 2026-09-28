@@ -396,3 +396,99 @@ def test_upload_evidence_rejects_bad_offset_and_unknown_case(auth_client):
     missing = auth_client.post("/api/cases/does-not-exist/evidence/upload",
                                files={"file": ("a.dd", b"x", "application/octet-stream")})
     assert missing.status_code == 404
+
+
+def test_create_case_with_extended_forensic_metadata(auth_client):
+    """Verify that comprehensive forensic fields are persisted and returned."""
+    payload = {
+        "case_number": "FIR-2026-9999",
+        "case_title": "Jewellery Store Burglary Investigation",
+        "examiner": "Officer S. Patel",
+        "agency": "Special Crime Branch, Unit 4",
+        "fir_number": "FIR-9999/2026",
+        "incident_date": "2026-09-15",
+        "seizure_officer": "Inspector R. Verma",
+        "seizure_location": "Main Road, Sector 12",
+        "priority": "HIGH",
+        "status": "ACTIVE",
+        "target_device": "Hikvision DS-7208HQHI",
+        "notes": "Target cameras covering front cash counter and vault corridor."
+    }
+    res = auth_client.post("/api/cases", json=payload)
+    assert res.status_code == 200, res.text
+    data = res.json()
+    assert data["case_number"] == payload["case_number"]
+    assert data["case_title"] == payload["case_title"]
+    assert data["agency"] == payload["agency"]
+    assert data["fir_number"] == payload["fir_number"]
+    assert data["incident_date"] == payload["incident_date"]
+    assert data["seizure_officer"] == payload["seizure_officer"]
+    assert data["seizure_location"] == payload["seizure_location"]
+    assert data["priority"] == "HIGH"
+    assert data["status"] == "ACTIVE"
+    assert data["target_device"] == payload["target_device"]
+    assert data["notes"] == payload["notes"]
+
+    case_id = data["case_id"]
+
+    # Open case detail
+    detail = auth_client.get(f"/api/cases/{case_id}").json()
+    assert detail["case_title"] == payload["case_title"]
+    assert detail["fir_number"] == payload["fir_number"]
+    assert detail["target_device"] == payload["target_device"]
+
+    # Verify certificate details auto-populated from case record
+    cert = auth_client.get(f"/api/cases/{case_id}/certificate").json()
+    values = cert["values"]
+    assert values["police_station"] == payload["agency"]
+    assert values["fir_number"] == payload["fir_number"]
+    assert values["seizure_officer"] == payload["seizure_officer"]
+    assert values["device_make_model"] == payload["target_device"]
+
+
+def test_case_scoping_by_examiner(auth_client):
+    """Verify that by default examiners see only their cases, and all_cases=true returns all."""
+    # 1. test_examiner creates a case
+    res1 = auth_client.post("/api/cases", json={
+        "case_number": "CASE-EX1-001",
+        "examiner": "test_examiner",
+        "notes": "Belongs to test_examiner"
+    })
+    assert res1.status_code == 200
+
+    # 2. Register examiner2
+    res_signup = auth_client.post("/api/auth/signup", json={
+        "username": "examiner_two",
+        "password": "PasswordTwo9988!"
+    })
+    assert res_signup.status_code == 200
+
+    # 3. Log in as examiner_two
+    auth_client.post("/api/auth/logout")
+    res_login = auth_client.post("/api/auth/login", json={
+        "username": "examiner_two",
+        "password": "PasswordTwo9988!"
+    })
+    assert res_login.status_code == 200
+
+    # 4. examiner_two creates their own case
+    res2 = auth_client.post("/api/cases", json={
+        "case_number": "CASE-EX2-001",
+        "examiner": "examiner_two",
+        "notes": "Belongs to examiner_two"
+    })
+    assert res2.status_code == 200
+
+    # 5. Default GET /api/cases for examiner_two should ONLY return CASE-EX2-001
+    my_cases = auth_client.get("/api/cases").json()
+    my_case_numbers = [c["case_number"] for c in my_cases]
+    assert "CASE-EX2-001" in my_case_numbers
+    assert "CASE-EX1-001" not in my_case_numbers
+
+    # 6. GET /api/cases?all_cases=true returns BOTH cases
+    all_cases = auth_client.get("/api/cases?all_cases=true").json()
+    all_case_numbers = [c["case_number"] for c in all_cases]
+    assert "CASE-EX2-001" in all_case_numbers
+    assert "CASE-EX1-001" in all_case_numbers
+
+

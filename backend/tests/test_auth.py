@@ -231,7 +231,7 @@ def test_setup_refuses_once_an_account_exists(isolated_app):
 # ── 14/15. Validation rules ────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("bad_password,why", [
-    ("short1A!", "too short"),
+    ("Sh1a!", "too short"),
     ("alllowercase123!", "no uppercase"),
     ("ALLUPPERCASE123!", "no lowercase"),
     ("NoDigitsHere!!", "no digit"),

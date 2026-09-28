@@ -145,7 +145,7 @@ Analytics read the exported MP4 only: YuNet (faces), SFace (embeddings, similari
 | Concern | Control |
 |---|---|
 | Network exposure | Binds to `127.0.0.1`; warns if `SIH_HOST` differs |
-| Authentication | Named examiner accounts (bcrypt hash, ≥ 12 characters with upper/lower/digit/special); optional per-account TOTP second factor (single-use codes, encrypted secret) with one-time recovery codes. No per-account permission levels: any signed-in examiner sees every case |
+| Authentication | Named examiner accounts (bcrypt hash, ≥ 8 characters with upper/lower/digit/special); optional per-account TOTP second factor (single-use codes, encrypted secret) with one-time recovery codes. No per-account permission levels: any signed-in examiner sees every case |
 | Sessions | `HttpOnly`, `SameSite=Strict` cookie (`Secure` over HTTPS, HSTS); idle timeout 30 min (`SESSION_TIMEOUT_MINUTES`) and absolute lifetime 12 h (`SESSION_MAX_HOURS`); bound to the account that created it |
 | Brute force | 5 failures on one account → 60 s lock (HTTP 429 with `retry_after`), never affecting other accounts |
 | Evidence integrity | Read-only mmap; hash on open, re-hash at end of scan and on `/verify` |
