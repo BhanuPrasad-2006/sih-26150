@@ -336,3 +336,19 @@ class SupabaseDatabase:
 
     def set_auth_value(self, key: str, value: str) -> None:
         self._table("auth_state").upsert({"key": key, "value": value}).execute()
+        if key == "users":
+            try:
+                import json
+                users = json.loads(value)
+                for uname, udata in users.items():
+                    display_name = udata.get("username", uname)
+                    self._table("users").upsert({
+                        "username": display_name,
+                        "password_hash": udata.get("password_hash"),
+                        "totp_secret": udata.get("totp_secret"),
+                        "totp_recovery": udata.get("totp_recovery"),
+                        "failure_count": udata.get("failure_count", 0),
+                        "lockout_until": udata.get("lockout_until", 0.0),
+                    }, on_conflict="username").execute()
+            except Exception:
+                pass

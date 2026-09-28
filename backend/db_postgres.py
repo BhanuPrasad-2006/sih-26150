@@ -134,6 +134,25 @@ CREATE TABLE IF NOT EXISTS auth_state (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS users (
+    user_id       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    username      TEXT UNIQUE NOT NULL,
+    full_name     TEXT,
+    email         TEXT,
+    role          TEXT NOT NULL DEFAULT 'EXAMINER',
+    agency        TEXT,
+    badge_number  TEXT,
+    password_hash TEXT NOT NULL,
+    totp_secret   TEXT,
+    totp_recovery TEXT,
+    failure_count INTEGER DEFAULT 0,
+    lockout_until NUMERIC DEFAULT 0,
+    is_active     BOOLEAN DEFAULT TRUE,
+    created_at    TIMESTAMPTZ DEFAULT now(),
+    last_login    TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 """
 
 
@@ -500,3 +519,30 @@ class PostgresDatabase:
                 "ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value",
                 (key, value),
             )
+            if key == "users":
+                try:
+                    import json
+                    users = json.loads(value)
+                    for uname, udata in users.items():
+                        display_name = udata.get("username", uname)
+                        conn.execute(
+                            "INSERT INTO users (username, password_hash, totp_secret, totp_recovery, failure_count, lockout_until) "
+                            "VALUES (%s,%s,%s,%s,%s,%s) "
+                            "ON CONFLICT (username) DO UPDATE SET "
+                            "  password_hash=EXCLUDED.password_hash, "
+                            "  totp_secret=EXCLUDED.totp_secret, "
+                            "  totp_recovery=EXCLUDED.totp_recovery, "
+                            "  failure_count=EXCLUDED.failure_count, "
+                            "  lockout_until=EXCLUDED.lockout_until",
+                            (
+                                display_name,
+                                udata.get("password_hash"),
+                                udata.get("totp_secret"),
+                                udata.get("totp_recovery"),
+                                udata.get("failure_count", 0),
+                                udata.get("lockout_until", 0.0),
+                            ),
+                        )
+                except Exception:
+                    pass
+
