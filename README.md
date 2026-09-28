@@ -65,7 +65,7 @@ for unknown recorders, and forensic bookkeeping (hashes, audit chain, report, le
 | 📏 | **Accuracy against ground truth**: frame recall / precision / order, byte placement, log coverage | ✅ new, honest "not measured" otherwise |
 | ⛓️ | **Hash-chained audit log** of every action, tamper-evident | ✅ |
 | 📄 | **PDF report** + **BSA 2023 §63(4)** certificate template, with examiner-entered police station, FIR, seizure officer and recorder details (printed as entered, marked unverified, blanks listed) | ✅ |
-| 🔑 | Named examiner accounts (multi-user login, each with their own password and optional 2FA), audit attribution per account, sessions, per-account lockout that survives a restart; SQLite or Supabase/Postgres | ✅ |
+| 🔑 | Named examiner accounts (multi-user login, each with their own password and optional 2FA), audit attribution per account, sessions, per-account lockout that survives a restart; local or Supabase/Postgres | ✅ |
 | 🎨 | **Interface**: light and dark themes, drag-and-drop evidence upload, inline SVG icons, audit and case times in IST | ✅ |
 
 ## 🏗️ Architecture
@@ -95,7 +95,7 @@ flowchart LR
         ACQ & PLG & EXP & ANA & ACC --> AUD --> REP
     end
 
-    API --> DB[("SQLite or<br/>Supabase Postgres")]
+    API --> DB[("Supabase/Postgres<br/>(metadata)")]
     API --> FS[["case folder:<br/>evidence · exports · reports · accuracy · analysis"]]
 ```
 
@@ -200,7 +200,9 @@ Keep the terminal window open while you work; closing it (or Ctrl+C) stops the t
 
 | Variable | Purpose |
 |---|---|
-| `DATABASE_URL` | Supabase/Postgres connection (session pooler). Unset → local SQLite. See `.env.example` |
+| `SUPABASE_URL` | Supabase project URL (desktop installer — baked in at build time via `packaging/bundle_env.py`) |
+| `SUPABASE_ANON_KEY` | Supabase anon/public key — client-safe, protected by RLS (desktop installer) |
+| `DATABASE_URL` | Postgres direct connection string (developer/server use; never bundled in installer) |
 | `FORENSIC_CASE_DIR` | Where cases, exports and reports are stored |
 | `FORENSIC_ALLOW_LOCAL_ACQUISITION=1` | Enables **drive imaging** (reads drives attached to this machine; keep off on any shared server) |
 | `OBJECT_MODEL_PATH` | Use a different YOLOX ONNX model |
@@ -253,7 +255,7 @@ All routes except login/setup require the session cookie. Interactive docs at `/
 <summary><b>Access control, integrity and audit design</b></summary>
 
 - **Local only**: binds to `127.0.0.1`; a loud warning is emitted if `SIH_HOST` says otherwise.
-- **Named examiner accounts**: each has their own bcrypt-hashed password (minimum 12 characters, with an uppercase letter, a lowercase letter, a digit and a special character) — the plaintext is never stored or logged. There are no separate permission levels: any signed-in examiner can see every case, but every action is attributed to the account that did it. A forgotten password has no in-app recovery (no email/SMS on an offline tool) — `tools/reset_user_password.py` resets it from a terminal with access to the machine.
+- **Named examiner accounts**: each has their own bcrypt-hashed password (minimum 8 characters, with an uppercase letter, a lowercase letter, a digit and a special character) — the plaintext is never stored or logged. There are no separate permission levels: any signed-in examiner can see every case, but every action is attributed to the account that did it. A forgotten password has no in-app recovery (no email/SMS on an offline tool) — `tools/reset_user_password.py` resets it from a terminal with access to the machine.
 - **Sessions**: `HttpOnly`, `SameSite=Strict` cookie; 30-minute idle timeout (configurable).
 - **Brute-force lockout**: 5 failures on one account → 60 s lock with live countdown, never affecting other accounts; the count and lock time are stored in the database, so restarting the server does not reset them; messages never reveal whether a username exists or which field was wrong.
 - **Read-only evidence**: images are memory-mapped read-only; the evidence hash is re-checked after every scan and on demand.

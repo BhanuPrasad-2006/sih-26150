@@ -51,7 +51,7 @@ PrivilegesRequiredOverridesAllowed=dialog
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
-Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: unchecked
+Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Additional shortcuts:"
 
 [Files]
 Source: "dist\SIH Forensic Tool\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs

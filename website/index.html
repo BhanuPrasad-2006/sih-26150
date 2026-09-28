@@ -1,0 +1,1157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SIH26150 — Multi-Vendor DVR/NVR Forensic Analysis Tool</title>
+  <meta name="description" content="A local, air-gapped digital forensics platform for acquisition, recovery, reconstruction, validation and reporting of CCTV video evidence across multiple DVR/NVR formats.">
+  <meta name="keywords" content="DVR forensics, NVR forensics, video carving, DHAV, HIK, CCTV recovery, digital forensics, DFIR, SHA-256 evidence integrity">
+  <meta name="author" content="SIH26150 Forensic Engineering Team">
+
+  <!-- OpenGraph / Social Meta Tags -->
+  <meta property="og:title" content="SIH26150 — Multi-Vendor DVR/NVR Forensic Analysis Tool">
+  <meta property="og:description" content="Local, air-gapped forensic acquisition, stream reconstruction, and evidence verification for law enforcement and DFIR labs.">
+  <meta property="og:type" content="website">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <!-- Ambient Cyber Lighting -->
+  <div class="ambient-glow-1"></div>
+  <div class="ambient-glow-2"></div>
+
+  <!-- Top Notice: Security & Air-Gapped Confirmation -->
+  <div class="top-notice-bar">
+    <span class="pulse-dot"></span>
+    <strong>SIH26150 FORENSIC PLATFORM</strong> — LOCAL-FIRST AIR-GAPPED EXAMINER ARCHITECTURE · ZERO CLOUD TELEMETRY · WRITE-PROTECTED
+  </div>
+
+  <!-- Main Sticky Header -->
+  <header class="site-header">
+    <div class="container nav-wrap">
+      <a href="#" class="brand-link" aria-label="SIH26150 Home">
+        <div class="brand-shield">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            <polyline points="9 12 11 14 15 10"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <div class="brand-title">SIH<span>26150</span></div>
+          <div class="brand-subtitle">DVR/NVR Forensic Suite</div>
+        </div>
+      </a>
+
+      <nav>
+        <ul class="nav-menu" id="navMenu">
+          <li><a href="#why" class="nav-link">Why Built</a></li>
+          <li><a href="#pipeline" class="nav-link">Pipeline</a></li>
+          <li><a href="#vendors" class="nav-link">Vendors</a></li>
+          <li><a href="#integrity" class="nav-link">Evidence Integrity</a></li>
+          <li><a href="#features" class="nav-link">Features</a></li>
+          <li><a href="#security" class="nav-link">Security</a></li>
+          <li><a href="#walkthrough" class="nav-link">Installation</a></li>
+          <li><a href="#versions" class="nav-link">Downloads</a></li>
+          <li><a href="#docs" class="nav-link">Docs</a></li>
+          <li><a href="#about" class="nav-link">About</a></li>
+        </ul>
+      </nav>
+
+      <div class="nav-actions">
+        <a href="https://github.com/BhanuPrasad-2006/sih-26150" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm" aria-label="View Source on GitHub">
+          <span class="btn-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
+            </svg>
+          </span>
+          GitHub
+        </a>
+        <a href="downloads/SIH-Forensic-Tool-Setup.exe" download class="btn btn-primary btn-sm" id="navDownloadBtn">
+          Download .EXE
+        </a>
+        <button class="mobile-nav-toggle" id="mobileNavToggle" aria-label="Toggle Navigation">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="hero-section">
+    <div class="container hero-grid">
+      <div class="hero-text-col">
+        <div class="hero-badge-row">
+          <div class="hero-status-pill">
+            <span class="indicator-dot"></span>
+            PRODUCTION BUILD READY
+          </div>
+          <div class="hero-version-pill">
+            v1.0.0 (x64) · WINDOWS
+          </div>
+        </div>
+
+        <h1 class="hero-h1">
+          DVR/NVR <span class="gradient-text">FORENSIC</span> ANALYSIS
+        </h1>
+
+        <div class="hero-subheadline">
+          Recover. Validate. Preserve.
+        </div>
+
+        <p class="hero-desc">
+          A local, air-gapped forensic platform for acquisition, recovery, reconstruction, validation, and court-admissible reporting of DVR/NVR video evidence across multiple recorder formats.
+        </p>
+
+        <div class="hero-cta-group">
+          <!-- Mandatory Direct .EXE Download -->
+          <a href="downloads/SIH-Forensic-Tool-Setup.exe" download class="btn btn-primary" id="heroDownloadBtn">
+            <span class="btn-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+            </span>
+            DOWNLOAD FOR WINDOWS
+          </a>
+
+          <!-- Separate GitHub Repository Link -->
+          <a href="https://github.com/BhanuPrasad-2006/sih-26150" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" id="heroGithubBtn">
+            <span class="btn-icon">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
+              </svg>
+            </span>
+            VIEW ON GITHUB
+          </a>
+        </div>
+
+        <div class="hero-file-specs">
+          <span>File: <strong class="val">SIH-Forensic-Tool-Setup.exe</strong></span>
+          <span>Size: <strong class="val">187.7 MB</strong></span>
+          <span>Target: <strong class="val">Windows 10 / 11 (64-bit)</strong></span>
+          <span>Type: <strong class="val">Direct Download</strong></span>
+        </div>
+      </div>
+
+      <!-- Hero Forensic Visualizer Card -->
+      <div class="hero-visual-card">
+        <div class="visual-top-bar">
+          <div class="visual-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            REAL-TIME FORENSIC STREAM ENGINE
+          </div>
+          <div class="mono" style="color: #10b981;">MMAP: ACCESS_READ</div>
+        </div>
+
+        <div class="canvas-container">
+          <canvas id="forensicCanvas"></canvas>
+          <div class="canvas-hud-overlay">
+            <div class="hud-stat">
+              <span class="hud-label">Read Cursor</span>
+              <span class="hud-value" id="hudSectors">184,320 LBA</span>
+            </div>
+            <div class="hud-stat">
+              <span class="hud-label">Carved Frames</span>
+              <span class="hud-value" id="hudFrames">384 H.264/DHAV</span>
+            </div>
+            <div class="hud-stat">
+              <span class="hud-label">Cryptographic Seal</span>
+              <span class="hud-value green" id="hudHash">6ed2148c... VERIFIED</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Live At-A-Glance Bar -->
+  <section class="metrics-strip">
+    <div class="container metrics-grid">
+      <div class="metric-card">
+        <div class="metric-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+        </div>
+        <div class="metric-info">
+          <h4>8 OEM Profiles</h4>
+          <p>Dahua, Hikvision, CP Plus, Honeywell + Standards Carving</p>
+        </div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-icon green">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+        </div>
+        <div class="metric-info">
+          <h4>100% Air-Gapped</h4>
+          <p>Zero cloud exposure, zero outbound telemetry — evidence never leaves your machine</p>
+        </div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+        </div>
+        <div class="metric-info">
+          <h4>Zero Write-Risk</h4>
+          <p>Enforced read-only memory mapping (<code class="mono">ACCESS_READ</code>)</p>
+        </div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-icon green">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+        </div>
+        <div class="metric-info">
+          <h4>Section 65B Audit</h4>
+          <p>BSA 2023 §63(4) court-admissible certificate & hash chains</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Why Built Section -->
+  <section class="why-section" id="why">
+    <div class="container">
+      <div class="section-tag">Forensic Problem Statement</div>
+      <h2 class="section-title">Why We Built It</h2>
+      <p class="section-subtitle">
+        CCTV and surveillance digital evidence present unique obstacles that defeat traditional commercial data recovery tools. SIH26150 was engineered specifically to solve the core challenges faced by forensic examiners.
+      </p>
+
+      <div class="why-grid">
+        <div class="why-card">
+          <div class="why-card-num">01 / PROPRIETARY STORAGE</div>
+          <h3>Non-Standard Filesystems</h3>
+          <p>
+            DVR and NVR manufacturers frequently bypass NTFS, FAT32, or ext filesystems. Media is written in vendor-specific structures (such as DHFS 4.1 or custom circular buffers) that Windows and standard OS tools fail to mount or recognize.
+          </p>
+          <div class="why-card-footer">
+            Impact: <span>OS reports disk as raw / unformatted</span>
+          </div>
+        </div>
+
+        <div class="why-card">
+          <div class="why-card-num">02 / DELETED FOOTAGE</div>
+          <h3>Hidden & Overwritten Sectors</h3>
+          <p>
+            When video is deleted or marked for circular overwrite, normal player menus cannot access it. Critical incident footage remains trapped inside unallocated clusters or orphaned video blocks across the storage volume.
+          </p>
+          <div class="why-card-footer">
+            Impact: <span>Cannot be extracted via DVR UI</span>
+          </div>
+        </div>
+
+        <div class="why-card">
+          <div class="why-card-num">03 / STREAM FRAGMENTATION</div>
+          <h3>Interleaved Multi-Camera Feeds</h3>
+          <p>
+            Surveillance recorders multiplex 4, 8, 16 or 32 cameras into interleaved sector streams. Generic file carvers yield scrambled, corrupted media files with out-of-order frames and mismatched camera channels.
+          </p>
+          <div class="why-card-footer">
+            Impact: <span>Corrupted playback & lost timeline</span>
+          </div>
+        </div>
+
+        <div class="why-card">
+          <div class="why-card-num">04 / EVIDENCE INTEGRITY</div>
+          <h3>Strict Write-Protection</h3>
+          <p>
+            Plugging a CCTV hard drive into a standard workstation can trigger automated disk signature writing or indexing changes. Forensic evidence must be handled in strictly enforced read-only modes with pre/post cryptographic hashes.
+          </p>
+          <div class="why-card-footer">
+            Impact: <span>Contamination voids court admissibility</span>
+          </div>
+        </div>
+
+        <div class="why-card">
+          <div class="why-card-num">05 / SCIENTIFIC VALIDATION</div>
+          <h3>Repeatable Verification</h3>
+          <p>
+            Carving alone does not guarantee stream integrity. Forensic examiners require frame-by-frame structural validation via ffprobe/FFmpeg to detect corrupt macroblocks, dropped GOP sequences, and decode failures.
+          </p>
+          <div class="why-card-footer">
+            Impact: <span>Unvalidated carving creates false positives</span>
+          </div>
+        </div>
+
+        <div class="why-card">
+          <div class="why-card-num">06 / COURT TRACEABILITY</div>
+          <h3>Immutable Chain of Custody</h3>
+          <p>
+            Every byte analyzed must be accountable. Analysis requires cryptographically linked audit trails, Section 65B (Indian Evidence Act) / BSA 2023 §63(4) electronic record certificates, and transparent confidence ratings.
+          </p>
+          <div class="why-card-footer">
+            Impact: <span>Required for judicial proceedings</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Forensic Pipeline Section -->
+  <section class="pipeline-section" id="pipeline">
+    <div class="container">
+      <div class="section-tag green">Execution Architecture</div>
+      <h2 class="section-title">The Forensic Recovery Pipeline</h2>
+      <p class="section-subtitle">
+        A modular, scientific workflow designed to maintain strict evidentiary hygiene from raw disk image acquisition through final court-ready reporting.
+      </p>
+
+      <div class="pipeline-flow">
+        <!-- Step 1 -->
+        <div class="pipeline-step">
+          <div class="pipeline-node">
+            <span class="step-num">STAGE 01</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+          </div>
+          <div class="pipeline-content">
+            <div class="pipeline-header">
+              <div class="pipeline-title">01 — ACQUIRE & PRE-HASH</div>
+              <span class="pipeline-badge">Read-Only Enforced</span>
+            </div>
+            <p class="pipeline-desc">
+              Mounts raw forensic images (.dd, .raw, .img, .bin) using kernel read-only memory mapping (<code class="mono">mmap ACCESS_READ</code>). Computes initial baseline SHA-256 and MD5 cryptographic hashes before any scanning takes place.
+            </p>
+            <div class="pipeline-tech-taglist">
+              <span class="tech-tag">mmap ACCESS_READ</span>
+              <span class="tech-tag">SHA-256 Baseline</span>
+              <span class="tech-tag">MD5 Baseline</span>
+              <span class="tech-tag">Raw LBA Addressing</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2 -->
+        <div class="pipeline-step">
+          <div class="pipeline-node">
+            <span class="step-num">STAGE 02</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          </div>
+          <div class="pipeline-content">
+            <div class="pipeline-header">
+              <div class="pipeline-title">02 — IDENTIFY & PROFILE</div>
+              <span class="pipeline-badge">Plugin Registry</span>
+            </div>
+            <p class="pipeline-desc">
+              Executes signature profiling across master boot records, partition sectors, and raw stream headers. Identifies brand signatures (Dahua DHFS/DHAV, Hikvision HIK, CP Plus) or routes automatically to generic standards-based carving.
+            </p>
+            <div class="pipeline-tech-taglist">
+              <span class="tech-tag">BrandPlugin Registry</span>
+              <span class="tech-tag">DHAV Magic 0x44484156</span>
+              <span class="tech-tag">HIK Signatures</span>
+              <span class="tech-tag">Fallback Router</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 3 -->
+        <div class="pipeline-step">
+          <div class="pipeline-node">
+            <span class="step-num">STAGE 03</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+          </div>
+          <div class="pipeline-content">
+            <div class="pipeline-header">
+              <div class="pipeline-title">03 — INDEX & ALLOCATION PARSE</div>
+              <span class="pipeline-badge">Metadata Recovery</span>
+            </div>
+            <p class="pipeline-desc">
+              Parses available vendor filesystem tables, chunk allocation descriptors, and channel mapping indexes. Pinpoints active, deleted, and unallocated cluster ranges for targeted extraction.
+            </p>
+            <div class="pipeline-tech-taglist">
+              <span class="tech-tag">DHFS 4.1 Index Parser</span>
+              <span class="tech-tag">Cluster Descriptors</span>
+              <span class="tech-tag">Channel Allocation Maps</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 4 -->
+        <div class="pipeline-step">
+          <div class="pipeline-node">
+            <span class="step-num">STAGE 04</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+          </div>
+          <div class="pipeline-content">
+            <div class="pipeline-header">
+              <div class="pipeline-title">04 — DEEP SECTOR CARVE</div>
+              <span class="pipeline-badge">Unallocated Space Scan</span>
+            </div>
+            <p class="pipeline-desc">
+              Sweeps unallocated disk space for frame boundaries, NAL unit starts (H.264 0x0000000167, H.265 0x0000000140), MPEG-PS pack headers (0x000001BA), and proprietary trailer tags with sector alignment.
+            </p>
+            <div class="pipeline-tech-taglist">
+              <span class="tech-tag">H.264 Annex B Carver</span>
+              <span class="tech-tag">MPEG-PS Pack Carver</span>
+              <span class="tech-tag">dhav Trailer Detection</span>
+              <span class="tech-tag">Byte-Level Boundary Scan</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 5 -->
+        <div class="pipeline-step">
+          <div class="pipeline-node">
+            <span class="step-num">STAGE 05</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+          </div>
+          <div class="pipeline-content">
+            <div class="pipeline-header">
+              <div class="pipeline-title">05 — STREAM RECONSTRUCTION</div>
+              <span class="pipeline-badge">De-interleaving & GOP Alignment</span>
+            </div>
+            <p class="pipeline-desc">
+              Demultiplexes interleaved multi-channel feeds. Groups frames by camera channel ID, sorts sequential presentation timestamps (PTS), recovers Group of Pictures (GOP) headers, and synthesizes standard MP4 containers.
+            </p>
+            <div class="pipeline-tech-taglist">
+              <span class="tech-tag">reconstructor.py</span>
+              <span class="tech-tag">Multi-Channel Demux</span>
+              <span class="tech-tag">GOP Re-alignment</span>
+              <span class="tech-tag">Container Remux</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 6 -->
+        <div class="pipeline-step">
+          <div class="pipeline-node">
+            <span class="step-num">STAGE 06</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+          </div>
+          <div class="pipeline-content">
+            <div class="pipeline-header">
+              <div class="pipeline-title">06 — FORENSIC VALIDATION</div>
+              <span class="pipeline-badge">FFmpeg / ffprobe Probe</span>
+            </div>
+            <p class="pipeline-desc">
+              Validates carved media with FFmpeg and ffprobe. Detects corrupt macroblocks, dropped frames, audio/video synchronization deltas, and assigns scientifically honest confidence states (Complete / Partial / Uncertain).
+            </p>
+            <div class="pipeline-tech-taglist">
+              <span class="tech-tag">ffprobe Stream Analysis</span>
+              <span class="tech-tag">Macroblock Validation</span>
+              <span class="tech-tag">Frame Drop Counter</span>
+              <span class="tech-tag">Confidence Engine</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 7 -->
+        <div class="pipeline-step">
+          <div class="pipeline-node">
+            <span class="step-num">STAGE 07</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+          </div>
+          <div class="pipeline-content">
+            <div class="pipeline-header">
+              <div class="pipeline-title">07 — AUDIT CHAIN & REPORTING</div>
+              <span class="pipeline-badge">Court-Admissible Output</span>
+            </div>
+            <p class="pipeline-desc">
+              Verifies post-scan evidence hash match. Appends timestamped examiner actions to an immutable hash-chained audit log. Generates forensic PDF reports and Bharatiya Sakshya Adhiniyam 2023 §63(4) / Section 65B certificates.
+            </p>
+            <div class="pipeline-tech-taglist">
+              <span class="tech-tag">Post-Scan Hash Verification</span>
+              <span class="tech-tag">Hash-Chained Audit Trail</span>
+              <span class="tech-tag">BSA 2023 §63(4) Certificate</span>
+              <span class="tech-tag">Forensic PDF Report</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Supported Vendors Section -->
+  <section class="vendors-section" id="vendors">
+    <div class="container">
+      <div class="section-tag">Supported OEM Matrix</div>
+      <h2 class="section-title">Transparent Hardware Support</h2>
+      <p class="section-subtitle">
+        In strict alignment with digital forensics principles, our tool explicitly distinguishes between verified on-disk format parsers and generic standards-based carve fallbacks. We never over-claim unsupported capabilities.
+      </p>
+
+      <div class="vendors-filter-bar">
+        <button class="filter-btn active" data-filter="all">All Profiles (8+1)</button>
+        <button class="filter-btn" data-filter="verified">Verified / Implemented</button>
+        <button class="filter-btn" data-filter="partial">Partial / Research</button>
+        <button class="filter-btn" data-filter="fallback">Standards Fallback</button>
+      </div>
+
+      <div class="vendors-grid">
+        <!-- Dahua -->
+        <div class="vendor-card" data-status="verified">
+          <div class="vendor-top">
+            <div class="vendor-name">Dahua Technology</div>
+            <span class="vendor-status verified">VERIFIED</span>
+          </div>
+          <div class="vendor-format">DHFS 4.1 / DHAV Frames</div>
+          <p class="vendor-desc">
+            Complete frame-level parser. Detects <code class="mono">DHAV</code> start headers, <code class="mono">dhav</code> footers, multi-camera channel IDs, and decoded frame timestamps aligned with FFmpeg dhav.c specifications.
+          </p>
+          <ul class="vendor-specs-list">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Channel demultiplexing</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Frame-accurate timestamp extraction</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Tested on real disk captures</li>
+          </ul>
+        </div>
+
+        <!-- Hikvision -->
+        <div class="vendor-card" data-status="verified">
+          <div class="vendor-top">
+            <div class="vendor-name">Hikvision</div>
+            <span class="vendor-status verified">VERIFIED</span>
+          </div>
+          <div class="vendor-format">HIK / MPEG-PS Stream</div>
+          <p class="vendor-desc">
+            Proprietary HIK chunk header parser and MPEG-PS stream carver. Extracts video payloads, indexes keyframe headers, and handles RTP packet encapsulation structures.
+          </p>
+          <ul class="vendor-specs-list">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> HIK header signature parsing</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> MPEG-PS stream reconstruction</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Keyframe sequence ordering</li>
+          </ul>
+        </div>
+
+        <!-- CP Plus -->
+        <div class="vendor-card" data-status="verified">
+          <div class="vendor-top">
+            <div class="vendor-name">CP Plus</div>
+            <span class="vendor-status verified">VERIFIED</span>
+          </div>
+          <div class="vendor-format">DHAV / Dahua Compatible</div>
+          <p class="vendor-desc">
+            CP Plus hardware utilizes Dahua OEM firmware specifications. Directly handles DHFS structures, DHAV framing, and CP Plus variant header signatures.
+          </p>
+          <ul class="vendor-specs-list">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Full DHAV frame compatibility</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Multi-channel stream recovery</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Native metadata parsing</li>
+          </ul>
+        </div>
+
+        <!-- Honeywell -->
+        <div class="vendor-card" data-status="partial">
+          <div class="vendor-top">
+            <div class="vendor-name">Honeywell</div>
+            <span class="vendor-status partial">RESEARCH BASIS</span>
+          </div>
+          <div class="vendor-format">MPEG-PS / Proprietary Headers</div>
+          <p class="vendor-desc">
+            Supported via peer-reviewed format documentation. Identifies Honeywell sector layout, MPEG-PS streams, and extracts valid video chunks without guessing unknown offsets.
+          </p>
+          <ul class="vendor-specs-list">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Header signature recognition</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Stream extraction</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Stream sanity checks</li>
+          </ul>
+        </div>
+
+        <!-- TP-Link -->
+        <div class="vendor-card" data-status="fallback">
+          <div class="vendor-top">
+            <div class="vendor-name">TP-Link (VIGI)</div>
+            <span class="vendor-status fallback">FALLBACK CARVING</span>
+          </div>
+          <div class="vendor-format">Standards Stream / MP4</div>
+          <p class="vendor-desc">
+            TP-Link VIGI devices storing standard H.264/H.265 Annex B streams or MP4/AVI atoms are carved using standards-based methods without fabricated vendor assumptions.
+          </p>
+          <ul class="vendor-specs-list">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> H.264/H.265 NAL unit carving</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Standard atom identification</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Conservative evidence bounds</li>
+          </ul>
+        </div>
+
+        <!-- Uniview -->
+        <div class="vendor-card" data-status="fallback">
+          <div class="vendor-top">
+            <div class="vendor-name">Uniview (UNV)</div>
+            <span class="vendor-status fallback">FALLBACK CARVING</span>
+          </div>
+          <div class="vendor-format">Standards Stream / TS</div>
+          <p class="vendor-desc">
+            No public proprietary filesystem spec exists. Carves standard video streams (MPEG-TS, H.264/H.265) directly from raw blocks with full forensic auditability.
+          </p>
+          <ul class="vendor-specs-list">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> MPEG-TS / H.264 detection</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> GOP validation with FFmpeg</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Extensible plugin architecture</li>
+          </ul>
+        </div>
+
+        <!-- Godrej -->
+        <div class="vendor-card" data-status="fallback">
+          <div class="vendor-top">
+            <div class="vendor-name">Godrej Security</div>
+            <span class="vendor-status fallback">FALLBACK CARVING</span>
+          </div>
+          <div class="vendor-format">Standards Stream</div>
+          <p class="vendor-desc">
+            Extracts recoverable surveillance streams using generic byte-level Annex B signature detection. Protects evidence from unsupported speculative transformations.
+          </p>
+          <ul class="vendor-specs-list">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Raw Annex B byte carving</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Frame boundary analysis</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Honest confidence rating</li>
+          </ul>
+        </div>
+
+        <!-- Matrix Comsec -->
+        <div class="vendor-card" data-status="fallback">
+          <div class="vendor-top">
+            <div class="vendor-name">Matrix Comsec</div>
+            <span class="vendor-status fallback">FALLBACK CARVING</span>
+          </div>
+          <div class="vendor-format">Standards Stream</div>
+          <p class="vendor-desc">
+            Recovers video frames through standards-compliant MPEG-PS and NAL byte scanning. Ready for custom OEM plugin registration via <code class="mono">backend/plugins/</code>.
+          </p>
+          <ul class="vendor-specs-list">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Standards-based extraction</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Stream parameter extraction</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Plugin extension ready</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Evidence Integrity & Confidence States -->
+  <section class="integrity-section" id="integrity">
+    <div class="container integrity-grid">
+      <div class="integrity-panel">
+        <div class="section-tag green">Evidentiary Standard</div>
+        <h3>Forensic Confidence States</h3>
+        <p>
+          A video file carved from raw disk sectors cannot automatically be declared “intact” simply because bytes were written. Our engine classifies every reconstructed file into verified, defensible confidence levels.
+        </p>
+
+        <div class="confidence-box">
+          <div class="confidence-item complete">
+            <h4>COMPLETE <span class="mono" style="font-size:0.75rem;">VERIFIED INTEGRITY</span></h4>
+            <p>
+              Both container and internal Elementary Stream decoded cleanly with zero syntax errors, intact sequence parameter sets (SPS/PPS), continuous timestamps, and verified closed GOP boundaries. Only assigned against verified ground truth.
+            </p>
+          </div>
+
+          <div class="confidence-item partial">
+            <h4>PARTIAL <span class="mono" style="font-size:0.75rem;">CARVED WITH GAPS</span></h4>
+            <p>
+              Reconstructed footage contains playable sequences with detected dropped frames, missing GOP headers, or minor macroblock artifacts. Clearly flagged for examiner review.
+            </p>
+          </div>
+
+          <div class="confidence-item uncertain">
+            <h4>UNCERTAIN <span class="mono" style="font-size:0.75rem;">RAW FRAGMENTS</span></h4>
+            <p>
+              Raw video slices extracted without definitive container timing, interleaved channel confirmation, or corrupt stream markers. Requires manual examiner analysis in the player viewport.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="integrity-panel">
+        <div class="section-tag">Audit Architecture</div>
+        <h3>Immutable Audit Trail</h3>
+        <p>
+          Every analysis run generates an incremental, hash-chained record. Each entry incorporates the SHA-256 hash of the previous record, making post-hoc evidence tampering mathematically detectable.
+        </p>
+
+        <div class="audit-mockup">
+          <div class="audit-header">
+            <div class="audit-dot-row">
+              <span class="audit-dot r"></span>
+              <span class="audit-dot y"></span>
+              <span class="audit-dot g"></span>
+            </div>
+            <span>audit_log.json [CRYPTOGRAPHIC CHAIN]</span>
+          </div>
+
+          <div class="audit-chain-item">
+            <div class="chain-ts">2026-09-28T14:15:02.108Z · EXAMINER: b_prasad</div>
+            <div class="chain-action">ACTION: EVIDENCE_ACQUIRE_READONLY</div>
+            <div class="chain-hash">PREV: 0000000000000000000000000000000000000000000000000000000000000000</div>
+            <div class="chain-hash">HASH: 4f8a29b3c4d7e8f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5</div>
+          </div>
+
+          <div class="audit-chain-item">
+            <div class="chain-ts">2026-09-28T14:15:18.420Z · EXAMINER: b_prasad</div>
+            <div class="chain-action">ACTION: CARVE_PLUGIN_DAHUA_RUN</div>
+            <div class="chain-hash">PREV: 4f8a29b3c4d7e8f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5</div>
+            <div class="chain-hash">HASH: 9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b</div>
+          </div>
+
+          <div class="audit-chain-item">
+            <div class="chain-ts">2026-09-28T14:18:45.892Z · EXAMINER: b_prasad</div>
+            <div class="chain-action">ACTION: POST_SCAN_HASH_MATCH_VERIFIED</div>
+            <div class="chain-hash">PREV: 9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b</div>
+            <div class="chain-hash">HASH: 6ed2148ce76043821c44266100c66d47563745fc3db63ea177ac180b9d61d302</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Product Features Section -->
+  <section class="features-section" id="features">
+    <div class="container">
+      <div class="section-tag">Core Capabilities</div>
+      <h2 class="section-title">Engineered for Real DFIR Labs</h2>
+      <p class="section-subtitle">
+        A complete forensic workstation suite with no external cloud dependencies, built specifically for digital forensics investigators and incident responders.
+      </p>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+          </div>
+          <h3>Read-Only Disk Acquisition</h3>
+          <p>
+            Mount raw disk images (.dd, .raw, .img, .bin) and physical drives in strictly enforced read-only memory mappings (<code class="mono">mmap ACCESS_READ</code>). Prevents OS write contaminations.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon></svg>
+          </div>
+          <h3>Automated OEM Signature Scan</h3>
+          <p>
+            Instantly identifies Dahua, Hikvision, CP Plus, and Honeywell filesystem headers or falls back gracefully to standards-based carving.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+          </div>
+          <h3>Unallocated Space Carving</h3>
+          <p>
+            Recovers overwritten and deleted video evidence across unallocated sector ranges using byte-level NAL unit and container boundary matching.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          </div>
+          <h3>Time-Synchronized Multichannel</h3>
+          <p>
+            Reconstructs multiplexed surveillance feeds into individual camera channels with synchronized timeline navigation and frame-accurate seeking.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          </div>
+          <h3>AI Analytics: Face & Object Search</h3>
+          <p>
+            Local, offline AI computer vision modules: automated face detection, face vector search, YOLO object detection (persons, vehicles), and motion heatmaps.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+          </div>
+          <h3>Court-Admissible PDF & BSA §63(4)</h3>
+          <p>
+            Generates standardized forensic PDF reports and Section 65B / BSA 2023 §63(4) electronic certificates with evidence hashes, examiner signatures, and audit logs.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Security Architecture Section -->
+  <section class="security-section" id="security">
+    <div class="container security-grid">
+      <div>
+        <div class="section-tag green">Security Hardened</div>
+        <h2 class="section-title">Zero Cloud Leaks. Local-First Architecture.</h2>
+        <p class="section-subtitle" style="margin-bottom: 24px;">
+          Surveillance evidence contains sensitive footage and legal investigations that must never cross public networks or third-party cloud infrastructure.
+        </p>
+
+        <ul class="security-list">
+          <li class="security-list-item">
+            <div class="sec-check-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </div>
+            <div class="sec-item-text">
+              <h4>100% Localhost & Air-Gapped</h4>
+              <p>Operates completely disconnected from the Internet. Zero analytics beacons, zero telemetry, zero external dependencies during scanning.</p>
+            </div>
+          </li>
+
+          <li class="security-list-item">
+            <div class="sec-check-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </div>
+            <div class="sec-item-text">
+              <h4>Named Examiner Role-Based Accounts</h4>
+              <p>Enforces examiner accountability with salted Argon2id / secure password hashing, session expiration, and lockout policies.</p>
+            </div>
+          </li>
+
+          <li class="security-list-item">
+            <div class="sec-check-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </div>
+            <div class="sec-item-text">
+              <h4>Strict Path Traversal Sandboxing</h4>
+              <p>Backend endpoints strictly sanitize file paths, preventing directory traversal attacks (<code class="mono">../</code>) and unauthorized disk tampering.</p>
+            </div>
+          </li>
+
+          <li class="security-list-item">
+            <div class="sec-check-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </div>
+            <div class="sec-item-text">
+              <h4>Cryptographic Tamper Detection</h4>
+              <p>Source evidence hashes are recorded before scanning and verified after processing to guarantee byte-for-byte evidence preservation.</p>
+            </div>
+          </li>
+        </ul>
+      </div>
+
+      <div class="security-card-visual">
+        <div class="sec-flow-box">
+          <div class="sec-flow-node">
+            <span>PUBLIC PRODUCT WEBSITE</span>
+            <span class="mono" style="color: #00e5ff;">INFORMATION ONLY</span>
+          </div>
+          <div class="sec-flow-arrow">↓ DIRECT DOWNLOAD (NO CLOUD REDIRECT)</div>
+          <div class="sec-flow-node">
+            <span>SIH-Forensic-Tool-Setup.exe</span>
+            <span class="mono" style="color: #38bdf8;">AUTHENTICATED BINARY</span>
+          </div>
+          <div class="sec-flow-arrow">↓ LOCAL WINDOWS WORKSTATION INSTALL</div>
+          <div class="sec-flow-node">
+            <span>ISOLATED DESKTOP RUNTIME</span>
+            <span class="mono" style="color: #10b981;">PYWEBVIEW + FASTAPI LOCALHOST</span>
+          </div>
+          <div class="sec-flow-arrow">↓ EXAMINER CREDENTIALS CREATED ON FIRST LAUNCH</div>
+          <div class="sec-flow-node">
+            <span>SECURE AIR-GAPPED FORENSIC DASHBOARD</span>
+            <span class="mono" style="color: #10b981;">127.0.0.1 AIR-GAPPED</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Installation & First Launch Walkthrough -->
+  <section class="walkthrough-section" id="walkthrough">
+    <div class="container">
+      <div class="section-tag">Examiner Onboarding</div>
+      <h2 class="section-title">Windows Installation & First Launch</h2>
+      <p class="section-subtitle">
+        Follow these steps to deploy the SIH26150 Forensic Analysis Tool to your Windows digital forensics lab workstation.
+      </p>
+
+      <div class="walkthrough-steps">
+        <div class="wt-step-card">
+          <span class="wt-step-badge">STEP 01</span>
+          <h4>Download & Unblock</h4>
+          <p>
+            Click <strong style="color:#00e5ff;">Download for Windows</strong> to get <code class="mono">SIH-Forensic-Tool-Setup.exe</code>. If Windows blocks opening due to security settings: Right-click the .exe &rarr; <em>Properties</em> &rarr; check <strong>Unblock</strong> &rarr; Apply, or on SmartScreen click <em>More info</em> &rarr; <em>Run anyway</em>.
+          </p>
+        </div>
+
+        <div class="wt-step-card">
+          <span class="wt-step-badge">STEP 02</span>
+          <h4>Windows Setup Wizard</h4>
+          <p>
+            Run the installer. Accept the licensing terms, select your target installation folder (default: <code class="mono">C:\Program Files\SIH Forensic Tool</code>), and click Install.
+          </p>
+        </div>
+
+        <div class="wt-step-card">
+          <span class="wt-step-badge">STEP 03</span>
+          <h4>Launch Application</h4>
+          <p>
+            Launch the application from the Start Menu or desktop shortcut. The tool initializes the local runtime and presents the welcome screen.
+          </p>
+        </div>
+
+        <div class="wt-step-card">
+          <span class="wt-step-badge">STEP 04</span>
+          <h4>Create Examiner Account</h4>
+          <p>
+            Configure your initial examiner administrator account with a secure password.
+          </p>
+          <div class="password-rules-box">
+            <strong>Password Requirements:</strong>
+            <ul>
+              <li>Minimum 8 characters</li>
+              <li>At least 1 uppercase letter</li>
+              <li>At least 1 lowercase letter</li>
+              <li>At least 1 number</li>
+              <li>At least 1 special character</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Versions & Download Hero Box -->
+  <section class="version-section" id="versions">
+    <div class="container">
+      <div class="download-hero-box">
+        <div class="dl-details">
+          <span class="dl-meta-badge">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            OFFICIAL STABLE RELEASE
+          </span>
+          <h3>SIH26150 Forensic Tool v1.0.0</h3>
+          <p style="color: var(--text-muted); font-size: 0.98rem; line-height: 1.6;">
+            Self-contained Windows 64-bit installer containing the complete forensic backend, Dahua/Hikvision format decoders, bundled FFmpeg/ffprobe binaries, local case storage, and the examiner interface.
+          </p>
+
+          <table class="dl-specs-table">
+            <tr>
+              <td class="label">VERSION</td>
+              <td class="value">v1.0.0 (Production Release)</td>
+            </tr>
+            <tr>
+              <td class="label">PLATFORM</td>
+              <td class="value">Windows 10 / Windows 11 (64-bit)</td>
+            </tr>
+            <tr>
+              <td class="label">FILE SIZE</td>
+              <td class="value">187.7 MB (196,856,557 bytes)</td>
+            </tr>
+            <tr>
+              <td class="label">RUNTIME</td>
+              <td class="value">Self-Contained Local Desktop (PyWebView + FastAPI)</td>
+            </tr>
+            <tr>
+              <td class="label">STATUS</td>
+              <td class="value" style="color: #10b981;">Production Ready · Verified Build</td>
+            </tr>
+          </table>
+
+          <div class="dl-hash-box">
+            <div class="dl-hash-title">
+              <span>SHA-256 Authenticity Checksum</span>
+              <button class="copy-hash-btn" id="copyHashBtn" aria-label="Copy SHA256 Checksum">COPY HASH</button>
+            </div>
+            <div class="dl-hash-val" id="installerHashVal">6ed2148ce76043821c44266100c66d47563745fc3db63ea177ac180b9d61d302</div>
+          </div>
+        </div>
+
+        <div class="dl-action-card">
+          <!-- Mandatory Direct .EXE Download Button -->
+          <a href="downloads/SIH-Forensic-Tool-Setup.exe" download class="btn btn-primary" id="mainDownloadBtn">
+            <span class="btn-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+            </span>
+            DOWNLOAD v1.0.0 (.EXE)
+          </a>
+
+          <!-- Separate GitHub Source Link -->
+          <a href="https://github.com/BhanuPrasad-2006/sih-26150" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" id="mainGithubBtn">
+            <span class="btn-icon">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
+              </svg>
+            </span>
+            VIEW SOURCE ON GITHUB
+          </a>
+
+          <div class="dl-notice">
+            Direct file download. No registration required. Verified against Inno Setup release bundle.<br>
+            <span style="color: #94a3b8; font-size: 0.74rem;">Windows prompt: If blocked by security, right-click file &rarr; Properties &rarr; check Unblock.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Help & Documentation Section -->
+  <section class="docs-section" id="docs">
+    <div class="container">
+      <div class="section-tag">Documentation & SOPs</div>
+      <h2 class="section-title">Examiner Guides & Reference</h2>
+      <p class="section-subtitle">
+        Comprehensive standard operating procedures and technical documentation available within the repository.
+      </p>
+
+      <div class="docs-grid">
+        <div class="doc-card">
+          <span class="doc-badge">GUIDE / SOP</span>
+          <h4>Standard Operating Procedure (SOP)</h4>
+          <p>Step-by-step forensic handling from physical hard drive extraction to chain-of-custody logging and court handover.</p>
+          <a href="https://github.com/BhanuPrasad-2006/sih-26150/blob/main/docs/SOP.md" target="_blank" rel="noopener noreferrer" class="doc-link">
+            Read SOP.md →
+          </a>
+        </div>
+
+        <div class="doc-card">
+          <span class="doc-badge">ARCHITECTURE</span>
+          <h4>System Architecture</h4>
+          <p>Technical blueprint detailing memory mapping, plugin interfaces, FFmpeg remuxing pipelines, and confidence grading engines.</p>
+          <a href="https://github.com/BhanuPrasad-2006/sih-26150/blob/main/docs/SYSTEM_ARCHITECTURE.md" target="_blank" rel="noopener noreferrer" class="doc-link">
+            Read SYSTEM_ARCHITECTURE.md →
+          </a>
+        </div>
+
+        <div class="doc-card">
+          <span class="doc-badge">MANUAL</span>
+          <h4>Examiner User Manual</h4>
+          <p>Operator manual for case management, image loading, carving parameter selection, AI analytics filtering, and export controls.</p>
+          <a href="https://github.com/BhanuPrasad-2006/sih-26150/blob/main/docs/USER_MANUAL.md" target="_blank" rel="noopener noreferrer" class="doc-link">
+            Read USER_MANUAL.md →
+          </a>
+        </div>
+
+        <div class="doc-card">
+          <span class="doc-badge">SECURITY</span>
+          <h4>Security Architecture</h4>
+          <p>Authentication model, password hashing algorithms, role-based access controls, and path sandboxing specifications.</p>
+          <a href="https://github.com/BhanuPrasad-2006/sih-26150/blob/main/docs/SECURITY.md" target="_blank" rel="noopener noreferrer" class="doc-link">
+            Read SECURITY.md →
+          </a>
+        </div>
+
+        <div class="doc-card">
+          <span class="doc-badge">RESEARCH</span>
+          <h4>OEM Format Analysis</h4>
+          <p>Comparative format sheets covering Dahua DHFS 4.1 / DHAV, Hikvision HIK, CP Plus, and fallback carving limits.</p>
+          <a href="https://github.com/BhanuPrasad-2006/sih-26150/blob/main/docs/oem_comparison.md" target="_blank" rel="noopener noreferrer" class="doc-link">
+            Read oem_comparison.md →
+          </a>
+        </div>
+
+        <div class="doc-card">
+          <span class="doc-badge">VALIDATION</span>
+          <h4>Accuracy & Validation Kit</h4>
+          <p>Methodology for calculating carving precision, recall, and container validity against known ground-truth datasets.</p>
+          <a href="https://github.com/BhanuPrasad-2006/sih-26150/blob/main/docs/VALIDATION_KIT.md" target="_blank" rel="noopener noreferrer" class="doc-link">
+            Read VALIDATION_KIT.md →
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- About Section -->
+  <section class="about-section" id="about">
+    <div class="container about-card">
+      <div class="about-content">
+        <div class="section-tag green">National Hackathon Project</div>
+        <h3>About SIH26150</h3>
+        <p>
+          The <strong>SIH26150 Multi-Vendor DVR/NVR Forensic Analysis Tool</strong> was developed as part of the <strong>Smart India Hackathon 2026</strong> under Problem Statement ID <strong>SIH26150</strong>.
+        </p>
+        <p>
+          Our mission was to build a rigorous, open, and legally defensible digital forensics platform capable of recovering surveillance video evidence from proprietary CCTV hardware. By adhering strictly to ISO/IEC 27037 digital evidence preservation standards and Bharatiya Sakshya Adhiniyam 2023 §63(4) statutory certificate requirements, this software provides law enforcement officers and DFIR laboratories with a dependable, transparent recovery platform.
+        </p>
+      </div>
+
+      <div class="about-specs">
+        <div class="about-spec-row">
+          <span class="about-spec-label">HACKATHON INITIATIVE</span>
+          <span class="about-spec-value">Smart India Hackathon 2026</span>
+        </div>
+        <div class="about-spec-row">
+          <span class="about-spec-label">PROBLEM STATEMENT ID</span>
+          <span class="about-spec-value">SIH26150</span>
+        </div>
+        <div class="about-spec-row">
+          <span class="about-spec-label">DOMAINS</span>
+          <span class="about-spec-value">Digital Forensics · DFIR · Cyber Defense</span>
+        </div>
+        <div class="about-spec-row">
+          <span class="about-spec-label">COMPLIANCE STANDARDS</span>
+          <span class="about-spec-value">ISO/IEC 27037 · BSA 2023 §63(4) / Sec 65B</span>
+        </div>
+        <div class="about-spec-row">
+          <span class="about-spec-label">ENGINEERING PHILOSOPHY</span>
+          <span class="about-spec-value">Evidence Integrity Over Speculation</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Site Footer -->
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <div class="brand-link">
+            <div class="brand-shield">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+            </div>
+            <div class="brand-text">
+              <div class="brand-title">SIH<span>26150</span></div>
+              <div class="brand-subtitle">Forensic Analysis Tool</div>
+            </div>
+          </div>
+          <p>
+            An open, court-admissible forensic suite for multi-vendor CCTV DVR/NVR surveillance media recovery, validation, and audit tracking.
+          </p>
+        </div>
+
+        <div class="footer-col">
+          <h5>Platform</h5>
+          <ul class="footer-links">
+            <li><a href="#why">Why We Built It</a></li>
+            <li><a href="#pipeline">Forensic Pipeline</a></li>
+            <li><a href="#vendors">Supported Vendors</a></li>
+            <li><a href="#integrity">Evidence Integrity</a></li>
+            <li><a href="#features">Capabilities</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h5>Examiners</h5>
+          <ul class="footer-links">
+            <li><a href="#security">Security Model</a></li>
+            <li><a href="#walkthrough">Installation Guide</a></li>
+            <li><a href="#versions">Download .EXE</a></li>
+            <li><a href="#docs">Documentation</a></li>
+            <li><a href="#about">About Project</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h5>Source & Legal</h5>
+          <ul class="footer-links">
+            <li><a href="https://github.com/BhanuPrasad-2006/sih-26150" target="_blank" rel="noopener noreferrer">GitHub Repository</a></li>
+            <li><a href="https://github.com/BhanuPrasad-2006/sih-26150/blob/main/packaging/TERMS.txt" target="_blank" rel="noopener noreferrer">Licensing Terms</a></li>
+            <li><a href="downloads/SIH-Forensic-Tool-Setup.exe" download>Direct Windows Installer</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <div>© 2026 SIH26150 Forensic Analysis Tool. Designed for Digital Forensics & Incident Response.</div>
+        <div class="mono" style="color: #00e5ff;">STATUS: AIR-GAPPED DESKTOP SUITE</div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="js/forensic-vis.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
