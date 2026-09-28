@@ -66,7 +66,7 @@ Because no recorder disk was available, disks were built from the specifications
 
 A FastAPI backend (≈ 13,400 lines of Python, ≈ 4,300 of them tests), a build-free vanilla-JavaScript single-page front end (≈ 4,600 lines), SQLite or Supabase/Postgres storage, ReportLab reports, OpenCV for analytics and FFmpeg for export. Detail is in the [System Architecture](SYSTEM_ARCHITECTURE.md).
 
-Key features: single-examiner login with bcrypt, lockout and idle timeout; hash-chained audit log `H_n = SHA-256(t_n ∥ action_n ∥ params_n ∥ H_{n-1})`; brand plugins with explicit trust wording; index-first-then-carve recovery; per-format format sheets; drive imaging with bad-sector accounting; YuNet, SFace and YOLOX analytics; cross-camera correlation; accuracy against ground truth; PDF report with certificate template.
+Key features: named examiner accounts with bcrypt, per-account lockout and idle timeout; hash-chained audit log `H_n = SHA-256(t_n ∥ action_n ∥ params_n ∥ H_{n-1})`; brand plugins with explicit trust wording; index-first-then-carve recovery; per-format format sheets; drive imaging with bad-sector accounting; YuNet, SFace and YOLOX analytics; cross-camera correlation; accuracy against ground truth; PDF report with certificate template.
 
 ## 5. Results
 
@@ -122,7 +122,7 @@ Full table: [oem_comparison.md](oem_comparison.md).
 5. Drive imaging untested on a physical drive; write-blocking cannot be enforced in software.
 6. Analytics: sampled frames; small or dark subjects missed; validated on a handful of images.
 7. Timestamps depend on an examiner-supplied clock offset; no drift correction.
-8. Single examiner, localhost only; no roles.
+8. Localhost only; multiple named examiner accounts can sign in, but there are no per-account permission levels or roles.
 9. No performance benchmarks.
 
 ## 9. Conclusion and future work

@@ -1,15 +1,21 @@
 /**
- * LoginScreen.js — Single-examiner authentication gate.
+ * LoginScreen.js — Multi-examiner authentication gate.
  *
  * Handles two flows:
- *   1. First-run setup  — called when no password has been set yet.
- *   2. Normal login     — called on every subsequent launch or session expiry.
+ *   1. First-run setup  — called when no examiner account exists yet. Creates the first account.
+ *   2. Normal login     — called on every subsequent launch or session expiry. Any existing
+ *                         examiner signs in with their own username and password.
  *
  * Security UX rules enforced here:
- *   • Error message is always "Incorrect password." — no hint about account existence.
- *   • Lockout: 5 failures → 60-second countdown banner.  No retry until lockout expires.
- *   • Password is submitted via fetch (never as a URL query parameter).
- *   • The UI intentionally provides no "username" field — single examiner tool.
+ *   • Error message never distinguishes an unknown username from a wrong password.
+ *   • Lockout: 5 failures for a given username → 60-second countdown banner (per-account, not
+ *     shared — a lockout on one examiner's account never blocks another's).
+ *   • Credentials are submitted via fetch (never as a URL query parameter).
+ *   • Two-factor is per-examiner: the code field only appears after a correct password reveals
+ *     that this particular account needs one (see API.login's totp_required response).
+ *   • Forgotten password: there is no in-app recovery (no email/SMS on an offline tool) — an
+ *     examiner locked out of their own account needs someone with terminal access to the machine
+ *     to run tools/reset_user_password.py.
  */
 
 function _hideChromeForAuth() {
@@ -48,12 +54,16 @@ function _brandPanelHtml() {
         <div class="auth-brand-art">${authArt()}</div>
         <ul class="auth-feature-list">
           <li>${_ICON_CHECK}<span><b>Evidence is only ever read.</b> The source disk image is never modified.</span></li>
-          <li>${_ICON_CHECK}<span><b>Every action is logged</b> in a hash-chained, tamper-evident audit trail.</span></li>
-          <li>${_ICON_CHECK}<span><b>Locked down by default:</b> single-examiner access, hashed credentials, lockout after repeated failures.</span></li>
+          <li>${_ICON_CHECK}<span><b>Every action is logged</b> in a hash-chained, tamper-evident audit trail, attributed to the examiner who did it.</span></li>
+          <li>${_ICON_CHECK}<span><b>Locked down by default:</b> named examiner accounts, hashed credentials, per-account lockout after repeated failures.</span></li>
         </ul>
       </div>
     </div>`;
 }
+
+// A password rule string shown on both the first-run and "add examiner" forms — kept as one
+// constant so the two can never describe different rules.
+const _PASSWORD_RULE_TEXT = 'At least 12 characters, with an uppercase letter, a lowercase letter, a digit, and a special character.';
 
 function renderSetupScreen() {
   const root = document.getElementById('content-root');
@@ -65,15 +75,26 @@ function renderSetupScreen() {
       <div class="auth-form-panel">
       <div class="auth-card">
         <div class="auth-icon">${_ICON_LOCK_PLUS}</div>
-        <div class="auth-title">Set up your workspace</div>
+        <div class="auth-title">Create the first examiner account</div>
         <div class="auth-subtitle">
-          Create a password to protect access to this forensic tool.<br>
-          <strong>Minimum 12 characters.</strong> The password will be stored only as a bcrypt hash.
+          This becomes the first login for this installation. You can add more examiner accounts
+          later, from inside the tool.<br><strong>${_PASSWORD_RULE_TEXT}</strong>
         </div>
 
         <form id="setup-form" novalidate autocomplete="off">
           <div class="form-group">
-            <label for="setup-password">Access Password</label>
+            <label for="setup-username">Username</label>
+            <input
+              type="text"
+              id="setup-username"
+              class="form-control"
+              placeholder="e.g. your name or badge number"
+              autocomplete="username"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="setup-password">Password</label>
             <input
               type="password"
               id="setup-password"
@@ -101,7 +122,7 @@ function renderSetupScreen() {
           </div>
 
           <button type="submit" id="btn-setup" class="btn btn-primary btn-lg w-full mt-sm">
-            Set Password &amp; Open Tool ${icon('arrow-right')}
+            Create Account &amp; Open Tool ${icon('arrow-right')}
           </button>
         </form>
       </div>
@@ -117,11 +138,12 @@ function renderSetupScreen() {
     e.preventDefault();
     errEl.style.display = 'none';
 
+    const username = document.getElementById('setup-username').value.trim();
     const pw  = document.getElementById('setup-password').value;
     const pw2 = document.getElementById('setup-confirm').value;
 
-    if (pw.length < 12) {
-      errMsg.textContent = 'Password must be at least 12 characters long.';
+    if (!username) {
+      errMsg.textContent = 'Choose a username.';
       errEl.style.display = 'flex';
       return;
     }
@@ -135,20 +157,20 @@ function renderSetupScreen() {
     btnSetup.innerHTML = '<span class="btn-spinner"></span> Setting up…';
 
     try {
-      await API.setupPassword(pw);
+      await API.setupAccount(username, pw);
       _restoreChromeAfterAuth();
       navigateTo('dashboard');
       initUpdateBanner();
     } catch (err) {
-      const isAlreadySet = err.message && err.message.toLowerCase().includes('already set');
+      const isAlreadySet = err.message && err.message.toLowerCase().includes('already exists');
       if (isAlreadySet) {
-        errMsg.innerHTML = 'Password is already set. <a href="#" data-nav="login" class="link-cyan">Go to sign in</a>';
+        errMsg.innerHTML = 'An account already exists. <a href="#" data-nav="login" class="link-cyan">Go to sign in</a>';
       } else {
         errMsg.textContent = err.message || 'Setup failed. Please try again.';
       }
       errEl.style.display = 'flex';
       btnSetup.disabled = false;
-      btnSetup.innerHTML = 'Set Password &amp; Open Tool ' + icon('arrow-right');
+      btnSetup.innerHTML = 'Create Account &amp; Open Tool ' + icon('arrow-right');
     }
   };
 }
@@ -179,7 +201,18 @@ function renderLoginScreen() {
 
         <form id="login-form" novalidate autocomplete="off">
           <div class="form-group">
-            <label for="login-password">Access Password</label>
+            <label for="login-username">Username</label>
+            <input
+              type="text"
+              id="login-username"
+              class="form-control"
+              placeholder="Enter your username"
+              autocomplete="username"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="login-password">Password</label>
             <input
               type="password"
               id="login-password"
@@ -205,6 +238,12 @@ function renderLoginScreen() {
             Sign in ${icon('arrow-right')}
           </button>
         </form>
+
+        <div class="auth-forgot-note">
+          Forgotten your password? An examiner cannot reset it from this screen — an offline tool
+          has nowhere to send a reset email. Whoever has terminal access to this machine can run
+          <code>tools/reset_user_password.py</code> to set a new one.
+        </div>
       </div>
       </div>
     </div>`;
@@ -215,7 +254,9 @@ function renderLoginScreen() {
   const btnLogin  = document.getElementById('btn-login');
   const lockoutEl = document.getElementById('lockout-banner');
   const countdownEl = document.getElementById('lockout-countdown');
+  const totpGroup = document.getElementById('totp-group');
   let _lockoutTimer = null;
+  let totpRequired = false;   // only known AFTER a correct password reveals it (2FA is per-account)
 
   function _startLockoutCountdown(seconds) {
     lockoutEl.style.display = 'flex';
@@ -236,20 +277,14 @@ function renderLoginScreen() {
     }, 1000);
   }
 
-  // Show the code field only when two-factor authentication is switched on.
-  let totpRequired = false;
-  API.authStatus().then((st) => {
-    totpRequired = !!st.totp_enabled;
-    if (totpRequired) document.getElementById('totp-group').style.display = 'block';
-  }).catch(() => {});
-
   form.onsubmit = async (e) => {
     e.preventDefault();
     errEl.style.display = 'none';
 
+    const username = document.getElementById('login-username').value.trim();
     const pw = document.getElementById('login-password').value;
-    if (!pw) {
-      errMsg.textContent = 'Password is required.';
+    if (!username || !pw) {
+      errMsg.textContent = 'Username and password are required.';
       errEl.style.display = 'flex';
       return;
     }
@@ -264,11 +299,24 @@ function renderLoginScreen() {
     btnLogin.innerHTML = '<span class="btn-spinner"></span> Verifying…';
 
     try {
-      const result = await API.login(pw, totpCode);
+      const result = await API.login(username, pw, totpCode);
 
       if (result.locked) {
         _startLockoutCountdown(result.retry_after || 60);
         btnLogin.innerHTML = 'Sign in ' + icon('arrow-right');
+        return;
+      }
+
+      if (result.totp_required) {
+        // Correct username/password; this account has 2FA — reveal the code field and ask
+        // again without treating this as a failure or clearing what was typed.
+        totpRequired = true;
+        totpGroup.style.display = 'block';
+        errMsg.textContent = 'Enter your two-factor authentication code to finish signing in.';
+        errEl.style.display = 'flex';
+        btnLogin.disabled = false;
+        btnLogin.innerHTML = 'Sign in ' + icon('arrow-right');
+        document.getElementById('login-totp').focus();
         return;
       }
 
@@ -285,7 +333,9 @@ function renderLoginScreen() {
         btnLogin.innerHTML = 'Sign in ' + icon('arrow-right');
       } else {
         // Always show the same message regardless of failure reason
-        errMsg.textContent = totpRequired ? 'Incorrect password or authentication code.' : 'Incorrect password.';
+        errMsg.textContent = totpRequired
+          ? 'Incorrect username, password, or authentication code.'
+          : 'Incorrect username or password.';
         errEl.style.display = 'flex';
         btnLogin.disabled = false;
         btnLogin.innerHTML = 'Sign in ' + icon('arrow-right');

@@ -147,7 +147,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     const status = await API.authStatus();
-    if (!status.password_set) {
+    if (!status.has_account) {
       navigateTo('setup');
     } else if (!status.authenticated) {
       navigateTo('login');

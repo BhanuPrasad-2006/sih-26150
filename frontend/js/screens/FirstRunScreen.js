@@ -141,7 +141,7 @@ async function renderFirstRunScreen(status) {
           }
           // First run is done — hand off to the normal auth flow (setup/login/dashboard).
           const authStatus = await API.authStatus();
-          if (!authStatus.password_set) navigateTo('setup');
+          if (!authStatus.has_account) navigateTo('setup');
           else if (!authStatus.authenticated) navigateTo('login');
           else navigateTo('dashboard');
         } catch (err) {

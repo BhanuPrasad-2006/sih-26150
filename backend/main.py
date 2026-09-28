@@ -57,7 +57,7 @@ load_dotenv()
 from backend import local_config
 from backend.acquisition import AcquisitionError, EvidenceImage, verify_disk_image_integrity
 from backend.audit import AuditLog
-from backend.auth import AuthManager
+from backend.auth import AuthManager, UsernameTakenError, validate_password_strength, validate_username
 from backend.database import (
     Database,
     DuplicateCaseNumberError,
@@ -123,6 +123,16 @@ log = logging.getLogger("main")
 # ── Constants ─────────────────────────────────────────────────────────────────
 
 SESSION_COOKIE_NAME = "sih_session"
+
+
+def _current_username(request: Request) -> str:
+    """
+    The examiner making this request. Every non-exempt route already passed AuthMiddleware
+    (a valid session is guaranteed), so this should always resolve — the fallback string only
+    protects against a logic error elsewhere rather than ever being expected in practice.
+    """
+    token = request.cookies.get(SESSION_COOKIE_NAME)
+    return auth.session_username(token) or "unknown-examiner"
 
 # Endpoints that do NOT require an authenticated session.
 # Everything else under /api/* is protected.
@@ -495,6 +505,7 @@ async def _run_scan(case_id: str, evidence_id: str) -> None:
 # ── Auth API routes ───────────────────────────────────────────────────────────
 
 class LoginRequest(BaseModel):
+    username: str
     password: str
     totp_code: Optional[str] = None
 
@@ -509,14 +520,36 @@ class TotpDisableRequest(BaseModel):
 
 
 class SetupRequest(BaseModel):
+    """First-run only: creates the very first examiner account (unauthenticated bootstrap)."""
+    username: str
     password: str
+
+    @field_validator("username")
+    @classmethod
+    def _validate_username(cls, v: str) -> str:
+        return validate_username(v)
 
     @field_validator("password")
     @classmethod
     def _validate_password(cls, v: str) -> str:
-        if len(v) < 12:
-            raise ValueError("Password must be at least 12 characters long.")
-        return v
+        return validate_password_strength(v)
+
+
+class SignupRequest(BaseModel):
+    """Adds another examiner account. Requires an existing logged-in session (see
+    _AUTH_EXEMPT_PATHS: this route is NOT exempt), unlike SetupRequest's first-run bootstrap."""
+    username: str
+    password: str
+
+    @field_validator("username")
+    @classmethod
+    def _validate_username(cls, v: str) -> str:
+        return validate_username(v)
+
+    @field_validator("password")
+    @classmethod
+    def _validate_password(cls, v: str) -> str:
+        return validate_password_strength(v)
 
 
 @app.get("/api/version")
@@ -625,13 +658,14 @@ async def auth_status():
     """
     Unauthenticated endpoint — lets the frontend decide on first load whether
     to show the setup screen, login screen, or dashboard.
-    Returns: {password_set: bool, authenticated: bool}
+    Returns: {has_account: bool, authenticated: bool}
+
+    totp_enabled is deliberately NOT reported here any more: two-factor is now per-examiner, so
+    whether it applies cannot be known before a username is submitted (see /api/auth/login,
+    which returns totp_required on the attempt that needs it).
     """
-    # We can't read the cookie in a plain route without Request; use Request param
-    # to match middleware expectation.  This route is exempt from middleware auth.
     return {
-        "password_set": auth.is_password_set(),
-        "totp_enabled": auth.totp_enabled(),
+        "has_account": auth.has_any_user(),
         "authenticated": False,  # client-side always checks cookie via middleware
     }
 
@@ -640,34 +674,41 @@ async def auth_status():
 async def auth_status_with_session(request: Request):
     """
     Same as /api/auth/status but also reports whether the current session cookie
-    is valid.  Used by the frontend to handle mid-session expiry redirects.
+    is valid, and who it belongs to.  Used by the frontend to handle mid-session
+    expiry redirects and to show "signed in as ...".
     Exempt from middleware (checked manually here).
     """
     token = request.cookies.get(SESSION_COOKIE_NAME)
+    authenticated = auth.validate_session(token)
     return {
-        "password_set": auth.is_password_set(),
-        "totp_enabled": auth.totp_enabled(),
-        "authenticated": auth.validate_session(token),
+        "has_account": auth.has_any_user(),
+        "authenticated": authenticated,
+        "username": auth.session_username(token) if authenticated else None,
     }
 
 
 @app.post("/api/auth/setup")
 async def setup_password(req: SetupRequest, response: Response, request: Request):
     """
-    First-run endpoint: set the examiner password.
-    Only works when no password has been set yet.
-    After setting the password, a session is created automatically.
+    First-run endpoint: create the very first examiner account.
+    Only works when no account exists yet — after that, use /api/auth/signup (which requires an
+    existing session) to add more examiners, or /api/auth/login to sign in as one that exists.
+    After creating the account, a session is created automatically.
     """
-    was_set = await asyncio.to_thread(auth.set_password_if_unset, req.password)
-    if not was_set:
-        raise HTTPException(400, "Password is already set. Use the login endpoint.")
+    try:
+        was_created = await asyncio.to_thread(auth.create_first_user_if_none_exist, req.username, req.password)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    if not was_created:
+        raise HTTPException(400, "An account already exists. Use the login screen, or ask an "
+                                  "existing examiner to add you from inside the tool.")
 
     # Auto-login after setup
-    token = auth.create_session()
-    auth.record_success()
+    token = auth.create_session(req.username)
+    auth.record_success(req.username)
 
     # Audit: no password details logged
-    _global_audit_event("examiner_password_set", "First-run password created")
+    _global_audit_event("examiner_account_created", f"username={req.username} (first-run)")
 
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
@@ -682,19 +723,49 @@ async def setup_password(req: SetupRequest, response: Response, request: Request
     return {"ok": True}
 
 
+@app.post("/api/auth/signup")
+async def signup(req: SignupRequest, request: Request):
+    """
+    Add another examiner account. NOT exempt from AuthMiddleware — the caller must already be
+    logged in as an existing examiner, so a stranger with network access to the tool cannot mint
+    themselves an account. Does not log the new account in; the creator stays signed in as
+    themselves and shares the new username/password with whoever it is for.
+    """
+    creator = _current_username(request)
+    try:
+        await asyncio.to_thread(auth.create_user, req.username, req.password)
+    except UsernameTakenError as exc:
+        raise HTTPException(409, str(exc))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    _global_audit_event("examiner_account_created", f"username={req.username} (added by {creator})")
+    return {"ok": True}
+
+
+@app.get("/api/auth/examiners")
+async def list_examiners():
+    """Authenticated: every examiner account's username, for the 'Add examiner' screen and for
+    general transparency about who has access to this installation."""
+    return {"usernames": auth.list_usernames()}
+
+
 @app.post("/api/auth/login")
 async def login(req: LoginRequest, response: Response, request: Request):
     """
     Login endpoint. Protected against brute force by per-account lockout.
 
     Security properties:
-      • Error message is always "Incorrect password." — never reveals whether
-        an account exists or why the check failed.
+      • Error message never reveals whether the username exists or which field was wrong.
       • Attempted password is NEVER logged, not even on failure.
-      • Audit entry records only: timestamp (via AuditLog) + attempt count.
+      • Audit entry records only: timestamp (via AuditLog) + username + attempt count.
+      • A password that is correct but belongs to a 2FA-enabled account, submitted with no code
+        yet, returns totp_required rather than failing outright or counting as a failed attempt —
+        the frontend re-prompts for the code without the user needing to re-type the password.
     """
+    username = (req.username or "").strip()
+
     # Check lockout BEFORE verifying password
-    locked, retry_after = auth.is_locked_out()
+    locked, retry_after = auth.is_locked_out(username)
     if locked:
         return JSONResponse(
             {"locked": True, "retry_after": retry_after,
@@ -702,23 +773,26 @@ async def login(req: LoginRequest, response: Response, request: Request):
             status_code=429,
         )
 
-    # Verify password (constant-time bcrypt comparison)
-    ok = await asyncio.to_thread(auth.verify_password, req.password)
-    # Second factor: checked whenever it is enabled; a wrong password OR a wrong code gets the same reply.
-    # The code is only checked (and so consumed) once the password is right, so a typo in the password does not
-    # burn a valid code.
-    if ok and auth.totp_enabled():
-        remaining_before = auth.recovery_codes_remaining()
-        ok = await asyncio.to_thread(auth.verify_second_factor, req.totp_code or "")
-        if ok and auth.recovery_codes_remaining() < remaining_before:
-            _global_audit_event("recovery_code_used", f"remaining={auth.recovery_codes_remaining()}")
+    # Verify password (constant-time-enough bcrypt comparison)
+    ok = await asyncio.to_thread(auth.verify_credentials, username, req.password)
+
+    if ok and auth.totp_enabled(username):
+        code = (req.totp_code or "").strip()
+        if not code:
+            # Correct password, but this account needs a second factor and none was sent yet —
+            # not a failed attempt, just an incomplete one.
+            return {"ok": False, "totp_required": True}
+        remaining_before = auth.recovery_codes_remaining(username)
+        ok = await asyncio.to_thread(auth.verify_second_factor, username, code)
+        if ok and auth.recovery_codes_remaining(username) < remaining_before:
+            _global_audit_event("recovery_code_used", f"username={username} remaining={auth.recovery_codes_remaining(username)}")
 
     if not ok:
-        failure_count, just_locked = auth.record_failure()
-        # Audit: timestamp and count only — NO password content
+        failure_count, just_locked = auth.record_failure(username)
+        # Audit: timestamp, username and count only — NO password content
         _global_audit_event(
             "login_failure",
-            f"attempt={failure_count} locked={just_locked}",
+            f"username={username} attempt={failure_count} locked={just_locked}",
         )
         if just_locked:
             return JSONResponse(
@@ -727,17 +801,16 @@ async def login(req: LoginRequest, response: Response, request: Request):
                 status_code=429,
             )
         return JSONResponse(
-            {"ok": False, "detail": ("Incorrect password or authentication code." if auth.totp_enabled()
-                                     else "Incorrect password.")},
+            {"ok": False, "detail": "Incorrect username, password, or authentication code."},
             status_code=401,
         )
 
     # Success
-    token = auth.create_session()
-    auth.record_success()
+    token = auth.create_session(username)
+    auth.record_success(username)
 
     # Audit: success, no credentials
-    _global_audit_event("login_success", "Examiner authenticated")
+    _global_audit_event("login_success", f"username={username}")
 
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
@@ -749,18 +822,20 @@ async def login(req: LoginRequest, response: Response, request: Request):
         max_age=None,           # Session cookie
         secure=(request.url.scheme == "https"),   # Secure whenever the session is served over HTTPS
     )
-    return {"ok": True}
+    return {"ok": True, "username": auth.get_username_display(username)}
 
 
 @app.get("/api/auth/totp")
-async def totp_status():
-    return {"enabled": auth.totp_enabled(), "recovery_codes_remaining": auth.recovery_codes_remaining()}
+async def totp_status(request: Request):
+    username = _current_username(request)
+    return {"enabled": auth.totp_enabled(username), "recovery_codes_remaining": auth.recovery_codes_remaining(username)}
 
 
 @app.post("/api/auth/totp/enroll")
-async def totp_enroll():
+async def totp_enroll(request: Request):
+    username = _current_username(request)
     try:
-        secret = await asyncio.to_thread(auth.begin_totp_enrollment)
+        secret = await asyncio.to_thread(auth.begin_totp_enrollment, username)
     except ValueError as exc:
         raise HTTPException(409, str(exc))
     return {"secret": secret, "otpauth_uri": totp_mod.otpauth_uri(secret),
@@ -769,34 +844,37 @@ async def totp_enroll():
 
 @app.post("/api/auth/totp/confirm")
 async def totp_confirm(req: TotpConfirmRequest, request: Request):
-    codes = await asyncio.to_thread(auth.confirm_totp, req.code)
+    username = _current_username(request)
+    codes = await asyncio.to_thread(auth.confirm_totp, username, req.code)
     if codes is None:
         raise HTTPException(400, "That code is not valid. Check the app's clock and try the current code.")
-    ended = auth.invalidate_other_sessions(request.cookies.get(SESSION_COOKIE_NAME))
-    _global_audit_event("totp_enabled", f"Two-factor authentication enabled; other sessions ended={ended}")
+    ended = auth.invalidate_other_sessions_for_user(username, request.cookies.get(SESSION_COOKIE_NAME))
+    _global_audit_event("totp_enabled", f"username={username}; other sessions for this examiner ended={ended}")
     return {"enabled": True, "recovery_codes": codes,
             "note": "Store these one-time recovery codes offline. They are shown only once."}
 
 
 @app.post("/api/auth/totp/recovery-codes")
-async def totp_new_recovery_codes(req: TotpDisableRequest):
-    """Replace all recovery codes. Needs the password and a current authenticator code."""
-    if not (await asyncio.to_thread(auth.verify_password, req.password)
-            and await asyncio.to_thread(auth.verify_second_factor, req.code)):
+async def totp_new_recovery_codes(req: TotpDisableRequest, request: Request):
+    """Replace all recovery codes. Needs the current examiner's own password and a current authenticator code."""
+    username = _current_username(request)
+    if not (await asyncio.to_thread(auth.verify_credentials, username, req.password)
+            and await asyncio.to_thread(auth.verify_second_factor, username, req.code)):
         raise HTTPException(401, "Password or authentication code is incorrect.")
-    codes = await asyncio.to_thread(auth.regenerate_recovery_codes)
-    _global_audit_event("recovery_codes_regenerated", "Old recovery codes are void")
+    codes = await asyncio.to_thread(auth.regenerate_recovery_codes, username)
+    _global_audit_event("recovery_codes_regenerated", f"username={username}; old recovery codes are void")
     return {"recovery_codes": codes}
 
 
 @app.post("/api/auth/totp/disable")
 async def totp_disable(req: TotpDisableRequest, request: Request):
-    if not (await asyncio.to_thread(auth.verify_password, req.password)
-            and await asyncio.to_thread(auth.verify_second_factor, req.code)):
+    username = _current_username(request)
+    if not (await asyncio.to_thread(auth.verify_credentials, username, req.password)
+            and await asyncio.to_thread(auth.verify_second_factor, username, req.code)):
         raise HTTPException(401, "Password or authentication code is incorrect.")
-    await asyncio.to_thread(auth.disable_totp)
-    ended = auth.invalidate_other_sessions(request.cookies.get(SESSION_COOKIE_NAME))
-    _global_audit_event("totp_disabled", f"Two-factor authentication disabled; other sessions ended={ended}")
+    await asyncio.to_thread(auth.disable_totp, username)
+    ended = auth.invalidate_other_sessions_for_user(username, request.cookies.get(SESSION_COOKIE_NAME))
+    _global_audit_event("totp_disabled", f"username={username}; other sessions for this examiner ended={ended}")
     return {"enabled": False}
 
 
@@ -807,8 +885,9 @@ async def logout(request: Request, response: Response):
     cookie itself is the proof of identity.
     """
     token = request.cookies.get(SESSION_COOKIE_NAME)
+    username = auth.session_username(token)
     auth.invalidate_session(token)
-    _global_audit_event("logout", "Session invalidated")
+    _global_audit_event("logout", f"username={username}")
     response.delete_cookie(SESSION_COOKIE_NAME)
     return {"ok": True}
 
@@ -1802,7 +1881,7 @@ async def security_status_endpoint(request: Request):
                    if (models_dir / n).is_file())
     checks = await asyncio.to_thread(
         security_status.run_checks,
-        totp_enabled=auth.totp_enabled(), recovery_remaining=auth.recovery_codes_remaining(),
+        totp_enabled=auth.totp_enabled(_current_username(request)), recovery_remaining=auth.recovery_codes_remaining(_current_username(request)),
         https=request.url.scheme == "https", case_dir=case_base,
         evidence_roots=security_module_roots(), seal_states=seals, model_ok=model_ok,
         acquisition_enabled=_local_acquisition_enabled())
