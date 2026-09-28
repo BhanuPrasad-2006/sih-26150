@@ -6,6 +6,7 @@ Checks:
   2. ffmpeg on PATH (needed for export and ffprobe validation)
   3. ffprobe on PATH (needed to validate exported files)
   4. Required Python packages are importable
+  5. Database connectivity (Supabase or Postgres, depending on env)
 
 Usage:
   python backend/startup_check.py
@@ -16,6 +17,7 @@ import sys
 import shutil
 import subprocess
 import importlib
+import os
 
 
 def check_python_version() -> bool:
@@ -61,9 +63,50 @@ def check_package(pkg: str, install_name: str | None = None) -> bool:
         return False
 
 
+def check_db_connectivity() -> bool:
+    """
+    Check connectivity to the configured database backend.
+    Priority: Supabase anon key → Postgres direct → local fallback (no check needed).
+    """
+    from dotenv import load_dotenv
+    load_dotenv()
+
+    supabase_url = os.environ.get("SUPABASE_URL", "").strip()
+    anon_key = os.environ.get("SUPABASE_ANON_KEY", "").strip()
+    database_url = os.environ.get("DATABASE_URL", "").strip()
+
+    if supabase_url and anon_key:
+        try:
+            from supabase import create_client
+            client = create_client(supabase_url, anon_key)
+            # Simple connectivity probe — list zero rows from cases table
+            client.table("cases").select("case_id").limit(0).execute()
+            print(f"  ✓  Supabase connection OK ({supabase_url})")
+            return True
+        except Exception as e:
+            print(f"  ✗ FAIL  Supabase connection failed: {e}")
+            print(f"          Check SUPABASE_URL and SUPABASE_ANON_KEY in .env")
+            return False
+
+    if database_url:
+        try:
+            import psycopg2
+            conn = psycopg2.connect(database_url, connect_timeout=5)
+            conn.close()
+            print(f"  ✓  Postgres connection OK")
+            return True
+        except Exception as e:
+            print(f"  ✗ FAIL  Postgres connection failed: {e}")
+            print(f"          Check DATABASE_URL in .env")
+            return False
+
+    print(f"  ℹ  No cloud database configured — running in local-only mode")
+    print(f"     (Set SUPABASE_URL + SUPABASE_ANON_KEY in .env for cloud-backed operation)")
+    return True  # local mode is valid; not a failure
+
+
 def check_case_dir() -> None:
     """Warn if the configured case directory is inside OneDrive."""
-    import os
     case_dir = os.environ.get("FORENSIC_CASE_DIR", "")
     if not case_dir:
         if os.name == "nt":
@@ -71,7 +114,6 @@ def check_case_dir() -> None:
         else:
             case_dir = os.path.expanduser("~/sih_cases")
         print(f"  ℹ  Case directory (default): {case_dir}")
-
     else:
         print(f"  ℹ  Case directory (FORENSIC_CASE_DIR): {case_dir}")
 
@@ -88,7 +130,7 @@ def check_case_dir() -> None:
 
 def main() -> int:
     print("=" * 60)
-    print("  SIH26150 — DVR/NVR Forensic Tool — startup check")
+    print("  SIH26150 — DVR/NVR Forensic Analysis Tool — startup check")
     print("=" * 60)
 
     all_ok = True
@@ -102,24 +144,35 @@ def main() -> int:
 
     print("\n[3] Python packages")
     packages = [
-        ("fastapi",       "fastapi"),
-        ("uvicorn",       "uvicorn[standard]"),
-        ("aiosqlite",     "aiosqlite"),
-        ("reportlab",     "reportlab"),
-        ("multipart",     "python-multipart"),
-        ("aiofiles",      "aiofiles"),
-        ("pydantic",      "pydantic"),
-        ("bcrypt",        "bcrypt"),
+        ("fastapi",      "fastapi"),
+        ("uvicorn",      "uvicorn[standard]"),
+        ("reportlab",    "reportlab"),
+        ("multipart",    "python-multipart"),
+        ("aiofiles",     "aiofiles"),
+        ("pydantic",     "pydantic"),
+        ("bcrypt",       "bcrypt"),
+        ("supabase",     "supabase"),
+        ("psycopg2",     "psycopg2-binary"),
+        ("webview",      "pywebview"),
     ]
     for mod, pip_name in packages:
-        all_ok &= check_package(mod, pip_name)
+        # webview and supabase are non-critical in a dev/server environment
+        result = check_package(mod, pip_name)
+        if mod in ("webview",):
+            if not result:
+                print(f"         (optional for desktop window — not required for server mode)")
+        else:
+            all_ok &= result
 
-    print("\n[4] Case directory")
+    print("\n[4] Database connectivity")
+    all_ok &= check_db_connectivity()
+
+    print("\n[5] Case directory")
     check_case_dir()
 
     print()
     if all_ok:
-        print("✓  All checks passed. Safe to start the server.\n")
+        print("✓  All checks passed. Safe to start the application.\n")
         return 0
     else:
         print("✗  One or more checks failed. Fix the issues above before starting.\n")

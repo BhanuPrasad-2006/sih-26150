@@ -148,15 +148,65 @@ _AUTH_EXEMPT_PATHS = {
 
 # ── Global state ──────────────────────────────────────────────────────────────
 
+def _load_bundled_config() -> None:
+    """
+    In a PyInstaller frozen build, load client-safe Supabase credentials that
+    were baked in at build time by packaging/bundle_env.py.
+
+    These are the Supabase project URL and anon key — designed to be embedded
+    in client apps and protected by Row Level Security (RLS). The Postgres
+    password (DATABASE_URL) is never bundled.
+
+    Does nothing in a normal source/dev run (env vars set via .env are already
+    loaded by load_dotenv() above).
+    """
+    if not getattr(__import__("sys"), "_MEIPASS", None):
+        return  # not a frozen build — skip
+    if os.environ.get("SUPABASE_URL") and os.environ.get("SUPABASE_ANON_KEY"):
+        return  # already set (e.g. by the OS / the user's own env override)
+    try:
+        from backend import _bundled_config  # noqa: PLC0415
+        if _bundled_config.SUPABASE_URL:
+            os.environ.setdefault("SUPABASE_URL", _bundled_config.SUPABASE_URL)
+        if _bundled_config.SUPABASE_ANON_KEY:
+            os.environ.setdefault("SUPABASE_ANON_KEY", _bundled_config.SUPABASE_ANON_KEY)
+    except ImportError:
+        pass  # bundled config not present — fall through to local-only mode
+
+
+_load_bundled_config()
+
+
 def _create_database():
     """
-    Postgres (Supabase) when DATABASE_URL is set, SQLite otherwise.
-    SQLite remains the zero-config local/offline fallback.
+    Database backend selection (in priority order):
+
+    1. Supabase client (anon key) — used by the desktop installer build.
+       Set SUPABASE_URL + SUPABASE_ANON_KEY (client-safe; no Postgres password).
+       Baked in at build time by packaging/bundle_env.py.
+
+    2. Postgres direct connection (psycopg2) — for developer / server use.
+       Set DATABASE_URL in .env. The raw Postgres password stays server-side.
+
+    3. Local offline fallback — no cloud credentials needed.
+       All case data is stored locally on the user's machine.
+       Evidence files always remain local regardless of which backend is active.
     """
+    supabase_url = os.environ.get("SUPABASE_URL", "").strip()
+    anon_key = os.environ.get("SUPABASE_ANON_KEY", "").strip()
+    if supabase_url and anon_key:
+        from backend.db_supabase_client import SupabaseDatabase
+        return SupabaseDatabase(supabase_url, anon_key)
+
     database_url = os.environ.get("DATABASE_URL", "").strip()
     if database_url:
         from backend.db_postgres import PostgresDatabase
         return PostgresDatabase(database_url)
+
+    log.warning(
+        "No cloud database credentials found. Running in local-only mode. "
+        "Set SUPABASE_URL + SUPABASE_ANON_KEY for cloud-backed operation."
+    )
     return Database()
 
 

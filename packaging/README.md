@@ -11,14 +11,26 @@ every build output are all gitignored (the ffmpeg binaries alone are ~200 MB).
 - Python 3.11+ with this project's `requirements.txt` installed (the normal dev setup)
 - `pip install pyinstaller`
 - [Inno Setup 6](https://jrsoftware.org/isinfo.php) (`winget install JRSoftware.InnoSetup`)
+- `SUPABASE_URL` and `SUPABASE_ANON_KEY` set in `.env`  
+  Get them from: **Supabase Dashboard → Settings → API**  
+  (`Project URL` and `anon public` key — client-safe credentials, no Postgres password needed)
 
 ## Build
 
 From the repository root:
 
 ```cmd
+REM Step 1: Fetch bundled ffmpeg binaries (~200 MB, downloaded once)
 python packaging\fetch_ffmpeg.py
+
+REM Step 2: Bake client-safe Supabase credentials into the frozen build
+REM (reads SUPABASE_URL + SUPABASE_ANON_KEY from .env — NOT the Postgres password)
+python packaging\bundle_env.py
+
+REM Step 3: Build the frozen app with PyInstaller
 pyinstaller packaging\sih_desktop.spec --noconfirm --distpath packaging\dist --workpath packaging\build
+
+REM Step 4: Wrap into a Windows installer with Inno Setup
 "C:\Users\%USERNAME%\AppData\Local\Programs\Inno Setup 6\ISCC.exe" packaging\sih_installer.iss
 ```
 

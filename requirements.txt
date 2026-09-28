@@ -1,6 +1,5 @@
 fastapi>=0.111.0
 uvicorn[standard]>=0.29.0
-aiosqlite>=0.20.0
 reportlab>=4.2.0
 python-multipart>=0.0.31   # earlier versions have known vulnerabilities (pip-audit)
 starlette>=1.3.1             # same
@@ -13,8 +12,14 @@ httpx>=0.27.0
 opencv-python-headless>=4.9.0
 numpy>=1.26.0
 
-# Postgres (Supabase) backend — optional; SQLite is used when DATABASE_URL
-# is unset. See .env.example.
+# Desktop application window (wraps the local FastAPI server in a native OS window)
+pywebview>=5.0
+
+# Supabase client backend — used by the desktop installer build.
+# Connects via the anon key (client-safe; no Postgres password required).
+supabase>=2.0.0
+
+# Postgres direct connection — for developer/server use with DATABASE_URL in .env.
 psycopg2-binary>=2.9.9
 python-dotenv>=1.0.1
 
@@ -23,3 +28,8 @@ cryptography>=49.0.0   # 46.x has known vulnerabilities (pip-audit)
 
 # Embedded PDF signatures
 pyhanko>=0.30.0
+
+# ── Optional: local offline fallback ──────────────────────────────────────────
+# aiosqlite is an internal fallback for air-gapped environments with no cloud
+# access. It is not required for the normal desktop installer build.
+# aiosqlite>=0.20.0

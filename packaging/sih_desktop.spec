@@ -36,10 +36,17 @@ hiddenimports = [
     "uvicorn.protocols.websockets.auto",
     "uvicorn.lifespan.on",
     # pywebview picks its Windows backend the same way.
+    "webview",
     "webview.platforms.edgechromium",
-    # Database backends selected by a runtime string (DATABASE_URL set or not).
+    # Supabase client backend (anon key — no Postgres password).
+    "supabase",
+    "supabase._sync.client",
+    "gotrue",
+    "httpx",
+    # Postgres direct connection (dev/server builds — kept for completeness).
     "psycopg2",
-    "aiosqlite",
+    # Bundled config written by packaging/bundle_env.py at build time.
+    "backend._bundled_config",
 ]
 
 a = Analysis(
