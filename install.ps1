@@ -8,7 +8,7 @@ $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 $RELEASE_URL = "https://github.com/BhanuPrasad-2006/sih-26150/releases/download/v1.0.0/SIH-Forensic-Tool-Setup-1.0.0.exe"
-$EXPECTED_SHA256 = "E79DFF5C1F3895694B3C0BE4469C9A444A4229942941CAD223DAE3135DD1E333"
+$EXPECTED_SHA256 = "A3C8A92AE72D1FF8B489E0F324D3B744F358AD6D5901869FB86536286EDC5780"
 $SETUP_FILE = "$env:TEMP\SIH-Forensic-Tool-Setup.exe"
 
 Write-Host ""
