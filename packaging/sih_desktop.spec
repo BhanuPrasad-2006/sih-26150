@@ -41,7 +41,6 @@ hiddenimports = [
     # Supabase client backend (anon key — no Postgres password).
     "supabase",
     "supabase._sync.client",
-    "gotrue",
     "httpx",
     # Postgres direct connection (dev/server builds — kept for completeness).
     "psycopg2",
