@@ -351,7 +351,17 @@ body {
   border-top: 1px solid var(--nav-border);
 }
 .sidebar-foot b { color: var(--nav-text); font-weight: 600; }
-.sidebar-version { padding: 0 14px 12px; font-size: 10.5px; color: var(--nav-dim); text-align: right; }
+.sidebar-version {
+  display: block; width: 100%; padding: 0 14px 12px; margin: 0; font-size: 10.5px; color: var(--nav-dim);
+  text-align: right; background: none; border: none; cursor: pointer; font-family: inherit;
+}
+.sidebar-version:hover { color: var(--nav-text); text-decoration: underline; }
+
+.about-rows { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+.about-row { display: flex; justify-content: space-between; gap: 16px; font-size: 13.5px; color: var(--text-muted); }
+.about-row b { color: var(--text-main); font-weight: 600; text-align: right; }
+.about-path { word-break: break-all; }
+.about-note { font-size: 12.5px; color: var(--text-muted); line-height: 1.55; border-top: 1px solid var(--border-color); padding-top: 12px; }
 
 /* Content */
 .content-root { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 30px 36px 64px; min-width: 0; }

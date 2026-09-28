@@ -48,7 +48,7 @@ function renderSidebar(activeScreen = 'dashboard', currentCaseId = null, current
       ${renderItems(caseItems)}
     ` : ''}
     <div class="sidebar-foot"><b>Evidence stays read-only.</b><br>Every action is hashed into a tamper-evident audit log.</div>
-    <div class="sidebar-version" id="sidebar-version">${_sidebarAppVersion ? `v${_sidebarAppVersion}` : ''}</div>
+    <button type="button" class="sidebar-version" id="sidebar-version">${_sidebarAppVersion ? `v${_sidebarAppVersion}` : ''}</button>
   `;
 
   const allItems = [...globalItems, ...caseItems];
@@ -57,4 +57,27 @@ function renderSidebar(activeScreen = 'dashboard', currentCaseId = null, current
     const item = allItems.find(i => i.id === screenId);
     if (item) el.addEventListener('click', item.action);
   });
+
+  document.getElementById('sidebar-version').addEventListener('click', showAboutModal);
+}
+
+async function showAboutModal() {
+  showModal('About this tool', '<p>Loading…</p>');
+  try {
+    const info = await (await fetch('/api/app-info')).json();
+    showModal('About this tool', `
+      <div class="about-rows">
+        <div class="about-row"><span>Version</span><b>v${info.version}</b></div>
+        <div class="about-row"><span>Database</span><b>${info.database_backend}</b></div>
+        <div class="about-row"><span>Case data folder</span><b class="about-path">${info.case_dir}</b></div>
+        <div class="about-row"><span>Terms accepted</span><b>v${info.terms_version_accepted || '—'}</b></div>
+      </div>
+      <p class="about-note">This tool runs entirely on this computer. Evidence images are opened
+      read-only and never leave the folder above unless you configure a remote database yourself.
+      Prototype built for Smart India Hackathon (SIH26150) — not certified for forensic use;
+      always corroborate PARTIAL/UNCERTAIN results independently.</p>
+    `, [{ label: 'Close', class: 'btn-primary' }]);
+  } catch (_) {
+    showModal('About this tool', '<p>Could not load version information.</p>', [{ label: 'Close', class: 'btn-primary' }]);
+  }
 }

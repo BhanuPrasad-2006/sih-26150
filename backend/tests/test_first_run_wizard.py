@@ -64,3 +64,16 @@ def test_first_run_complete_is_reachable_with_no_session_cookie(isolated_app, te
     target = os.path.join(temp_dir, "no_session_cases")
     r = isolated_app.post("/api/setup/first-run-complete", json={"case_dir": target, "accept_terms": True})
     assert r.status_code == 200
+
+
+def test_app_info_needs_a_session(isolated_app):
+    assert isolated_app.get("/api/app-info").status_code == 401
+
+
+def test_app_info_authenticated(auth_client):
+    r = auth_client.get("/api/app-info")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["version"]
+    assert body["case_dir"]
+    assert body["database_backend"] in ("PostgreSQL (Supabase)", "SQLite (local file)")
