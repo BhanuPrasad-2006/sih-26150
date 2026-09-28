@@ -63,6 +63,7 @@ from backend.database import (
     DuplicateCaseNumberError,
     get_case_accuracy_dir,
     get_case_analysis_dir,
+    get_case_dir,
     get_case_evidence_dir,
     get_case_export_dir,
     get_case_report_dir,
@@ -522,6 +523,22 @@ class SetupRequest(BaseModel):
 async def get_app_version():
     """Unauthenticated: the running app's version, shown in the UI and used for update checks."""
     return {"version": local_config.get_version()}
+
+
+@app.get("/api/app-info")
+async def get_app_info():
+    """
+    Authenticated. Backs an in-app 'About' panel with exactly the kind of information a real
+    forensic examiner (or an auditor reviewing their work later) would want on record: which
+    build produced a given case's results, and where its data actually lives on disk.
+    """
+    database_url = os.environ.get("DATABASE_URL", "").strip()
+    return {
+        "version": local_config.get_version(),
+        "case_dir": str(get_case_dir()),
+        "database_backend": "PostgreSQL (Supabase)" if database_url else "SQLite (local file)",
+        "terms_version_accepted": local_config.load_config().get("terms_accepted_version"),
+    }
 
 
 @app.get("/api/update/check")

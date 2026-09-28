@@ -39,9 +39,13 @@ SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64compatible
 WizardStyle=modern
 UninstallDisplayIcon={app}\{#MyAppExeName}
-; This app writes its own settings under the user's home folder (~/.sih_forensic_tool), not the
-; install directory, so a per-machine (Program Files) install works cleanly without admin-write
-; workarounds at runtime.
+; Asks up front, same as Autopsy/Wireshark: "install for everyone on this computer" (elevates,
+; installs to Program Files) or "install just for me" (no admin prompt, installs to this user's
+; own AppData instead - {autopf} resolves to the right one automatically for either choice).
+; This app writes its own settings under the user's home folder (~/.sih_forensic_tool) either
+; way, never into the install directory, so both modes work cleanly at runtime with no extra code.
+PrivilegesRequired=lowest
+PrivilegesRequiredOverridesAllowed=dialog
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
