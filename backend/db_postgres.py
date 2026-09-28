@@ -42,17 +42,36 @@ from backend.models import (
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS cases (
-    case_id     TEXT PRIMARY KEY,
-    case_number TEXT NOT NULL UNIQUE,
-    examiner    TEXT NOT NULL,
-    created_at  TEXT NOT NULL,
-    notes       TEXT
+    case_id          TEXT PRIMARY KEY,
+    case_number      TEXT NOT NULL UNIQUE,
+    case_title       TEXT,
+    created_by       TEXT,
+    examiner         TEXT NOT NULL,
+    agency           TEXT,
+    fir_number       TEXT,
+    incident_date    TEXT,
+    seizure_officer  TEXT,
+    seizure_location TEXT,
+    priority         TEXT DEFAULT 'MEDIUM',
+    status           TEXT DEFAULT 'ACTIVE',
+    target_device    TEXT,
+    created_at       TEXT NOT NULL,
+    updated_at       TEXT,
+    notes            TEXT
 );
+
+CREATE INDEX IF NOT EXISTS idx_cases_created_by ON cases(created_by);
 
 CREATE TABLE IF NOT EXISTS evidence (
     evidence_id   TEXT PRIMARY KEY,
     case_id       TEXT NOT NULL REFERENCES cases(case_id),
     path          TEXT NOT NULL,
+    device_type   TEXT,
+    make_model    TEXT,
+    serial_number TEXT,
+    capacity      TEXT,
+    write_blocker TEXT,
+    evidence_tag  TEXT,
     size_bytes    BIGINT,
     sha256_before TEXT,
     md5_before    TEXT,
@@ -179,9 +198,16 @@ class PostgresDatabase:
         try:
             with self._connect() as conn:
                 conn.execute(
-                    "INSERT INTO cases(case_id, case_number, examiner, created_at, notes) "
-                    "VALUES (%s,%s,%s,%s,%s)",
-                    (case.case_id, case.case_number, case.examiner, case.created_at, case.notes),
+                    "INSERT INTO cases(case_id, case_number, examiner, created_at, notes, "
+                    " case_title, created_by, agency, fir_number, incident_date, "
+                    " seizure_officer, seizure_location, priority, status, target_device, updated_at) "
+                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                    (
+                        case.case_id, case.case_number, case.examiner, case.created_at, case.notes,
+                        case.case_title, case.created_by, case.agency, case.fir_number, case.incident_date,
+                        case.seizure_officer, case.seizure_location, case.priority, case.status,
+                        case.target_device, case.updated_at
+                    ),
                 )
         except psycopg2.errors.UniqueViolation:
             raise DuplicateCaseNumberError(case.case_number)
@@ -194,9 +220,15 @@ class PostgresDatabase:
             ).fetchone()
         return Case(**dict(row)) if row else None
 
-    def list_cases(self) -> list[Case]:
+    def list_cases(self, examiner: Optional[str] = None) -> list[Case]:
         with self._connect() as conn:
-            rows = conn.execute("SELECT * FROM cases ORDER BY created_at DESC").fetchall()
+            if examiner:
+                rows = conn.execute(
+                    "SELECT * FROM cases WHERE created_by=%s OR examiner=%s ORDER BY created_at DESC",
+                    (examiner, examiner),
+                ).fetchall()
+            else:
+                rows = conn.execute("SELECT * FROM cases ORDER BY created_at DESC").fetchall()
         return [Case(**dict(r)) for r in rows]
 
     # ── Evidence ──────────────────────────────────────────────────────────────
@@ -207,21 +239,27 @@ class PostgresDatabase:
                 "INSERT INTO evidence "
                 "(evidence_id, case_id, path, size_bytes, sha256_before, md5_before, "
                 " sha256_after, brand, brand_version, confidence, is_synthetic, created_at, "
-                " device_utc_offset_minutes) "
-                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+                " device_utc_offset_minutes, device_type, make_model, serial_number, "
+                " capacity, write_blocker, evidence_tag) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
                 "ON CONFLICT (evidence_id) DO UPDATE SET "
                 "  case_id=EXCLUDED.case_id, path=EXCLUDED.path, size_bytes=EXCLUDED.size_bytes, "
                 "  sha256_before=EXCLUDED.sha256_before, md5_before=EXCLUDED.md5_before, "
                 "  sha256_after=EXCLUDED.sha256_after, brand=EXCLUDED.brand, "
                 "  brand_version=EXCLUDED.brand_version, confidence=EXCLUDED.confidence, "
                 "  is_synthetic=EXCLUDED.is_synthetic, created_at=EXCLUDED.created_at, "
-                "  device_utc_offset_minutes=EXCLUDED.device_utc_offset_minutes",
+                "  device_utc_offset_minutes=EXCLUDED.device_utc_offset_minutes, "
+                "  device_type=EXCLUDED.device_type, make_model=EXCLUDED.make_model, "
+                "  serial_number=EXCLUDED.serial_number, capacity=EXCLUDED.capacity, "
+                "  write_blocker=EXCLUDED.write_blocker, evidence_tag=EXCLUDED.evidence_tag",
                 (
                     ev.evidence_id, ev.case_id, ev.path, ev.size_bytes,
                     ev.sha256_before, ev.md5_before, ev.sha256_after,
                     ev.brand, ev.brand_version, ev.confidence,
                     int(ev.is_synthetic), ev.created_at,
                     ev.device_utc_offset_minutes,
+                    ev.device_type, ev.make_model, ev.serial_number,
+                    ev.capacity, ev.write_blocker, ev.evidence_tag,
                 ),
             )
         return ev

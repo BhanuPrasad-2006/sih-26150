@@ -5,7 +5,7 @@
 Use this procedure to create a case, process a **forensically acquired raw disk image**, review recovered video, and produce the application's case documentation. The application accepts raw-image files with the extensions `.dd`, `.img`, `.raw`, or `.bin`; it deliberately refuses live physical-drive paths. Acquire the source media with an approved acquisition process before using this tool. Do not use a synthetic test image as real evidence.
 
 1. **Sign in as the examiner.**
-   - Open the application. On first use, create the access password; it must be at least 12 characters long. The application signs you in after the initial password is set.
+   - Open the application. On first use, create the access password; it must be at least 8 characters long. The application signs you in after the initial password is set.
    - On later use, enter the existing access password on the login screen. A successful login opens the case dashboard. Failed login attempts are recorded in the access audit trail; passwords themselves are not recorded.
 
 2. **Create the case before loading evidence.**

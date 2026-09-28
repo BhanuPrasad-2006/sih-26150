@@ -16,33 +16,90 @@ function renderNewCaseScreen() {
   root.innerHTML = `
     <div class="page-header">
       <div class="page-title">Register New Case</div>
-      <div class="page-subtitle">Enter chain-of-custody metadata before loading evidence disk images.</div>
+      <div class="page-subtitle">Enter chain-of-custody and legal reference metadata before loading evidence disk images.</div>
     </div>
 
     <div class="card max-w-card">
       <form id="new-case-form" novalidate>
-        <div class="form-group">
-          <label for="input-case-number">Case Number / Reference ID <span class="text-error">*</span></label>
-          <input type="text" id="input-case-number" class="form-control"
-            placeholder="e.g. FIR-2026-892" required autocomplete="off" maxlength="64" />
-          <div id="err-case-number" class="field-error hidden"></div>
+        <!-- Primary Identification -->
+        <div class="form-row-2col">
+          <div class="form-group">
+            <label for="input-case-number">Case Number / Reference ID <span class="text-error">*</span></label>
+            <input type="text" id="input-case-number" class="form-control"
+              placeholder="e.g. FIR-2026-892" required autocomplete="off" maxlength="64" />
+            <div id="err-case-number" class="field-error hidden"></div>
+          </div>
+          <div class="form-group">
+            <label for="input-case-title">Case Title / Description</label>
+            <input type="text" id="input-case-title" class="form-control"
+              placeholder="e.g. Commercial Burglary - Sector 4 CCTV" maxlength="255" />
+          </div>
         </div>
-        <div class="form-group">
-          <label for="input-investigator">Investigator Name <span class="text-error">*</span></label>
-          <input type="text" id="input-investigator" class="form-control"
-            placeholder="e.g. Officer A. Sharma" required maxlength="128" />
-          <div id="err-investigator" class="field-error hidden"></div>
+
+        <!-- Investigator & Agency -->
+        <div class="form-row-2col">
+          <div class="form-group">
+            <label for="input-investigator">Lead Examiner / Investigator <span class="text-error">*</span></label>
+            <input type="text" id="input-investigator" class="form-control"
+              placeholder="e.g. Officer A. Sharma" required maxlength="128" />
+            <div id="err-investigator" class="field-error hidden"></div>
+          </div>
+          <div class="form-group">
+            <label for="input-agency">Agency / Police Unit <span class="text-error">*</span></label>
+            <input type="text" id="input-agency" class="form-control"
+              placeholder="e.g. Cyber Crime Division, State Police" required maxlength="255" />
+            <div id="err-agency" class="field-error hidden"></div>
+          </div>
         </div>
-        <div class="form-group">
-          <label for="input-agency">Agency / Organization <span class="text-error">*</span></label>
-          <input type="text" id="input-agency" class="form-control"
-            placeholder="e.g. Cyber Crime Unit, State Police" required />
-          <div id="err-agency" class="field-error hidden"></div>
+
+        <!-- FIR & Priority -->
+        <div class="form-row-2col">
+          <div class="form-group">
+            <label for="input-fir-number">FIR / Crime Reference No.</label>
+            <input type="text" id="input-fir-number" class="form-control"
+              placeholder="e.g. 142/2026 PS Connaught Place" maxlength="128" />
+          </div>
+          <div class="form-group">
+            <label for="input-priority">Investigation Priority</label>
+            <select id="input-priority" class="form-control">
+              <option value="LOW">Low</option>
+              <option value="MEDIUM" selected>Medium</option>
+              <option value="HIGH">High</option>
+              <option value="CRITICAL">Critical (Urgent / Active Crime)</option>
+            </select>
+          </div>
         </div>
+
+        <!-- Seizure Details -->
+        <div class="form-row-2col">
+          <div class="form-group">
+            <label for="input-seizure-officer">Seizure Officer (as on Panchnama)</label>
+            <input type="text" id="input-seizure-officer" class="form-control"
+              placeholder="e.g. Sub-Inspector V. Rao" maxlength="128" />
+          </div>
+          <div class="form-group">
+            <label for="input-incident-date">Incident / Seizure Date</label>
+            <input type="date" id="input-incident-date" class="form-control" />
+          </div>
+        </div>
+
+        <div class="form-row-2col">
+          <div class="form-group">
+            <label for="input-seizure-location">Seizure Location / Scene</label>
+            <input type="text" id="input-seizure-location" class="form-control"
+              placeholder="e.g. Building A-12, Main Server Room" maxlength="255" />
+          </div>
+          <div class="form-group">
+            <label for="input-target-device">Target DVR / NVR Hardware</label>
+            <input type="text" id="input-target-device" class="form-control"
+              placeholder="e.g. Hikvision DS-7208HQHI / Dahua DH-XVR5108" maxlength="128" />
+          </div>
+        </div>
+
         <div class="form-group">
-          <label for="input-notes">Notes / Case Summary</label>
-          <textarea id="input-notes" class="form-control" rows="4"
-            placeholder="Optional: seizure location, recorder model, special handling notes…"></textarea>
+          <label for="input-notes">Forensic Examination Notes &amp; Scope</label>
+          <textarea id="input-notes" class="form-control" rows="3"
+            placeholder="Optional: specific cameras of interest, time ranges required, write-blocker details…"></textarea>
         </div>
 
         <!-- inline error — hidden by default -->
@@ -84,10 +141,17 @@ function renderNewCaseScreen() {
     e.preventDefault();
     _clearAll();
 
-    const caseNumber   = document.getElementById('input-case-number').value.trim();
-    const investigator = document.getElementById('input-investigator').value.trim();
-    const agency       = document.getElementById('input-agency').value.trim();
-    const notes        = document.getElementById('input-notes').value.trim();
+    const caseNumber      = document.getElementById('input-case-number').value.trim();
+    const caseTitle       = document.getElementById('input-case-title').value.trim();
+    const investigator    = document.getElementById('input-investigator').value.trim();
+    const agency          = document.getElementById('input-agency').value.trim();
+    const firNumber       = document.getElementById('input-fir-number').value.trim();
+    const priority        = document.getElementById('input-priority').value;
+    const seizureOfficer  = document.getElementById('input-seizure-officer').value.trim();
+    const incidentDate    = document.getElementById('input-incident-date').value;
+    const seizureLocation = document.getElementById('input-seizure-location').value.trim();
+    const targetDevice    = document.getElementById('input-target-device').value.trim();
+    const notes           = document.getElementById('input-notes').value.trim();
 
     let hasError = false;
 
@@ -127,12 +191,19 @@ function renderNewCaseScreen() {
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<span class="btn-spinner"></span> Creating…';
 
-    // Combine agency and notes into the notes field
-    const combinedNotes = agency + (notes ? `\n\n${notes}` : '');
     const data = {
-      case_number: caseNumber,
-      examiner:    investigator,
-      notes:       combinedNotes,
+      case_number:      caseNumber,
+      case_title:       caseTitle || null,
+      examiner:         investigator,
+      agency:           agency || null,
+      fir_number:       firNumber || null,
+      incident_date:    incidentDate || null,
+      seizure_officer:  seizureOfficer || null,
+      seizure_location: seizureLocation || null,
+      priority:         priority || 'MEDIUM',
+      status:           'ACTIVE',
+      target_device:    targetDevice || null,
+      notes:            notes || null,
     };
 
     try {
@@ -141,6 +212,7 @@ function renderNewCaseScreen() {
     } catch (err) {
       // Show verbatim server error (includes HTTP 409 duplicate message)
       errMsg.textContent = err.message;
+      errEl.classList.remove('hidden');
       errEl.style.display = 'flex';
       submitBtn.disabled = false;
       submitBtn.innerHTML = 'Create case &amp; continue ' + icon('arrow-right');

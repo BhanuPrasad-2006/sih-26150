@@ -251,8 +251,8 @@ const API = {
 
   // ── Case endpoints ─────────────────────────────────────────────────────────
 
-  async listCases() {
-    const url = '/api/cases';
+  async listCases(allCases = false) {
+    const url = allCases ? '/api/cases?all_cases=true' : '/api/cases';
     const res = await fetch(url);
     await this._checkOk(res, url);
     return res.json();
@@ -292,9 +292,18 @@ const API = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        case_number: data.case_number,
-        examiner: data.examiner || data.investigator_name,
-        notes: data.notes
+        case_number:      data.case_number,
+        case_title:       data.case_title || null,
+        examiner:         data.examiner || data.investigator_name,
+        agency:           data.agency || null,
+        fir_number:       data.fir_number || null,
+        incident_date:    data.incident_date || null,
+        seizure_officer:  data.seizure_officer || null,
+        seizure_location: data.seizure_location || null,
+        priority:         data.priority || 'MEDIUM',
+        status:           data.status || 'ACTIVE',
+        target_device:    data.target_device || null,
+        notes:            data.notes || null,
       })
     });
     await this._checkOk(res, url);

@@ -49,11 +49,22 @@ class ScanPhase(str, Enum):
 # ── API / DB models ────────────────────────────────────────────────────────────
 
 class Case(BaseModel):
-    case_id:     str = Field(default_factory=lambda: str(uuid4()))
-    case_number: str
-    examiner:    str
-    notes:       Optional[str] = None
-    created_at:  str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    case_id:          str = Field(default_factory=lambda: str(uuid4()))
+    case_number:      str
+    case_title:       Optional[str] = None
+    created_by:       Optional[str] = None  # Username of examiner who owns this case
+    examiner:         str                   # Investigator / Lead officer display name
+    agency:           Optional[str] = None  # Police department, Cyber cell, NTRO, etc.
+    fir_number:       Optional[str] = None  # First Information Report / Court Seizure Ref
+    incident_date:    Optional[str] = None  # Date/time when the crime/incident took place
+    seizure_officer:  Optional[str] = None  # Officer who seized the recorder
+    seizure_location: Optional[str] = None  # Location where DVR was recovered
+    priority:         str = "MEDIUM"        # LOW, MEDIUM, HIGH, CRITICAL
+    status:           str = "ACTIVE"        # ACTIVE, PENDING, UNDER_REVIEW, CLOSED, ARCHIVED
+    target_device:    Optional[str] = None  # Recorder model (e.g. Dahua DH-XVR5108, Hikvision)
+    notes:            Optional[str] = None
+    created_at:       str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at:       Optional[str] = None
 
 
 class CaseDetail(Case):
@@ -71,6 +82,12 @@ class Evidence(BaseModel):
     evidence_id:    str = Field(default_factory=lambda: str(uuid4()))
     case_id:        str
     path:           str
+    device_type:    Optional[str] = None  # DVR, NVR, Hard Disk, SD Card, Flash
+    make_model:     Optional[str] = None  # Dahua, Hikvision, CP Plus, etc.
+    serial_number:  Optional[str] = None  # Device or drive serial number
+    capacity:       Optional[str] = None  # e.g. "2 TB"
+    write_blocker:  Optional[str] = None  # Hardware/Software write blocker
+    evidence_tag:   Optional[str] = None  # Tag ID (e.g. EX-01)
     size_bytes:     Optional[int]    = None
     sha256_before:  Optional[str]    = None
     md5_before:     Optional[str]    = None

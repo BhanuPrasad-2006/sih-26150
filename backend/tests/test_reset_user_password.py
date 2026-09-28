@@ -58,7 +58,7 @@ def test_set_user_password_enforces_the_strong_password_rule():
     if not a.get_username_display(username):
         a.create_user(username, "OriginalPass1!")
     with pytest.raises(ValueError):
-        a.set_user_password(username, "tooshort1A!")
+        a.set_user_password(username, "Sh1a!")
 
 
 def test_disable_totp_for_clears_a_lost_authenticator():
@@ -137,7 +137,7 @@ def test_cli_accepts_username_flag_and_skips_the_picker(cli_module, capsys):
 def test_cli_rejects_a_weak_new_password_and_reprompts(cli_module, capsys):
     from backend.tests.conftest import _AUTH_TEST_USERNAME as user
     # First attempt too short, second attempt is strong enough
-    code, out = _run_main(cli_module, [], ["1", "short1A!", "GoodEnough4!", "GoodEnough4!", "n"], capsys)
+    code, out = _run_main(cli_module, [], ["1", "Sh1a!", "GoodEnough4!", "GoodEnough4!", "n"], capsys)
     assert code in (0, None), out
     import backend.main as m
     auth = AuthManager(m.db)

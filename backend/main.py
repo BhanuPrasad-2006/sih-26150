@@ -967,9 +967,18 @@ _ALLOWED_EVIDENCE_EXTS = {".dd", ".img", ".raw", ".bin"}
 
 
 class CreateCaseRequest(BaseModel):
-    case_number: str
-    examiner:    str
-    notes:       Optional[str] = None
+    case_number:      str
+    examiner:         str
+    case_title:       Optional[str] = None
+    agency:           Optional[str] = None
+    fir_number:       Optional[str] = None
+    incident_date:    Optional[str] = None
+    seizure_officer:  Optional[str] = None
+    seizure_location: Optional[str] = None
+    priority:         str = "MEDIUM"
+    status:           str = "ACTIVE"
+    target_device:    Optional[str] = None
+    notes:            Optional[str] = None
 
     @field_validator("case_number")
     @classmethod
@@ -1043,8 +1052,23 @@ class LoadEvidenceRequest(BaseModel):
 
 
 @app.post("/api/cases", response_model=Case)
-async def create_case(req: CreateCaseRequest):
-    case = Case(case_number=req.case_number, examiner=req.examiner, notes=req.notes)
+async def create_case(req: CreateCaseRequest, request: Request):
+    current_user = _current_username(request) or req.examiner
+    case = Case(
+        case_number=req.case_number,
+        case_title=req.case_title,
+        created_by=current_user,
+        examiner=req.examiner or current_user,
+        agency=req.agency,
+        fir_number=req.fir_number,
+        incident_date=req.incident_date,
+        seizure_officer=req.seizure_officer,
+        seizure_location=req.seizure_location,
+        priority=req.priority or "MEDIUM",
+        status=req.status or "ACTIVE",
+        target_device=req.target_device,
+        notes=req.notes,
+    )
     try:
         result = await asyncio.to_thread(db.create_case, case)
     except DuplicateCaseNumberError:
@@ -1053,13 +1077,15 @@ async def create_case(req: CreateCaseRequest):
             f"Case number '{req.case_number}' already exists. "
             "Each case must have a unique case number."
         )
-    _audit(case.case_id, "case_created", f"case_number={req.case_number} examiner={req.examiner}")
+    _audit(case.case_id, "case_created", f"case_number={req.case_number} examiner={case.examiner} created_by={case.created_by}")
     return result
 
 
 @app.get("/api/cases")
-async def list_cases():
-    return await asyncio.to_thread(db.list_cases)
+async def list_cases(request: Request, all_cases: bool = False):
+    current_user = _current_username(request)
+    filter_user = None if all_cases else current_user
+    return await asyncio.to_thread(db.list_cases, filter_user)
 
 
 @app.get("/api/cases/{case_id}", response_model=CaseDetail)

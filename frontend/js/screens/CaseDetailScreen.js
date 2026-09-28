@@ -43,26 +43,53 @@ async function renderCaseDetailScreen(params) {
     <div class="page-header">
       <div class="page-header-row">
         <div>
-          <div class="page-title">Case: <span class="text-primary">${escapeHtml(caseObj.case_number)}</span></div>
-          <div class="page-subtitle">Investigator: ${escapeHtml(caseObj.examiner)}</div>
+          <div class="page-title">
+            Case: <span class="text-primary">${escapeHtml(caseObj.case_number)}</span>
+            ${caseObj.priority ? `<span class="badge badge-priority-${escapeHtml(caseObj.priority.toLowerCase())}">${escapeHtml(caseObj.priority)}</span>` : ''}
+            ${caseObj.status ? `<span class="badge badge-status-${escapeHtml(caseObj.status.toLowerCase())}">${escapeHtml(caseObj.status)}</span>` : ''}
+          </div>
+          <div class="page-subtitle">
+            ${caseObj.case_title ? `<strong class="text-main">${escapeHtml(caseObj.case_title)}</strong> • ` : ''}
+            Investigator: <strong>${escapeHtml(caseObj.examiner)}</strong>
+            ${caseObj.created_by && caseObj.created_by !== caseObj.examiner ? ` <span class="text-dim">(registered by ${escapeHtml(caseObj.created_by)})</span>` : ''}
+          </div>
         </div>
         <button id="btn-add-evidence" class="btn btn-primary btn-lg">${icon('upload-cloud')} Add disk image</button>
       </div>
     </div>
 
     <div class="card">
-      <div class="card-title">Case Metadata</div>
+      <div class="card-title">Case &amp; Custody Details</div>
       <div class="meta-grid">
+        <div>
+          <div class="meta-label">FIR / Crime Reference</div>
+          <div class="meta-value font-mono">${caseObj.fir_number ? escapeHtml(caseObj.fir_number) : '—'}</div>
+        </div>
+        <div>
+          <div class="meta-label">Police Unit / Agency</div>
+          <div class="meta-value">${caseObj.agency ? escapeHtml(caseObj.agency) : '—'}</div>
+        </div>
+        <div>
+          <div class="meta-label">Seizure Officer &amp; Scene</div>
+          <div class="meta-value">
+            ${caseObj.seizure_officer ? escapeHtml(caseObj.seizure_officer) : '—'}
+            ${caseObj.seizure_location ? `<div class="text-xs text-muted">${escapeHtml(caseObj.seizure_location)}</div>` : ''}
+          </div>
+        </div>
+        <div>
+          <div class="meta-label">Target Hardware / DVR</div>
+          <div class="meta-value font-mono text-sm">${caseObj.target_device ? escapeHtml(caseObj.target_device) : '—'}</div>
+        </div>
         <div>
           <div class="meta-label">Registered (IST)</div>
           <div class="meta-value">${escapeHtml(formatIST(caseObj.created_at))}</div>
         </div>
         <div>
-          <div class="meta-label">Examiner</div>
-          <div class="meta-value">${escapeHtml(caseObj.examiner)}</div>
+          <div class="meta-label">Incident / Seizure Date</div>
+          <div class="meta-value">${caseObj.incident_date ? escapeHtml(caseObj.incident_date) : '—'}</div>
         </div>
-        <div>
-          <div class="meta-label">Notes</div>
+        <div style="grid-column: 1 / -1;">
+          <div class="meta-label">Notes &amp; Scope</div>
           <div class="meta-value text-muted">${caseObj.notes ? escapeHtml(caseObj.notes) : '—'}</div>
         </div>
       </div>

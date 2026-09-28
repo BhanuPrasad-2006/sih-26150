@@ -19,14 +19,27 @@ async function renderDashboardScreen() {
     </section>
 
     <div class="card">
-      <div class="card-title"><span>${icon('folder-open')} Your cases</span><span class="badge badge-pending" id="stat-cases">–</span></div>
+      <div class="case-tabs-container">
+        <div class="case-tabs" role="tablist">
+          <button id="tab-my-cases" class="case-tab-btn active" type="button" role="tab">
+            ${icon('user')} My Cases <span class="tab-badge" id="count-my-cases">–</span>
+          </button>
+          <button id="tab-all-cases" class="case-tab-btn" type="button" role="tab">
+            ${icon('folder-open')} All Cases <span class="tab-badge" id="count-all-cases">–</span>
+          </button>
+        </div>
+        <span class="badge badge-pending" id="stat-cases">–</span>
+      </div>
+
       <div class="table-container">
         <table>
           <thead>
             <tr>
-              <th>Case Number</th>
-              <th>Investigator</th>
-              <th>Notes / Agency</th>
+              <th>Case / Title</th>
+              <th>Investigator / Agency</th>
+              <th>FIR / Crime Ref</th>
+              <th>Priority</th>
+              <th>Status</th>
               <th>Registered</th>
               <th>Action</th>
             </tr>
@@ -36,14 +49,9 @@ async function renderDashboardScreen() {
             <tr class="skeleton-row">
               <td><div class="skeleton-cell skeleton-w-110"></div></td>
               <td><div class="skeleton-cell skeleton-w-140"></div></td>
-              <td><div class="skeleton-cell skeleton-w-180"></div></td>
-              <td><div class="skeleton-cell skeleton-w-130"></div></td>
-              <td><div class="skeleton-cell skeleton-w-90"></div></td>
-            </tr>
-            <tr class="skeleton-row">
-              <td><div class="skeleton-cell skeleton-w-90"></div></td>
-              <td><div class="skeleton-cell skeleton-w-120"></div></td>
-              <td><div class="skeleton-cell skeleton-w-160"></div></td>
+              <td><div class="skeleton-cell skeleton-w-100"></div></td>
+              <td><div class="skeleton-cell skeleton-w-70"></div></td>
+              <td><div class="skeleton-cell skeleton-w-70"></div></td>
               <td><div class="skeleton-cell skeleton-w-130"></div></td>
               <td><div class="skeleton-cell skeleton-w-90"></div></td>
             </tr>
@@ -57,53 +65,109 @@ async function renderDashboardScreen() {
   document.getElementById('btn-2fa').onclick = openTwoFactorDialog;
   document.getElementById('btn-add-examiner').onclick = openAddExaminerDialog;
 
-  try {
-    const cases = await API.listCases();
-    document.getElementById('stat-cases').textContent = cases.length + (cases.length === 1 ? ' case' : ' cases');
-    const tbody = document.getElementById('cases-table-body');
+  const tabMyCases  = document.getElementById('tab-my-cases');
+  const tabAllCases = document.getElementById('tab-all-cases');
+  let currentTabIsAll = false;
 
-    if (cases.length === 0) {
+  async function loadCaseList(isAll) {
+    currentTabIsAll = isAll;
+    tabMyCases.classList.toggle('active', !isAll);
+    tabAllCases.classList.toggle('active', isAll);
+
+    const tbody = document.getElementById('cases-table-body');
+    tbody.innerHTML = `
+      <tr class="skeleton-row">
+        <td><div class="skeleton-cell skeleton-w-110"></div></td>
+        <td><div class="skeleton-cell skeleton-w-140"></div></td>
+        <td><div class="skeleton-cell skeleton-w-100"></div></td>
+        <td><div class="skeleton-cell skeleton-w-70"></div></td>
+        <td><div class="skeleton-cell skeleton-w-70"></div></td>
+        <td><div class="skeleton-cell skeleton-w-130"></div></td>
+        <td><div class="skeleton-cell skeleton-w-90"></div></td>
+      </tr>
+    `;
+
+    try {
+      const cases = await API.listCases(isAll);
+      const countLabel = cases.length + (cases.length === 1 ? ' case' : ' cases');
+      document.getElementById('stat-cases').textContent = countLabel;
+
+      if (!isAll) {
+        document.getElementById('count-my-cases').textContent = cases.length;
+      } else {
+        document.getElementById('count-all-cases').textContent = cases.length;
+      }
+
+      if (cases.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="7" class="p-0 border-none">
+              <div class="empty-state">
+                ${emptyArt()}
+                <div class="empty-state-title">${isAll ? 'No forensic cases registered' : 'No cases assigned to your account'}</div>
+                <div class="empty-state-subtitle">${isAll ? 'Create your first forensic case to begin chain of custody.' : 'You have not registered or been assigned any cases yet. You can view all cases in the "All Cases" tab or register a new one.'}</div>
+                <button class="btn btn-primary" ${navAttrs('new-case')}>${icon('plus-circle')} Register New Case</button>
+              </div>
+            </td>
+          </tr>`;
+        return;
+      }
+
+      tbody.innerHTML = cases.map(c => `
+        <tr>
+          <td>
+            <strong class="text-primary font-mono text-base">${escapeHtml(c.case_number)}</strong>
+            ${c.case_title ? `<div class="text-xs text-muted mt-2">${escapeHtml(c.case_title)}</div>` : ''}
+          </td>
+          <td>
+            <div class="font-medium">${escapeHtml(c.examiner)}</div>
+            ${c.agency ? `<div class="text-xs text-muted">${escapeHtml(c.agency)}</div>` : ''}
+          </td>
+          <td class="font-mono text-sm">${c.fir_number ? escapeHtml(c.fir_number) : '<span class="text-dim">—</span>'}</td>
+          <td>
+            <span class="badge badge-priority-${escapeHtml((c.priority || 'MEDIUM').toLowerCase())}">
+              ${escapeHtml(c.priority || 'MEDIUM')}
+            </span>
+          </td>
+          <td>
+            <span class="badge badge-status-${escapeHtml((c.status || 'ACTIVE').toLowerCase())}">
+              ${escapeHtml(c.status || 'ACTIVE')}
+            </span>
+          </td>
+          <td class="text-dim text-sm">${escapeHtml(formatIST(c.created_at))}</td>
+          <td>
+            <button class="btn btn-secondary btn-sm" ${navAttrs('case-detail', { caseId: c.case_id })}>Open ${icon('arrow-right')}</button>
+          </td>
+        </tr>
+      `).join('');
+
+    } catch (err) {
       tbody.innerHTML = `
         <tr>
-          <td colspan="5" class="p-0 border-none">
-            <div class="empty-state">
-              ${emptyArt()}
-              <div class="empty-state-title">No cases yet</div>
-              <div class="empty-state-subtitle">Create your first forensic case to get started — each case tracks a chain of custody for one investigation.</div>
-              <button class="btn btn-primary" ${navAttrs('new-case')}>${icon('plus-circle')} Register First Case</button>
+          <td colspan="7" class="p-12 border-none">
+            <div class="error-banner">
+              <div class="error-banner-icon">${icon('alert')}</div>
+              <div class="error-banner-body">
+                <div class="error-banner-title">Failed to load cases</div>
+                <div class="error-banner-msg">${escapeHtml(err.message)}</div>
+              </div>
             </div>
           </td>
         </tr>`;
-      return;
     }
-
-    tbody.innerHTML = cases.map(c => `
-      <tr>
-        <td><strong class="text-primary font-mono text-base">${escapeHtml(c.case_number)}</strong></td>
-        <td>${escapeHtml(c.examiner)}</td>
-        <td class="text-muted text-sm">${c.notes ? escapeHtml(c.notes) : '—'}</td>
-        <td class="text-dim text-sm">${escapeHtml(formatIST(c.created_at))}</td>
-        <td>
-          <button class="btn btn-secondary btn-sm" ${navAttrs('case-detail', { caseId: c.case_id })}>Open ${icon('arrow-right')}</button>
-        </td>
-      </tr>
-    `).join('');
-
-  } catch (err) {
-    const tbody = document.getElementById('cases-table-body');
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="5" class="p-12 border-none">
-          <div class="error-banner">
-            <div class="error-banner-icon">${icon('alert')}</div>
-            <div class="error-banner-body">
-              <div class="error-banner-title">Failed to load cases</div>
-              <div class="error-banner-msg">${escapeHtml(err.message)}</div>
-            </div>
-          </div>
-        </td>
-      </tr>`;
   }
+
+  tabMyCases.onclick  = () => loadCaseList(false);
+  tabAllCases.onclick = () => loadCaseList(true);
+
+  // Initial load: show current examiner's cases by default
+  await loadCaseList(false);
+
+  // Background fetch total count for the other tab
+  API.listCases(true).then(allCases => {
+    const el = document.getElementById('count-all-cases');
+    if (el) el.textContent = allCases.length;
+  }).catch(() => {});
 }
 
 
