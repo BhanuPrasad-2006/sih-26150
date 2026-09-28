@@ -97,20 +97,20 @@ const API = {
     const url = '/api/auth/status-with-session';
     const res = await fetch(url);
     // This endpoint never returns 401 (it's exempt), so _checkOk is fine
-    if (!res.ok) return { password_set: false, authenticated: false };
+    if (!res.ok) return { has_account: false, authenticated: false, username: null };
     return res.json();
   },
 
   /**
-   * First-run: set the examiner password.
+   * First-run only: create the very first examiner account.
    * On success the backend also creates a session cookie automatically.
    */
-  async setupPassword(password) {
+  async setupAccount(username, password) {
     const url = '/api/auth/setup';
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password }),
+      body: JSON.stringify({ username, password }),
     });
     // Don't pass through _checkOk on 4xx because the caller handles the error
     if (!res.ok) {
@@ -122,16 +122,42 @@ const API = {
   },
 
   /**
-   * Login with password.
-   * Returns {ok: true} on success, or {locked: true, retry_after: N} on lockout.
-   * On wrong password the server returns 401; this method throws with "Incorrect password."
+   * Add another examiner account. Requires an existing session (unlike setupAccount).
    */
-  async login(password, totpCode) {
+  async addExaminer(username, password) {
+    const url = '/api/auth/signup';
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    if (!res.ok) {
+      let msg = 'Could not create that account.';
+      try { const b = await res.json(); msg = b.detail || msg; } catch (_) {}
+      throw new Error(msg);
+    }
+    return res.json();
+  },
+
+  async listExaminers() {
+    const res = await fetch('/api/auth/examiners');
+    await this._checkOk(res, '/api/auth/examiners');
+    return (await res.json()).usernames;
+  },
+
+  /**
+   * Login with username + password.
+   * Returns {ok: true, username} on success, {locked: true, retry_after: N} on lockout, or
+   * {ok: false, totp_required: true} when the password was right but a 2FA code is needed —
+   * the caller should show the code field and call login() again with it, without re-locking.
+   * On a genuine wrong username/password/code the server returns 401; this method throws.
+   */
+  async login(username, password, totpCode) {
     const url = '/api/auth/login';
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password, totp_code: totpCode || null }),
+      body: JSON.stringify({ username, password, totp_code: totpCode || null }),
     });
 
     if (res.status === 429) {
@@ -141,7 +167,7 @@ const API = {
     }
 
     if (res.status === 401) {
-      let m = 'Incorrect password.';
+      let m = 'Incorrect username or password.';
       try { m = (await res.json()).detail || m; } catch (_) {}
       throw new Error(m);
     }
@@ -152,7 +178,7 @@ const API = {
       throw new Error(msg);
     }
 
-    return res.json();
+    return res.json();   // {ok: true, username} or {ok: false, totp_required: true}
   },
 
   // ── Two-factor authentication (TOTP) ───────────────────────────────────────

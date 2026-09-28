@@ -145,9 +145,9 @@ Analytics read the exported MP4 only: YuNet (faces), SFace (embeddings, similari
 | Concern | Control |
 |---|---|
 | Network exposure | Binds to `127.0.0.1`; warns if `SIH_HOST` differs |
-| Authentication | Single examiner, bcrypt hash, ≥ 12 characters; optional TOTP second factor (single-use codes, encrypted secret) with one-time recovery codes |
-| Sessions | `HttpOnly`, `SameSite=Strict` cookie (`Secure` over HTTPS, HSTS); idle timeout 30 min (`SESSION_TIMEOUT_MINUTES`) and absolute lifetime 12 h (`SESSION_MAX_HOURS`) |
-| Brute force | 5 failures → 60 s lock (HTTP 429 with `retry_after`) |
+| Authentication | Named examiner accounts (bcrypt hash, ≥ 12 characters with upper/lower/digit/special); optional per-account TOTP second factor (single-use codes, encrypted secret) with one-time recovery codes. No per-account permission levels: any signed-in examiner sees every case |
+| Sessions | `HttpOnly`, `SameSite=Strict` cookie (`Secure` over HTTPS, HSTS); idle timeout 30 min (`SESSION_TIMEOUT_MINUTES`) and absolute lifetime 12 h (`SESSION_MAX_HOURS`); bound to the account that created it |
+| Brute force | 5 failures on one account → 60 s lock (HTTP 429 with `retry_after`), never affecting other accounts |
 | Evidence integrity | Read-only mmap; hash on open, re-hash at end of scan and on `/verify` |
 | Path handling | Upload names sanitised; physical-device paths refused for scanning; imaging refuses device destinations and existing files; optional server-side allow-list (`FORENSIC_EVIDENCE_ROOTS`) for evidence, original-image and imaging-source paths, resolved through `..` and symlinks |
 | Web hardening | `security.py`: CSP with `script-src 'self'` and `style-src 'self'` (no inline script or style attributes), `X-Frame-Options: DENY`, `nosniff`, no-referrer on every response; Host must be a local name; foreign `Origin` / cross-site fetches refused on POST/PUT/PATCH/DELETE; API docs and OpenAPI schema require a session |
@@ -175,4 +175,4 @@ Residual risks and the full control list are in [SECURITY.md](SECURITY.md): a co
 
 ## 10. Known architectural limits
 
-Single process and single examiner; whole-image scans are sequential; carving works on a memory map so very large images depend on OS paging; performance has not been benchmarked on multi-terabyte disks.
+Single process (multiple named examiner accounts can sign in, but there are no per-account permission levels); whole-image scans are sequential; carving works on a memory map so very large images depend on OS paging; performance has not been benchmarked on multi-terabyte disks.

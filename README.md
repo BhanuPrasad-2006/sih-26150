@@ -65,7 +65,7 @@ for unknown recorders, and forensic bookkeeping (hashes, audit chain, report, le
 | 📏 | **Accuracy against ground truth**: frame recall / precision / order, byte placement, log coverage | ✅ new, honest "not measured" otherwise |
 | ⛓️ | **Hash-chained audit log** of every action, tamper-evident | ✅ |
 | 📄 | **PDF report** + **BSA 2023 §63(4)** certificate template, with examiner-entered police station, FIR, seizure officer and recorder details (printed as entered, marked unverified, blanks listed) | ✅ |
-| 🔑 | Single-examiner login, optional 2FA, sessions, lockout that survives a restart; SQLite or Supabase/Postgres | ✅ |
+| 🔑 | Named examiner accounts (multi-user login, each with their own password and optional 2FA), audit attribution per account, sessions, per-account lockout that survives a restart; SQLite or Supabase/Postgres | ✅ |
 | 🎨 | **Interface**: light and dark themes, drag-and-drop evidence upload, inline SVG icons, audit and case times in IST | ✅ |
 
 ## 🏗️ Architecture
@@ -253,9 +253,9 @@ All routes except login/setup require the session cookie. Interactive docs at `/
 <summary><b>Access control, integrity and audit design</b></summary>
 
 - **Local only**: binds to `127.0.0.1`; a loud warning is emitted if `SIH_HOST` says otherwise.
-- **Single-examiner password**: bcrypt hash only, minimum 12 characters; the plaintext is never stored or logged.
+- **Named examiner accounts**: each has their own bcrypt-hashed password (minimum 12 characters, with an uppercase letter, a lowercase letter, a digit and a special character) — the plaintext is never stored or logged. There are no separate permission levels: any signed-in examiner can see every case, but every action is attributed to the account that did it. A forgotten password has no in-app recovery (no email/SMS on an offline tool) — `tools/reset_user_password.py` resets it from a terminal with access to the machine.
 - **Sessions**: `HttpOnly`, `SameSite=Strict` cookie; 30-minute idle timeout (configurable).
-- **Brute-force lockout**: 5 failures → 60 s lock with live countdown; the count and lock time are stored in the database, so restarting the server does not reset them; messages never reveal more than "Incorrect password."
+- **Brute-force lockout**: 5 failures on one account → 60 s lock with live countdown, never affecting other accounts; the count and lock time are stored in the database, so restarting the server does not reset them; messages never reveal whether a username exists or which field was wrong.
 - **Read-only evidence**: images are memory-mapped read-only; the evidence hash is re-checked after every scan and on demand.
 - **Imaging** is off by default, requires a write-blocker attestation (recorded, not enforceable by software), refuses to overwrite, and removes a partial image on failure.
 - **Two-factor login (optional TOTP)** with **one-time recovery codes**: RFC 6238 codes (tested against the RFC vectors), single-use, encrypted secret, uniform errors; every other session ends when it changes. Turn it on from the dashboard.
@@ -352,7 +352,7 @@ Legend: ✅ done · 🟡 partly / unvalidated · ❌ not done.
 7. **Object detection** was checked on three photos, not on CCTV footage; small, dark or distant subjects will be missed. Frames are sampled.
 8. **Accuracy numbers** describe one test on one disk and are not a general recovery rate.
 9. Clock drift and time zones are examiner-supplied, never inferred. Recovered-video times are the recorder's own clock and are not converted to IST or UTC by the interface.
-10. Single-examiner tool, bound to localhost; not a multi-user service.
+10. Bound to localhost, not internet-facing. Multiple named examiner accounts can sign in, but there are no per-account permission levels — any signed-in examiner sees every case.
 
 ## 🗺️ Roadmap
 

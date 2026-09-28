@@ -1,7 +1,9 @@
 # Security
 
 What the tool protects, how, what it does not protect, and what the examiner must do. Written against the code as built.
-**No software is unhackable.** This is a hardened single-examiner forensic workstation tool, not an internet-facing service.
+**No software is unhackable.** This is a hardened forensic workstation tool, not an internet-facing service. Multiple named
+examiner accounts can sign in, but there is no per-account permission model: any signed-in examiner sees every case, and
+every action is attributed to the account that did it.
 A live self-check of the points below is available at `/api/security/status` (log in first; there is no dashboard button for it).
 
 ## 1. Threat model
@@ -62,7 +64,7 @@ Back these up **separately from the case database**: if one place holds both the
 3. **Sandboxing is process-level.** The container profile is stronger but untested here. For truly hostile media use a disposable VM.
 4. **Fuzzing is bounded evidence, not proof.** Native parsers inside FFmpeg/OpenCV were not fuzzed by us.
 5. **Self-signed certificates.** The PDF signature proves integrity and origin of the file, not a person's identity, and viewers show the signer as "unknown" until the certificate is trusted. A certificate from a public or organisational CA would fix that (bring your own key/certificate).
-6. **Single examiner.** No roles, no per-user attribution; adding them means a different data model, not a patch.
+6. **No per-account permission levels.** Every examiner account can see every case (audit attribution exists per account, but access control does not); adding per-case ownership or roles means a different data model, not a patch.
 7. **No independent penetration test** has been done. Automated checks (tests, fuzzing, pip-audit, bandit) are not a substitute; commission one before high-stakes use.
 
 ## 5. Deployment checklist

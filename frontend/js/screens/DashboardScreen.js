@@ -7,11 +7,12 @@ async function renderDashboardScreen() {
   root.innerHTML = `
     <section class="hero">
       <div>
-        <h2>Recover CCTV evidence you can defend in court.</h2>
+        <h2>Recover CCTV evidence, with every step on record.</h2>
         <p>Load a DVR/NVR disk image, carve the video that is still on it, prove nothing was altered, and export a signed forensic report. The evidence file is only ever read, never written.</p>
         <div class="hero-actions">
           <button id="btn-new-case" class="btn btn-primary btn-lg">${icon('plus-circle')} Register New Case</button>
           <button id="btn-2fa" class="btn btn-secondary btn-lg">${icon('key')} Two-factor</button>
+          <button id="btn-add-examiner" class="btn btn-secondary btn-lg">${icon('plus-circle')} Add Examiner</button>
         </div>
       </div>
       <div class="hero-art">${heroArt()}</div>
@@ -54,6 +55,7 @@ async function renderDashboardScreen() {
 
   document.getElementById('btn-new-case').onclick = () => navigateTo('new-case');
   document.getElementById('btn-2fa').onclick = openTwoFactorDialog;
+  document.getElementById('btn-add-examiner').onclick = openAddExaminerDialog;
 
   try {
     const cases = await API.listCases();
@@ -164,4 +166,40 @@ async function openTwoFactorDialog() {
       } },
        { label: 'Close', class: 'btn-secondary', onClick: () => {} }]);
   }
+}
+
+
+/** Lists existing examiner accounts and offers to add a new one (each with their own password). */
+async function openAddExaminerDialog() {
+  let usernames = [];
+  try { usernames = await API.listExaminers(); } catch (err) {
+    showModal('Examiner accounts', `<div class="error-inline">${escapeHtml(err.message)}</div>`, [{ label: 'Close', class: 'btn-secondary', onClick: () => {} }]);
+    return;
+  }
+  showModal('Examiner accounts',
+    `<p class="mb-10"><b>Existing accounts:</b> ${usernames.map(escapeHtml).join(', ') || '—'}</p>
+     <p class="mb-10">Every examiner signs in with their own username and password; everything they
+     do is attributed to them in the audit log. There are no separate permission levels — any
+     signed-in examiner can see every case.</p>
+     <div class="form-group"><label>New username</label><input id="ae-username" class="form-control" autocomplete="off"></div>
+     <div class="form-group"><label>Password</label><input id="ae-password" type="password" class="form-control" autocomplete="new-password"></div>
+     <div class="form-group"><label>Confirm password</label><input id="ae-password2" type="password" class="form-control" autocomplete="new-password"></div>
+     <p class="text-xs mb-10">${_PASSWORD_RULE_TEXT}</p>
+     <div id="ae-msg" class="text-base"></div>`,
+    [{ label: 'Add examiner', class: 'btn-primary', autoClose: false, onClick: async () => {
+        const msg = document.getElementById('ae-msg');
+        const username = document.getElementById('ae-username').value.trim();
+        const pw = document.getElementById('ae-password').value;
+        const pw2 = document.getElementById('ae-password2').value;
+        if (!username) { msg.textContent = 'Choose a username.'; return; }
+        if (pw !== pw2) { msg.textContent = 'Passwords do not match.'; return; }
+        try {
+          await API.addExaminer(username, pw);
+          msg.innerHTML = `<strong>${escapeHtml(username)}</strong> can now sign in with the password you just set.`;
+          document.getElementById('ae-username').value = '';
+          document.getElementById('ae-password').value = '';
+          document.getElementById('ae-password2').value = '';
+        } catch (e) { msg.textContent = e.message; }
+    } },
+     { label: 'Close', class: 'btn-secondary', onClick: () => {} }]);
 }

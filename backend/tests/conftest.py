@@ -193,7 +193,8 @@ def isolated_app(tmp_path, monkeypatch):
 
 # ── Pre-authenticated app fixture ──────────────────────────────────────────────
 
-_AUTH_TEST_PASSWORD = "TestPassword1234!"   # ≥12 chars, not the real examiner password
+_AUTH_TEST_USERNAME = "test_examiner"
+_AUTH_TEST_PASSWORD = "TestPassword1234!"   # meets the strong-password rule; not a real examiner's
 
 
 @pytest.fixture
@@ -205,10 +206,10 @@ def auth_client(isolated_app):
     Sets up the password via /api/auth/setup, then logs in, so the session
     cookie is present in the client's cookie jar for subsequent requests.
     """
-    # Set up password via setup endpoint (first-run flow)
+    # Set up the first examiner account via the setup endpoint (first-run flow)
     setup_res = isolated_app.post(
         "/api/auth/setup",
-        json={"password": _AUTH_TEST_PASSWORD},
+        json={"username": _AUTH_TEST_USERNAME, "password": _AUTH_TEST_PASSWORD},
     )
     assert setup_res.status_code == 200, (
         f"auth_client fixture: setup failed: {setup_res.text}"

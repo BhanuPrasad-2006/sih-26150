@@ -91,26 +91,30 @@ def test_two_factor_login_flow(auth_client, monkeypatch):
     assert auth_client.post("/api/auth/totp/enroll").status_code == 409                      # already enabled
 
     auth_client.post("/api/auth/logout")
-    st = auth_client.get("/api/auth/status").json()
-    assert st["totp_enabled"] is True
 
+    from backend.tests.conftest import _AUTH_TEST_USERNAME as user
     from backend.tests.conftest import _AUTH_TEST_PASSWORD as pw
 
     base = totp.counter_now()
     monkeypatch.setattr(totp, "counter_now", lambda now=None: base + 5)                       # a later 30 s step for login
     good = totp.code_at(secret, base + 5)
 
-    no_code = auth_client.post("/api/auth/login", json={"password": pw})
-    bad_code = auth_client.post("/api/auth/login", json={"password": pw, "totp_code": "000000"})
-    bad_pw = auth_client.post("/api/auth/login", json={"password": "wrong-password-xx", "totp_code": good})
-    assert no_code.status_code == bad_code.status_code == bad_pw.status_code == 401
-    assert no_code.json()["detail"] == bad_code.json()["detail"] == bad_pw.json()["detail"]   # reveals nothing about which
+    # Correct username/password with no code yet: not a failure -- the frontend is told a code
+    # is needed (2FA is per-account, so this can only be known after the password checks out).
+    no_code = auth_client.post("/api/auth/login", json={"username": user, "password": pw})
+    assert no_code.status_code == 200
+    assert no_code.json() == {"ok": False, "totp_required": True}
 
-    ok = auth_client.post("/api/auth/login", json={"password": pw, "totp_code": good})
+    bad_code = auth_client.post("/api/auth/login", json={"username": user, "password": pw, "totp_code": "000000"})
+    bad_pw = auth_client.post("/api/auth/login", json={"username": user, "password": "wrong-password-xx", "totp_code": good})
+    assert bad_code.status_code == bad_pw.status_code == 401
+    assert bad_code.json()["detail"] == bad_pw.json()["detail"]   # reveals nothing about which was wrong
+
+    ok = auth_client.post("/api/auth/login", json={"username": user, "password": pw, "totp_code": good})
     assert ok.status_code == 200 and auth_client.get("/api/cases").status_code == 200
 
     auth_client.post("/api/auth/logout")
-    replay = auth_client.post("/api/auth/login", json={"password": pw, "totp_code": good})
+    replay = auth_client.post("/api/auth/login", json={"username": user, "password": pw, "totp_code": good})
     assert replay.status_code == 401                                                          # same code cannot be reused
 
 
@@ -126,9 +130,12 @@ def test_disable_requires_password_and_code(auth_client, monkeypatch):
 
 
 def test_totp_secret_is_encrypted_in_the_database(auth_client):
+    import json
     import backend.main as m
+    from backend.tests.conftest import _AUTH_TEST_USERNAME as user
     secret = _enable_totp(auth_client)
-    stored = m.db.get_auth_value("totp_secret")
+    users = json.loads(m.db.get_auth_value("users"))
+    stored = users[user.lower()]["totp_secret"]
     assert stored.startswith("enc1:") and secret not in stored
 
 

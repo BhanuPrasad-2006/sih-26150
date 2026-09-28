@@ -12,6 +12,7 @@ import pytest
 
 from backend import case_package, pdf_signing, totp, tls
 from backend.tests.conftest import _AUTH_TEST_PASSWORD as PW
+from backend.tests.conftest import _AUTH_TEST_USERNAME as USER
 
 
 def _enable_totp_get_codes(client):
@@ -35,29 +36,34 @@ def test_recovery_codes_are_not_stored_in_plaintext():
     import backend.main as m
     from backend.auth import AuthManager
     a = AuthManager(m.db)
-    if a.totp_enabled():
-        a.disable_totp()
-    secret = a.begin_totp_enrollment()
-    codes = a.confirm_totp(totp.code_at(secret, totp.counter_now()))
+    username = "recovery_plaintext_test"
+    if not a.get_username_display(username):
+        a.create_user(username, "SomeStrongPass1!")
+    if a.totp_enabled(username):
+        a.disable_totp(username)
+    secret = a.begin_totp_enrollment(username)
+    codes = a.confirm_totp(username, totp.code_at(secret, totp.counter_now()))
     assert codes and len(codes) == 10
-    raw = m.db.get_auth_value("totp_recovery")
+    users = m.db.get_auth_value("users")
+    import json as _json
+    raw = _json.loads(users)[username]["totp_recovery"]
     assert raw.startswith("enc1:")
     from backend import secure_store
     inner = secure_store.decrypt_text(raw)                                               # even decrypted: hashes only
     assert not any(c.replace("-", "") in inner for c in codes) and "\"h\"" in inner
-    a.disable_totp()
+    a.disable_totp(username)
 
 
 def test_login_with_recovery_code_works_once(auth_client):
     secret, codes = _enable_totp_get_codes(auth_client)
     auth_client.post("/api/auth/logout")
-    ok = auth_client.post("/api/auth/login", json={"password": PW, "totp_code": codes[0]})
+    ok = auth_client.post("/api/auth/login", json={"username": USER, "password": PW, "totp_code": codes[0]})
     assert ok.status_code == 200 and auth_client.get("/api/cases").status_code == 200
     assert auth_client.get("/api/auth/totp").json()["recovery_codes_remaining"] == 9
     auth_client.post("/api/auth/logout")
-    again = auth_client.post("/api/auth/login", json={"password": PW, "totp_code": codes[0]})
+    again = auth_client.post("/api/auth/login", json={"username": USER, "password": PW, "totp_code": codes[0]})
     assert again.status_code == 401                                                    # single use
-    lowercase = auth_client.post("/api/auth/login", json={"password": PW, "totp_code": codes[1].lower().replace("-", " ")})
+    lowercase = auth_client.post("/api/auth/login", json={"username": USER, "password": PW, "totp_code": codes[1].lower().replace("-", " ")})
     assert lowercase.status_code == 200                                                # formatting-tolerant
     glog = auth_client.get("/api/auth/global-audit").json()["entries"]
     assert any(e["action"] == "recovery_code_used" for e in glog)
@@ -69,8 +75,8 @@ def test_recovery_code_can_disable_2fa_and_regenerate_needs_password(auth_client
     fresh = auth_client.post("/api/auth/totp/recovery-codes", json={"password": PW, "code": codes[0]}).json()["recovery_codes"]
     assert len(fresh) == 10 and set(fresh).isdisjoint(codes[1:])                       # old codes are void
     auth_client.post("/api/auth/logout")
-    assert auth_client.post("/api/auth/login", json={"password": PW, "totp_code": codes[2]}).status_code == 401
-    assert auth_client.post("/api/auth/login", json={"password": PW, "totp_code": fresh[0]}).status_code == 200
+    assert auth_client.post("/api/auth/login", json={"username": USER, "password": PW, "totp_code": codes[2]}).status_code == 401
+    assert auth_client.post("/api/auth/login", json={"username": USER, "password": PW, "totp_code": fresh[0]}).status_code == 200
     d = auth_client.post("/api/auth/totp/disable", json={"password": PW, "code": fresh[1]})
     assert d.status_code == 200 and auth_client.get("/api/auth/totp").json()["enabled"] is False
 
@@ -84,7 +90,7 @@ def test_session_has_an_absolute_lifetime_even_when_active(monkeypatch):
     monkeypatch.setenv("SESSION_MAX_HOURS", "1")
     t = [1_000_000.0]
     monkeypatch.setattr(auth_mod.time, "time", lambda: t[0])
-    token = a.create_session()
+    token = a.create_session("session_lifetime_test_user")
     for _ in range(5):                                                                  # active every 20 minutes
         t[0] += 20 * 60
         if t[0] - 1_000_000.0 <= 3600:
@@ -95,11 +101,16 @@ def test_session_has_an_absolute_lifetime_even_when_active(monkeypatch):
 
 
 def test_enabling_2fa_ends_other_sessions(auth_client):
+    """Enabling 2FA ends this SAME examiner's other sessions (e.g. logged in on two tabs) but
+    must never touch a different examiner's session."""
     import backend.main as m
-    other = m.auth.create_session()
-    assert m.auth.validate_session(other) is True
+    same_user_other_tab = m.auth.create_session(USER)         # the same examiner, a second session
+    different_examiner = m.auth.create_session("someone_else")
+    assert m.auth.validate_session(same_user_other_tab) is True
+    assert m.auth.validate_session(different_examiner) is True
     _enable_totp_get_codes(auth_client)
-    assert m.auth.validate_session(other) is False
+    assert m.auth.validate_session(same_user_other_tab) is False                        # same examiner: ended
+    assert m.auth.validate_session(different_examiner) is True                          # different examiner: untouched
     assert auth_client.get("/api/cases").status_code == 200                             # the current session survives
 
 
@@ -136,7 +147,7 @@ def test_https_gets_secure_cookie_and_hsts_http_does_not(isolated_app):
     from starlette.testclient import TestClient
     import backend.main as m
     https = TestClient(m.app, base_url="https://testserver")
-    r = https.post("/api/auth/setup", json={"password": PW})
+    r = https.post("/api/auth/setup", json={"username": USER, "password": PW})
     assert r.status_code == 200
     assert "secure" in r.headers["set-cookie"].lower()
     assert r.headers["strict-transport-security"].startswith("max-age=")
@@ -258,17 +269,19 @@ def _fresh_auth(tmp_path, monkeypatch):
     from backend.database import Database
     monkeypatch.setenv("FORENSIC_CASE_DIR", str(tmp_path / "cases"))
     db = Database()
-    return db, AuthManager(db)
+    a = AuthManager(db)
+    a.create_user("lockout_test_user", "SomeStrongPass1!")
+    return db, a
 
 
 def test_lockout_and_failure_count_survive_a_restart(tmp_path, monkeypatch):
     from backend.auth import AuthManager
     db, a = _fresh_auth(tmp_path, monkeypatch)
     for _ in range(AuthManager.MAX_FAILURES):
-        a.record_failure()
-    assert a.is_locked_out()[0] is True
+        a.record_failure("lockout_test_user")
+    assert a.is_locked_out("lockout_test_user")[0] is True
     restarted = AuthManager(db)                      # same database, new process state
-    locked, remaining = restarted.is_locked_out()
+    locked, remaining = restarted.is_locked_out("lockout_test_user")
     assert locked is True and 0 < remaining <= AuthManager.LOCKOUT_SECONDS
 
 
@@ -276,9 +289,9 @@ def test_partial_failures_are_not_forgotten_on_restart(tmp_path, monkeypatch):
     from backend.auth import AuthManager
     db, a = _fresh_auth(tmp_path, monkeypatch)
     for _ in range(AuthManager.MAX_FAILURES - 1):
-        a.record_failure()
+        a.record_failure("lockout_test_user")
     restarted = AuthManager(db)
-    count, just_locked = restarted.record_failure()
+    count, just_locked = restarted.record_failure("lockout_test_user")
     assert just_locked is True and count == AuthManager.MAX_FAILURES
 
 
@@ -286,13 +299,18 @@ def test_a_successful_login_clears_the_saved_lockout(tmp_path, monkeypatch):
     from backend.auth import AuthManager
     db, a = _fresh_auth(tmp_path, monkeypatch)
     for _ in range(AuthManager.MAX_FAILURES):
-        a.record_failure()
-    a.record_success()
-    assert AuthManager(db).is_locked_out() == (False, 0)
+        a.record_failure("lockout_test_user")
+    a.record_success("lockout_test_user")
+    assert AuthManager(db).is_locked_out("lockout_test_user") == (False, 0)
 
 
 def test_a_corrupt_saved_counter_fails_closed(tmp_path, monkeypatch):
+    """A stored lockout_until that is not a number (e.g. partial disk corruption) must lock the
+    account out rather than silently letting it back in."""
+    import json
     from backend.auth import AuthManager
     db, _ = _fresh_auth(tmp_path, monkeypatch)
-    db.set_auth_value("lockout_until", "not-a-number")
-    assert AuthManager(db).is_locked_out()[0] is True
+    users = json.loads(db.get_auth_value("users"))
+    users["lockout_test_user"]["lockout_until"] = "not-a-number"
+    db.set_auth_value("users", json.dumps(users))
+    assert AuthManager(db).is_locked_out("lockout_test_user")[0] is True
