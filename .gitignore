@@ -64,3 +64,6 @@ Output/
 # Contains client-safe Supabase URL + anon key baked into the frozen build.
 # Never commit this file.
 backend/_bundled_config.py
+
+# Large installer binary in website downloads (hosted via GitHub Releases instead)
+website/downloads/*.exe

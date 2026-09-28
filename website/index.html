@@ -933,7 +933,7 @@
             </tr>
             <tr>
               <td class="label">FILE SIZE</td>
-              <td class="value">187.7 MB (196,856,557 bytes)</td>
+              <td class="value">188.4 MB (197,573,927 bytes)</td>
             </tr>
             <tr>
               <td class="label">RUNTIME</td>
@@ -950,13 +950,13 @@
               <span>SHA-256 Authenticity Checksum</span>
               <button class="copy-hash-btn" id="copyHashBtn" aria-label="Copy SHA256 Checksum">COPY HASH</button>
             </div>
-            <div class="dl-hash-val" id="installerHashVal">6ed2148ce76043821c44266100c66d47563745fc3db63ea177ac180b9d61d302</div>
+            <div class="dl-hash-val" id="installerHashVal">E79DFF5C1F3895694B3C0BE4469C9A444A4229942941CAD223DAE3135DD1E333</div>
           </div>
         </div>
 
         <div class="dl-action-card">
           <!-- Mandatory Direct .EXE Download Button -->
-          <a href="downloads/SIH-Forensic-Tool-Setup.exe" download class="btn btn-primary" id="mainDownloadBtn">
+          <a href="https://github.com/BhanuPrasad-2006/sih-26150/releases/download/v1.0.0/SIH-Forensic-Tool-Setup-1.0.0.exe" class="btn btn-primary" id="mainDownloadBtn">
             <span class="btn-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -966,6 +966,17 @@
             </span>
             DOWNLOAD v1.0.0 (.EXE)
           </a>
+
+          <!-- One-Line PowerShell Quick Install -->
+          <div class="ps-install-box" style="margin: 0.85rem 0; background: #0f172a; border: 1px solid #1e293b; border-radius: 8px; padding: 0.85rem; text-align: left;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+              <span style="font-size: 0.72rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px;">Quick Install via PowerShell</span>
+              <button class="copy-hash-btn" onclick="navigator.clipboard.writeText('irm https://raw.githubusercontent.com/BhanuPrasad-2006/sih-26150/main/install.ps1 | iex'); this.textContent='COPIED!';" style="padding: 2px 8px; font-size: 0.7rem; cursor: pointer;">COPY</button>
+            </div>
+            <code style="display: block; font-family: 'JetBrains Mono', Consolas, monospace; font-size: 0.78rem; color: #38bdf8; word-break: break-all; user-select: all;">
+              irm https://raw.githubusercontent.com/BhanuPrasad-2006/sih-26150/main/install.ps1 | iex
+            </code>
+          </div>
 
           <!-- Separate GitHub Source Link -->
           <a href="https://github.com/BhanuPrasad-2006/sih-26150" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" id="mainGithubBtn">
