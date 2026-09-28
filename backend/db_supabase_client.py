@@ -80,10 +80,10 @@ class SupabaseDatabase:
 
     def get_case(self, case_id: str) -> Optional[object]:
         from backend.models import Case
-        res = self._table("cases").select("*").eq("case_id", case_id).single().execute()
+        res = self._table("cases").select("*").eq("case_id", case_id).limit(1).execute()
         if not res.data:
             return None
-        return Case(**res.data)
+        return Case(**res.data[0])
 
     def list_cases(self) -> list:
         from backend.models import Case
@@ -117,12 +117,12 @@ class SupabaseDatabase:
             self._table("evidence")
             .select("*")
             .eq("evidence_id", evidence_id)
-            .single()
+            .limit(1)
             .execute()
         )
         if not res.data:
             return None
-        d = res.data.copy()
+        d = res.data[0].copy()
         d["is_synthetic"] = bool(d.get("is_synthetic"))
         return Evidence(**d)
 
@@ -307,11 +307,11 @@ class SupabaseDatabase:
             self._table("auth_state")
             .select("value")
             .eq("key", key)
-            .single()
+            .limit(1)
             .execute()
         )
         if res.data:
-            return res.data.get("value")
+            return res.data[0].get("value")
         return None
 
     def set_auth_value(self, key: str, value: str) -> None:
