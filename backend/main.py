@@ -150,25 +150,16 @@ _AUTH_EXEMPT_PATHS = {
 
 def _load_bundled_config() -> None:
     """
-    In a PyInstaller frozen build, load client-safe Supabase credentials that
-    were baked in at build time by packaging/bundle_env.py.
-
-    These are the Supabase project URL and anon key — designed to be embedded
-    in client apps and protected by Row Level Security (RLS). The Postgres
-    password (DATABASE_URL) is never bundled.
-
-    Does nothing in a normal source/dev run (env vars set via .env are already
-    loaded by load_dotenv() above).
+    Load client-safe Supabase credentials that were baked in by packaging/bundle_env.py
+    if they are not already set in the environment.
     """
-    if not getattr(__import__("sys"), "_MEIPASS", None):
-        return  # not a frozen build — skip
     if os.environ.get("SUPABASE_URL") and os.environ.get("SUPABASE_ANON_KEY"):
-        return  # already set (e.g. by the OS / the user's own env override)
+        return  # already set (e.g. by .env or OS env override)
     try:
         from backend import _bundled_config  # noqa: PLC0415
-        if _bundled_config.SUPABASE_URL:
+        if getattr(_bundled_config, "SUPABASE_URL", None):
             os.environ.setdefault("SUPABASE_URL", _bundled_config.SUPABASE_URL)
-        if _bundled_config.SUPABASE_ANON_KEY:
+        if getattr(_bundled_config, "SUPABASE_ANON_KEY", None):
             os.environ.setdefault("SUPABASE_ANON_KEY", _bundled_config.SUPABASE_ANON_KEY)
     except ImportError:
         pass  # bundled config not present — fall through to local-only mode
