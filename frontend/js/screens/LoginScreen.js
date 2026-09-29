@@ -75,10 +75,9 @@ function renderSetupScreen() {
       <div class="auth-form-panel">
       <div class="auth-card">
         <div class="auth-icon">${_ICON_LOCK_PLUS}</div>
-        <div class="auth-title">Create the first examiner account</div>
+        <div class="auth-title">Create Local Profile</div>
         <div class="auth-subtitle">
-          This becomes the first login for this installation. You can add more examiner accounts
-          later, from inside the tool.<br><strong>${_PASSWORD_RULE_TEXT}</strong>
+          First-run setup for this installation. Your account and evidence remain strictly offline on this computer.<br><strong>${_PASSWORD_RULE_TEXT}</strong>
         </div>
 
         <form id="setup-form" novalidate autocomplete="off">
@@ -88,7 +87,7 @@ function renderSetupScreen() {
               type="text"
               id="setup-username"
               class="form-control"
-              placeholder="e.g. your name or badge number"
+              placeholder="Enter your username"
               autocomplete="username"
               required
             />
@@ -122,7 +121,7 @@ function renderSetupScreen() {
           </div>
 
           <button type="submit" id="btn-setup" class="btn btn-primary btn-lg w-full mt-sm">
-            Create Account &amp; Open Tool ${icon('arrow-right')}
+            Create Profile &amp; Open Tool ${icon('arrow-right')}
           </button>
         </form>
       </div>
@@ -170,15 +169,27 @@ function renderSetupScreen() {
       }
       errEl.style.display = 'flex';
       btnSetup.disabled = false;
-      btnSetup.innerHTML = 'Create Account &amp; Open Tool ' + icon('arrow-right');
+      btnSetup.innerHTML = 'Create Profile &amp; Open Tool ' + icon('arrow-right');
     }
   };
 }
 
 
-function renderLoginScreen() {
+async function renderLoginScreen() {
   const root = document.getElementById('content-root');
   _hideChromeForAuth();
+
+  let rememberedUser = '';
+  let requirePwEveryTime = false;
+  try {
+    const status = await API.authStatus();
+    rememberedUser = status.remembered_username || '';
+    requirePwEveryTime = !!status.require_password_every_time;
+  } catch (_) {}
+
+  function _esc(s) {
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
 
   root.innerHTML = `
     <div class="auth-screen-wrapper">
@@ -208,6 +219,7 @@ function renderLoginScreen() {
               class="form-control"
               placeholder="Enter your username"
               autocomplete="username"
+              value="${_esc(rememberedUser)}"
               required
             />
           </div>
@@ -221,6 +233,13 @@ function renderLoginScreen() {
               autocomplete="current-password"
               required
             />
+          </div>
+
+          <div class="form-group checkbox-group" id="remember-me-group" style="${requirePwEveryTime ? 'display:none;' : 'margin: 6px 0 14px 0;'}">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.88rem; color: var(--text-secondary); user-select: none;">
+              <input type="checkbox" id="login-remember-me" checked style="cursor: pointer; width: 16px; height: 16px;" />
+              <span>Stay signed in for 7 days on this computer</span>
+            </label>
           </div>
 
           <div class="form-group hidden" id="totp-group">
@@ -299,7 +318,9 @@ function renderLoginScreen() {
     btnLogin.innerHTML = '<span class="btn-spinner"></span> Verifying…';
 
     try {
-      const result = await API.login(username, pw, totpCode);
+      const rememberBox = document.getElementById('login-remember-me');
+      const rememberMe = rememberBox ? rememberBox.checked : true;
+      const result = await API.login(username, pw, totpCode, rememberMe);
 
       if (result.locked) {
         _startLockoutCountdown(result.retry_after || 60);
@@ -344,4 +365,12 @@ function renderLoginScreen() {
       document.getElementById('login-password').value = '';
     }
   };
+
+  if (rememberedUser) {
+    const pwInput = document.getElementById('login-password');
+    if (pwInput) pwInput.focus();
+  } else {
+    const userInput = document.getElementById('login-username');
+    if (userInput) userInput.focus();
+  }
 }

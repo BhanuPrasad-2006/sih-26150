@@ -140,23 +140,34 @@ window.addEventListener('auth:expired', () => {
 // ── App Initialization ────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   try {
-    const firstRun = await (await fetch('/api/setup/first-run-status')).json();
-    if (!firstRun.complete) {
-      renderFirstRunScreen(firstRun);
+    const status = await API.authStatus();
+
+    // 1. First run / new install: no local account exists
+    if (!status.has_account) {
+      navigateTo('setup');
       return;
     }
 
-    const status = await API.authStatus();
-    if (!status.has_account) {
-      navigateTo('setup');
-    } else if (!status.authenticated) {
+    // 2. Existing local user, but session is not active
+    if (!status.authenticated) {
+      // If "require password every time" is OFF, try seamless 7-day auto-login
+      if (!status.require_password_every_time) {
+        const autoRes = await API.autoLogin();
+        if (autoRes.authenticated) {
+          navigateTo('dashboard');
+          initUpdateBanner();
+          return;
+        }
+      }
+      // If require-password is ON or auto-login expired: show login screen
       navigateTo('login');
-    } else {
-      navigateTo('dashboard');
-      initUpdateBanner();
+      return;
     }
+
+    // 3. Authenticated: enter dashboard
+    navigateTo('dashboard');
+    initUpdateBanner();
   } catch (_) {
-    // If the status check itself fails (server down?), show login
     navigateTo('login');
   }
 });

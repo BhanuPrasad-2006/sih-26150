@@ -31,8 +31,7 @@ function showModal(title, bodyHtml, buttons = []) {
 
   buttons.forEach((b, i) => {
     document.getElementById(`modal-btn-${i}`).onclick = () => {
-      b.onClick();
-      // Only auto-close if not the primary action button (let async handlers control flow)
+      if (b.onClick) b.onClick();
       if (b.autoClose !== false) closeModal();
     };
   });

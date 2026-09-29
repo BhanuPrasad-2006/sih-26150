@@ -54,7 +54,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 # A no-op when no .env file exists, so this is safe on any deployment target.
 load_dotenv()
 
-from backend import local_config
+from backend import local_config, remember_token
+from backend.auth_db import AuthDB
 from backend.acquisition import AcquisitionError, EvidenceImage, verify_disk_image_integrity
 from backend.audit import AuditLog
 from backend.auth import AuthManager, UsernameTakenError, validate_password_strength, validate_username
@@ -139,8 +140,10 @@ def _current_username(request: Request) -> str:
 _AUTH_EXEMPT_PATHS = {
     "/api/auth/status",
     "/api/auth/status-with-session",
+    "/api/auth/auto-login",
     "/api/auth/login",
     "/api/auth/setup",
+    "/api/auth/security-prefs",
     "/api/setup/first-run-status",     # first-run wizard runs before any password exists
     "/api/setup/first-run-complete",
     "/api/version",                    # shown on the login/setup screens too, before a session exists
@@ -148,61 +151,35 @@ _AUTH_EXEMPT_PATHS = {
 
 # ── Global state ──────────────────────────────────────────────────────────────
 
-def _load_bundled_config() -> None:
-    """
-    Load client-safe Supabase credentials that were baked in by packaging/bundle_env.py
-    if they are not already set in the environment.
-    """
-    if os.environ.get("SUPABASE_URL") and os.environ.get("SUPABASE_ANON_KEY"):
-        return  # already set (e.g. by .env or OS env override)
-    try:
-        from backend import _bundled_config  # noqa: PLC0415
-        if getattr(_bundled_config, "SUPABASE_URL", None):
-            os.environ.setdefault("SUPABASE_URL", _bundled_config.SUPABASE_URL)
-        if getattr(_bundled_config, "SUPABASE_ANON_KEY", None):
-            os.environ.setdefault("SUPABASE_ANON_KEY", _bundled_config.SUPABASE_ANON_KEY)
-    except ImportError:
-        pass  # bundled config not present — fall through to local-only mode
-
-
-_load_bundled_config()
-
-
 def _create_database():
     """
-    Database backend selection (in priority order):
-
-    1. Supabase client (anon key) — used by the desktop installer build.
-       Set SUPABASE_URL + SUPABASE_ANON_KEY (client-safe; no Postgres password).
-       Baked in at build time by packaging/bundle_env.py.
-
-    2. Postgres direct connection (psycopg2) — for developer / server use.
-       Set DATABASE_URL in .env. The raw Postgres password stays server-side.
-
-    3. Local offline fallback — no cloud credentials needed.
-       All case data is stored locally on the user's machine.
-       Evidence files always remain local regardless of which backend is active.
+    Database backend selection:
+    By default, SIH Forensic Tool is a 100% local, offline desktop application.
+    All case data, evidence metadata, and recovered segments are stored locally
+    in the user's local forensic.db (via backend.database.Database).
+    
+    Cloud/server databases (Supabase or PostgreSQL) are only enabled if explicitly
+    configured via USE_CLOUD_DB=1 or USE_POSTGRES=1.
     """
-    supabase_url = os.environ.get("SUPABASE_URL", "").strip()
-    anon_key = os.environ.get("SUPABASE_ANON_KEY", "").strip()
-    if supabase_url and anon_key:
-        from backend.db_supabase_client import SupabaseDatabase
-        return SupabaseDatabase(supabase_url, anon_key)
+    if os.environ.get("USE_CLOUD_DB") == "1":
+        supabase_url = os.environ.get("SUPABASE_URL", "").strip()
+        anon_key = os.environ.get("SUPABASE_ANON_KEY", "").strip()
+        if supabase_url and anon_key:
+            from backend.db_supabase_client import SupabaseDatabase
+            return SupabaseDatabase(supabase_url, anon_key)
 
-    database_url = os.environ.get("DATABASE_URL", "").strip()
-    if database_url:
-        from backend.db_postgres import PostgresDatabase
-        return PostgresDatabase(database_url)
+    if os.environ.get("USE_POSTGRES") == "1":
+        database_url = os.environ.get("DATABASE_URL", "").strip()
+        if database_url:
+            from backend.db_postgres import PostgresDatabase
+            return PostgresDatabase(database_url)
 
-    log.warning(
-        "No cloud database credentials found. Running in local-only mode. "
-        "Set SUPABASE_URL + SUPABASE_ANON_KEY for cloud-backed operation."
-    )
     return Database()
 
 
+auth_db: AuthDB = AuthDB()
 db = _create_database()
-auth: AuthManager = AuthManager(db)
+auth: AuthManager = AuthManager(auth_db)
 
 # Per-case: {case_id → asyncio.Queue[ScanProgress]}
 _progress_queues: dict[str, asyncio.Queue] = {}
@@ -221,11 +198,13 @@ _active_scan_evidence: dict[str, str] = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global db, auth
+    global db, auth, auth_db
+    if auth_db is None or not hasattr(auth_db, "_path"):
+        auth_db = AuthDB()
+        auth = AuthManager(auth_db)
     if not hasattr(db, "_path"):
         db = _create_database()
-        auth = AuthManager(db)
-    log.info("Database initialised at %s", db._path)
+    log.info("Local Auth DB initialised at %s; Case Database at %s", auth_db._path, getattr(db, "_path", "cloud"))
 
     # ── Startup binding check ──────────────────────────────────────────────────
     # The bind address is controlled by uvicorn CLI args (in run.bat/run.sh),
@@ -549,6 +528,11 @@ class LoginRequest(BaseModel):
     username: str
     password: str
     totp_code: Optional[str] = None
+    remember_me: bool = True
+
+
+class SecurityPrefsRequest(BaseModel):
+    require_password_every_time: bool
 
 
 class TotpConfirmRequest(BaseModel):
@@ -695,19 +679,20 @@ async def first_run_complete(req: FirstRunCompleteRequest):
 
 
 @app.get("/api/auth/status")
-async def auth_status():
+async def auth_status(request: Request):
     """
     Unauthenticated endpoint — lets the frontend decide on first load whether
     to show the setup screen, login screen, or dashboard.
-    Returns: {has_account: bool, authenticated: bool}
-
-    totp_enabled is deliberately NOT reported here any more: two-factor is now per-examiner, so
-    whether it applies cannot be known before a username is submitted (see /api/auth/login,
-    which returns totp_required on the attempt that needs it).
+    Returns: {has_account: bool, authenticated: bool, username: Optional[str], remembered_username: Optional[str], require_password_every_time: bool}
     """
+    token = request.cookies.get(SESSION_COOKIE_NAME)
+    authenticated = bool(token and auth.validate_session(token))
     return {
         "has_account": auth.has_any_user(),
-        "authenticated": False,  # client-side always checks cookie via middleware
+        "authenticated": authenticated,
+        "username": auth.session_username(token) if authenticated else None,
+        "remembered_username": local_config.get_remembered_username(),
+        "require_password_every_time": local_config.get_require_password_every_time(),
     }
 
 
@@ -725,7 +710,51 @@ async def auth_status_with_session(request: Request):
         "has_account": auth.has_any_user(),
         "authenticated": authenticated,
         "username": auth.session_username(token) if authenticated else None,
+        "remembered_username": local_config.get_remembered_username(),
+        "require_password_every_time": local_config.get_require_password_every_time(),
     }
+
+
+@app.get("/api/auth/auto-login")
+async def auto_login(request: Request, response: Response):
+    """
+    Attempt seamless auto-login on application startup using the 7-day remembered token.
+    Exempt from auth middleware.
+    """
+    if local_config.get_require_password_every_time():
+        return {"authenticated": False, "reason": "password_required"}
+
+    # If active valid session cookie already exists, return current user
+    token = request.cookies.get(SESSION_COOKIE_NAME)
+    if token and auth.validate_session(token):
+        return {
+            "authenticated": True,
+            "username": auth.session_username(token),
+        }
+
+    saved = remember_token.load_remember_token()
+    if not saved:
+        return {"authenticated": False}
+
+    username = saved.get("username")
+    display_name = auth.get_username_display(username)
+    if not display_name:
+        remember_token.clear_remember_token()
+        return {"authenticated": False}
+
+    new_token = auth.create_session(display_name)
+    auth.record_success(display_name)
+    _global_audit_event("auto_login_success", f"username={display_name}")
+
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=new_token,
+        httponly=True,
+        samesite="strict",
+        max_age=7 * 24 * 3600,
+        secure=(request.url.scheme == "https"),
+    )
+    return {"authenticated": True, "username": display_name}
 
 
 @app.post("/api/auth/setup")
@@ -748,6 +777,15 @@ async def setup_password(req: SetupRequest, response: Response, request: Request
     token = auth.create_session(req.username)
     auth.record_success(req.username)
 
+    # Persist remembered username
+    local_config.set_remembered_username(req.username)
+    require_pw = local_config.get_require_password_every_time()
+    max_age = None if require_pw else 7 * 24 * 3600
+    if not require_pw:
+        remember_token.save_remember_token(req.username, token)
+    else:
+        remember_token.clear_remember_token()
+
     # Audit: no password details logged
     _global_audit_event("examiner_account_created", f"username={req.username} (first-run)")
 
@@ -756,9 +794,7 @@ async def setup_password(req: SetupRequest, response: Response, request: Request
         value=token,
         httponly=True,          # JS cannot read — blocks XSS token theft
         samesite="strict",      # Blocks basic CSRF
-        # secure=True would be added if this were ever served over HTTPS.
-        # On localhost HTTP, secure=True would prevent the cookie from being sent.
-        max_age=None,           # Session cookie — expires when browser closes
+        max_age=max_age,
         secure=(request.url.scheme == "https"),   # Secure whenever the session is served over HTTPS
     )
     return {"ok": True}
@@ -847,8 +883,20 @@ async def login(req: LoginRequest, response: Response, request: Request):
         )
 
     # Success
+    display_name = auth.get_username_display(username) or username
     token = auth.create_session(username)
     auth.record_success(username)
+
+    # Remember local username & optionally persist 7-day token
+    local_config.set_remembered_username(display_name)
+    require_pw = local_config.get_require_password_every_time()
+    remember_me = getattr(req, "remember_me", True)
+    if remember_me and not require_pw:
+        max_age = 7 * 24 * 3600
+        remember_token.save_remember_token(display_name, token)
+    else:
+        max_age = None
+        remember_token.clear_remember_token()
 
     # Audit: success, no credentials
     _global_audit_event("login_success", f"username={username}")
@@ -858,12 +906,10 @@ async def login(req: LoginRequest, response: Response, request: Request):
         value=token,
         httponly=True,          # JS cannot read — blocks XSS token theft
         samesite="strict",      # Blocks basic CSRF
-        # secure=True would be set if this were served over HTTPS.
-        # On localhost HTTP, secure=True prevents the cookie from being sent.
-        max_age=None,           # Session cookie
+        max_age=max_age,
         secure=(request.url.scheme == "https"),   # Secure whenever the session is served over HTTPS
     )
-    return {"ok": True, "username": auth.get_username_display(username)}
+    return {"ok": True, "username": display_name}
 
 
 @app.get("/api/auth/totp")
@@ -928,9 +974,33 @@ async def logout(request: Request, response: Response):
     token = request.cookies.get(SESSION_COOKIE_NAME)
     username = auth.session_username(token)
     auth.invalidate_session(token)
+    remember_token.clear_remember_token()
     _global_audit_event("logout", f"username={username}")
     response.delete_cookie(SESSION_COOKIE_NAME)
     return {"ok": True}
+
+
+@app.get("/api/auth/security-prefs")
+async def get_security_prefs():
+    """Return local installation security preferences."""
+    return {
+        "require_password_every_time": local_config.get_require_password_every_time(),
+        "remembered_username": local_config.get_remembered_username(),
+    }
+
+
+@app.post("/api/auth/security-prefs")
+async def set_security_prefs(req: SecurityPrefsRequest, request: Request):
+    """Update local installation security preferences."""
+    username = _current_username(request)
+    local_config.set_require_password_every_time(req.require_password_every_time)
+    if req.require_password_every_time:
+        remember_token.clear_remember_token()
+    _global_audit_event(
+        "security_preference_updated",
+        f"username={username} require_password_every_time={req.require_password_every_time}",
+    )
+    return {"ok": True, "require_password_every_time": req.require_password_every_time}
 
 
 @app.get("/api/auth/global-audit")

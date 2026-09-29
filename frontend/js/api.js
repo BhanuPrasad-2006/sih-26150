@@ -152,12 +152,40 @@ const API = {
    * the caller should show the code field and call login() again with it, without re-locking.
    * On a genuine wrong username/password/code the server returns 401; this method throws.
    */
-  async login(username, password, totpCode) {
+  async autoLogin() {
+    const res = await fetch('/api/auth/auto-login');
+    if (!res.ok) return { authenticated: false };
+    return res.json();
+  },
+
+  async getSecurityPrefs() {
+    const res = await fetch('/api/auth/security-prefs');
+    if (!res.ok) return { require_password_every_time: false };
+    return res.json();
+  },
+
+  async setSecurityPrefs(requirePasswordEveryTime) {
+    const res = await fetch('/api/auth/security-prefs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ require_password_every_time: requirePasswordEveryTime }),
+    });
+    return res.json();
+  },
+
+  /**
+   * Login with username + password.
+   * Returns {ok: true, username} on success, {locked: true, retry_after: N} on lockout, or
+   * {ok: false, totp_required: true} when the password was right but a 2FA code is needed —
+   * the caller should show the code field and call login() again with it, without re-locking.
+   * On a genuine wrong username/password/code the server returns 401; this method throws.
+   */
+  async login(username, password, totpCode, rememberMe = true) {
     const url = '/api/auth/login';
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password, totp_code: totpCode || null }),
+      body: JSON.stringify({ username, password, totp_code: totpCode || null, remember_me: rememberMe }),
     });
 
     if (res.status === 429) {

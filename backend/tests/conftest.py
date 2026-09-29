@@ -172,10 +172,13 @@ def isolated_app(tmp_path, monkeypatch):
         f"isolated_app fixture created a DB at the real case dir: {fresh_db_parent}"
     )
 
-    fresh_auth = AuthManager(fresh_db)
+    from backend.auth_db import AuthDB
+    fresh_auth_db = AuthDB(tmp_path / "auth.db")
+    fresh_auth = AuthManager(fresh_auth_db)
 
     # Patch the module-level db and auth instances used by all routes
     monkeypatch.setattr(_main_module, "db", fresh_db)
+    monkeypatch.setattr(_main_module, "auth_db", fresh_auth_db)
     monkeypatch.setattr(_main_module, "auth", fresh_auth)
 
     # Clear in-memory per-case state

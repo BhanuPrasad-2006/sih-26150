@@ -46,6 +46,8 @@ hiddenimports = [
     "psycopg2",
     # Bundled config written by packaging/bundle_env.py at build time.
     "backend._bundled_config",
+    "backend.auth_db",
+    "backend.remember_token",
 ]
 
 a = Analysis(

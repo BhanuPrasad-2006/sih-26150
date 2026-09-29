@@ -519,30 +519,4 @@ class PostgresDatabase:
                 "ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value",
                 (key, value),
             )
-            if key == "users":
-                try:
-                    import json
-                    users = json.loads(value)
-                    for uname, udata in users.items():
-                        display_name = udata.get("username", uname)
-                        conn.execute(
-                            "INSERT INTO users (username, password_hash, totp_secret, totp_recovery, failure_count, lockout_until) "
-                            "VALUES (%s,%s,%s,%s,%s,%s) "
-                            "ON CONFLICT (username) DO UPDATE SET "
-                            "  password_hash=EXCLUDED.password_hash, "
-                            "  totp_secret=EXCLUDED.totp_secret, "
-                            "  totp_recovery=EXCLUDED.totp_recovery, "
-                            "  failure_count=EXCLUDED.failure_count, "
-                            "  lockout_until=EXCLUDED.lockout_until",
-                            (
-                                display_name,
-                                udata.get("password_hash"),
-                                udata.get("totp_secret"),
-                                udata.get("totp_recovery"),
-                                udata.get("failure_count", 0),
-                                udata.get("lockout_until", 0.0),
-                            ),
-                        )
-                except Exception:
-                    pass
 
