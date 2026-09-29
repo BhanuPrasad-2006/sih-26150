@@ -13,6 +13,10 @@ const _CASE_NUMBER_RE = /^[\w\-/]{1,64}$/;
 
 function renderNewCaseScreen() {
   const root = document.getElementById('content-root');
+  
+  // Try to find current logged-in username to pre-fill investigator
+  const currentHeaderUser = document.getElementById('header-username')?.textContent?.replace(/^[👤\s]+|[▼\s]+$/g, '') || '';
+
   root.innerHTML = `
     <div class="page-header">
       <div class="page-title">Register New Case</div>
@@ -27,7 +31,7 @@ function renderNewCaseScreen() {
             <label for="input-case-number">Case Number / Reference ID <span class="text-error">*</span></label>
             <input type="text" id="input-case-number" class="form-control"
               placeholder="e.g. FIR-2026-892" required autocomplete="off" maxlength="64" />
-            <div id="err-case-number" class="field-error hidden"></div>
+            <div id="err-case-number" class="field-error" style="display: none; color: #ef4444; font-size: 12px; margin-top: 4px;"></div>
           </div>
           <div class="form-group">
             <label for="input-case-title">Case Title / Description</label>
@@ -41,14 +45,14 @@ function renderNewCaseScreen() {
           <div class="form-group">
             <label for="input-investigator">Lead Examiner / Investigator <span class="text-error">*</span></label>
             <input type="text" id="input-investigator" class="form-control"
-              placeholder="e.g. Officer A. Sharma" required maxlength="128" />
-            <div id="err-investigator" class="field-error hidden"></div>
+              placeholder="e.g. Officer A. Sharma" required maxlength="128" value="${escapeHtml(currentHeaderUser)}" />
+            <div id="err-investigator" class="field-error" style="display: none; color: #ef4444; font-size: 12px; margin-top: 4px;"></div>
           </div>
           <div class="form-group">
-            <label for="input-agency">Agency / Police Unit <span class="text-error">*</span></label>
+            <label for="input-agency">Agency / Police Unit <span class="text-dim text-xs">(optional)</span></label>
             <input type="text" id="input-agency" class="form-control"
-              placeholder="e.g. Cyber Crime Division, State Police" required maxlength="255" />
-            <div id="err-agency" class="field-error hidden"></div>
+              placeholder="e.g. Cyber Crime Division, State Police" maxlength="255" />
+            <div id="err-agency" class="field-error" style="display: none; color: #ef4444; font-size: 12px; margin-top: 4px;"></div>
           </div>
         </div>
 
@@ -103,7 +107,7 @@ function renderNewCaseScreen() {
         </div>
 
         <!-- inline error — hidden by default -->
-        <div id="case-error" class="error-inline hidden">
+        <div id="case-error" class="error-inline" style="display: none; margin-bottom: 12px;">
           <span>${icon('alert')}</span>
           <span id="case-error-msg"></span>
         </div>
@@ -116,6 +120,16 @@ function renderNewCaseScreen() {
     </div>
   `;
 
+  // If header username wasn't loaded yet, try async fetch
+  if (!currentHeaderUser) {
+    API.authStatus().then(st => {
+      const invInput = document.getElementById('input-investigator');
+      if (invInput && !invInput.value && st && st.username) {
+        invInput.value = st.username;
+      }
+    }).catch(() => {});
+  }
+
   const form      = document.getElementById('new-case-form');
   const submitBtn = document.getElementById('btn-submit-case');
   const errEl     = document.getElementById('case-error');
@@ -124,17 +138,17 @@ function renderNewCaseScreen() {
   /** Show a per-field error message. */
   function _fieldError(id, msg) {
     const el = document.getElementById(id);
-    if (el) { el.textContent = msg; el.classList.remove('hidden'); }
+    if (el) { el.textContent = msg; el.style.display = 'block'; }
   }
   /** Clear a per-field error. */
   function _fieldClear(id) {
     const el = document.getElementById(id);
-    if (el) { el.textContent = ''; el.classList.add('hidden'); }
+    if (el) { el.textContent = ''; el.style.display = 'none'; }
   }
   /** Clear all per-field errors. */
   function _clearAll() {
     ['err-case-number', 'err-investigator', 'err-agency'].forEach(_fieldClear);
-    errEl.classList.add('hidden');
+    errEl.style.display = 'none';
   }
 
   form.onsubmit = async (e) => {
@@ -179,12 +193,6 @@ function renderNewCaseScreen() {
       hasError = true;
     }
 
-    // ── Agency validation ───────────────────────────────────────────────────
-    if (!agency) {
-      _fieldError('err-agency', 'Agency / Organization is required.');
-      hasError = true;
-    }
-
     if (hasError) return;
 
     // Disable button + show spinner
@@ -208,12 +216,17 @@ function renderNewCaseScreen() {
 
     try {
       const created = await API.createCase(data);
+      if (typeof Toast !== 'undefined' && Toast.success) {
+        Toast.success(`Case created successfully: ${caseNumber}`);
+      }
       navigateTo('case-detail', { caseId: created.case_id });
     } catch (err) {
       // Show verbatim server error (includes HTTP 409 duplicate message)
       errMsg.textContent = err.message;
-      errEl.classList.remove('hidden');
       errEl.style.display = 'flex';
+      if (typeof Toast !== 'undefined' && Toast.error) {
+        Toast.error(err.message || 'Failed to create case');
+      }
       submitBtn.disabled = false;
       submitBtn.innerHTML = 'Create case &amp; continue ' + icon('arrow-right');
     }

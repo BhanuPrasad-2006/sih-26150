@@ -124,6 +124,21 @@ class _DesktopBridge:
         result = window.create_file_dialog(webview.FileDialog.FOLDER)
         return result[0] if result else None
 
+    def pick_file(self) -> str | None:
+        import webview
+        window = webview.windows[0]
+        file_types = (
+            "Forensic Disk Images (*.dd;*.img;*.raw;*.bin;*.001;*.iso;*.vmdk;*.e01;*.*)|"
+            "*.dd;*.img;*.raw;*.bin;*.001;*.iso;*.vmdk;*.e01;*.*|"
+            "All Files (*.*)|*.*"
+        )
+        result = window.create_file_dialog(
+            webview.FileDialog.OPEN,
+            allow_multiple=False,
+            file_types=(file_types,),
+        )
+        return result[0] if result else None
+
 
 def _error_html(detail: str) -> str:
     log_path = str(_get_log_file())

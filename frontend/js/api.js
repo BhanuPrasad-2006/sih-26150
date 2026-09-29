@@ -365,12 +365,13 @@ const API = {
   },
 
   async addEvidence(caseId, filePath, label, deviceUtcOffsetMinutes) {
+    const cleanPath = String(filePath || '').trim().replace(/^["']|["']$/g, '');
     const url = `/api/cases/${caseId}/evidence`;
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        path: filePath,
+        path: cleanPath,
         label,
         device_utc_offset_minutes: deviceUtcOffsetMinutes ?? null,
       })
@@ -425,8 +426,10 @@ const API = {
     });
   },
 
-  async startScan(caseId) {
-    const url = `/api/cases/${caseId}/scan`;
+  async startScan(caseId, evidenceId) {
+    const url = evidenceId
+      ? `/api/cases/${caseId}/scan?evidence_id=${encodeURIComponent(evidenceId)}`
+      : `/api/cases/${caseId}/scan`;
     const res = await fetch(url, { method: 'POST' });
     await this._checkOk(res, url);
     return res.json();

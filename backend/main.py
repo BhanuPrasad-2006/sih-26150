@@ -1035,8 +1035,12 @@ async def global_audit_log():
 
 # Allowed characters for case numbers: alphanumeric, dash, slash, underscore
 _CASE_NUMBER_RE = re.compile(r'^[\w\-/]{1,64}$')
-# Allowed file extensions for evidence disk images
-_ALLOWED_EVIDENCE_EXTS = {".dd", ".img", ".raw", ".bin"}
+# Allowed file extensions for evidence disk images (raw, split raw, and standard forensic formats)
+_ALLOWED_EVIDENCE_EXTS = {
+    ".dd", ".img", ".raw", ".bin", ".001", ".iso",
+    ".vmdk", ".vhd", ".vhdx", ".e01", ".ex01", ".aff", ".aff4", ".qcow2",
+    "",  # Allow raw forensic images without file extension
+}
 
 
 class CreateCaseRequest(BaseModel):
@@ -1099,7 +1103,7 @@ class LoadEvidenceRequest(BaseModel):
     @field_validator("path")
     @classmethod
     def _validate_path(cls, v: str) -> str:
-        v = v.strip()
+        v = v.strip().strip('"').strip("'")
         if not v:
             raise ValueError("Evidence file path is required.")
         # Reject path traversal attempts
@@ -1116,10 +1120,11 @@ class LoadEvidenceRequest(BaseModel):
             )
         # Check extension
         ext = Path(v).suffix.lower()
-        if ext not in _ALLOWED_EVIDENCE_EXTS:
+        if _ALLOWED_EVIDENCE_EXTS and ext not in _ALLOWED_EVIDENCE_EXTS:
+            valid_exts = sorted([e for e in _ALLOWED_EVIDENCE_EXTS if e])
             raise ValueError(
-                f"Evidence file must be a raw disk image with one of these extensions: "
-                f"{', '.join(sorted(_ALLOWED_EVIDENCE_EXTS))}. Got: '{ext or '(none)'}'"
+                f"Evidence file must be a forensic disk image with one of these extensions: "
+                f"{', '.join(valid_exts)}. Got: '{ext or '(none)'}'"
             )
         return v
 
@@ -1293,11 +1298,15 @@ async def upload_evidence(
 
 
 @app.post("/api/cases/{case_id}/scan")
-async def start_scan(case_id: str, bg: BackgroundTasks):
+async def start_scan(case_id: str, bg: BackgroundTasks, evidence_id: Optional[str] = None):
     evs = await asyncio.to_thread(db.list_evidence_for_case, case_id)
     if not evs:
         raise HTTPException(400, "No evidence loaded for this case")
-    ev = evs[-1]  # scan the most recently loaded evidence
+    if evidence_id:
+        matching = [e for e in evs if str(e.evidence_id) == str(evidence_id)]
+        ev = matching[0] if matching else evs[-1]
+    else:
+        ev = evs[-1]  # default to most recently loaded evidence
 
     if case_id not in _progress_queues:
         _progress_queues[case_id] = asyncio.Queue()

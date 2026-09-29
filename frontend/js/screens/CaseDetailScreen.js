@@ -125,19 +125,19 @@ async function renderCaseDetailScreen(params) {
         <div class="option-stack">
           <!-- Option 1: Choose File -->
           <div class="option-card">
-            <h4>${iconChip('upload-cloud')} Option 1 · Upload from this computer</h4>
-            <input type="file" id="modal-ev-file-input" accept=".dd,.img,.raw,.bin,.001,.iso,*" class="hidden">
+            <h4>${iconChip('upload-cloud')} Option 1 · Select or Drop File</h4>
+            <input type="file" id="modal-ev-file-input" accept=".dd,.img,.raw,.bin,.001,.iso,.vmdk,.vhd,.vhdx,.e01,.ex01,.aff,.aff4,*" class="hidden">
             <div id="modal-ev-browse-btn" class="dropzone" role="button" tabindex="0" aria-label="Choose a disk image file">
               ${dropArt()}
               <div class="dropzone-title">Drop your disk image here</div>
               <div class="dropzone-sub">or <b>browse your computer</b> to pick a file</div>
-              <div class="dropzone-types">.dd · .img · .raw · .bin · .001 · .iso</div>
+              <div class="dropzone-types">.dd · .img · .raw · .bin · .001 · .iso · .vmdk · .e01</div>
             </div>
             <div id="modal-ev-file-chip" class="file-chip">
               ${iconChip('hard-drive', 'ok')}
               <div class="grow">
                 <div class="file-chip-name" id="modal-ev-file-name">No file chosen</div>
-                <div class="file-chip-meta">Ready to upload to case storage</div>
+                <div class="file-chip-meta">Ready to load into case</div>
               </div>
               <button type="button" id="modal-ev-file-clear" class="modal-close hidden" title="Remove selected file" aria-label="Remove selected file">${icon('x')}</button>
             </div>
@@ -147,9 +147,12 @@ async function renderCaseDetailScreen(params) {
 
           <!-- Option 2: File Path -->
           <div class="option-card">
-            <h4>${iconChip('server')} Option 2 · Use a file already on this machine</h4>
-            <input type="text" id="modal-ev-path" class="form-control" placeholder="C:\\path\\to\\evidence_image.dd">
-            <p class="form-hint">Best for very large (multi-GB or TB) images: nothing is copied, the file is read where it is.</p>
+            <h4>${iconChip('server')} Option 2 · Disk Image Path on this Machine</h4>
+            <div style="display: flex; gap: 8px;">
+              <input type="text" id="modal-ev-path" class="form-control" placeholder="C:\\path\\to\\evidence_image.dd" style="flex: 1;">
+              <button type="button" id="modal-ev-browse-path-btn" class="btn btn-secondary" style="white-space: nowrap;">${icon('folder-open')} Browse…</button>
+            </div>
+            <p class="form-hint">Fastest for large (multi-GB or TB) images: read in-place via read-only memory mapping, no copying needed.</p>
           </div>
 
           <div class="option-or">or</div>
@@ -174,7 +177,7 @@ async function renderCaseDetailScreen(params) {
 
         <div id="modal-ev-progress-box" class="upload-progress hidden">
           <div class="d-flex justify-between text-muted-125">
-            <span id="modal-ev-progress-status">Uploading evidence file...</span>
+            <span id="modal-ev-progress-status">Processing evidence file...</span>
             <span id="modal-ev-progress-pct" class="font-bold text-primary">0%</span>
           </div>
           <div class="progress-bar-container mt-sm mb-0">
@@ -182,7 +185,7 @@ async function renderCaseDetailScreen(params) {
           </div>
         </div>
 
-        <div id="modal-ev-error" class="error-inline hidden mt-md">
+        <div id="modal-ev-error" class="error-inline" style="display: none; margin-top: 12px;">
           <span>${icon('alert')}</span><span id="modal-ev-error-msg"></span>
         </div>
       `,
@@ -194,29 +197,53 @@ async function renderCaseDetailScreen(params) {
           autoClose: false,
           onClick: async () => {
             const label = document.getElementById('modal-ev-label').value.trim();
-            const path = document.getElementById('modal-ev-path').value.trim();
+            let path = document.getElementById('modal-ev-path').value.trim();
+            path = path.replace(/^["']|["']$/g, ''); // strip any Windows quotes
             const tzOffsetRaw = document.getElementById('modal-ev-tz-offset').value.trim();
             const tzOffset = tzOffsetRaw === '' ? null : parseInt(tzOffsetRaw, 10);
             const errDiv = document.getElementById('modal-ev-error');
             const errMsgEl = document.getElementById('modal-ev-error-msg');
             const submitBtn = document.getElementById('modal-btn-1');
 
-            errDiv.classList.add('hidden');
+            function showModalError(msg) {
+              errMsgEl.textContent = msg;
+              errDiv.style.display = 'flex';
+              if (typeof Toast !== 'undefined' && Toast.error) {
+                Toast.error(msg);
+              }
+            }
+            function hideModalError() {
+              errMsgEl.textContent = '';
+              errDiv.style.display = 'none';
+            }
+
+            hideModalError();
 
             if (!selectedFile && !path) {
-              errMsgEl.textContent = 'Please choose a file or enter an image file path.';
-              errDiv.classList.remove('hidden');
+              showModalError('Please choose a file or enter an image file path.');
               return;
             }
             if (tzOffsetRaw !== '' && (Number.isNaN(tzOffset) || tzOffset < -720 || tzOffset > 840)) {
-              errMsgEl.textContent = 'Device clock offset must be a number of minutes between -720 and 840.';
-              errDiv.classList.remove('hidden');
+              showModalError('Device clock offset must be a number of minutes between -720 and 840.');
               return;
             }
 
             try {
               let ev;
-              if (selectedFile) {
+              // If path is specified or derived from selectedFile.path, use addEvidence (in-place)
+              if (path) {
+                if (submitBtn) {
+                  submitBtn.disabled = true;
+                  submitBtn.innerHTML = '<span class="btn-spinner"></span> Loading…';
+                }
+                ev = await API.addEvidence(caseId, path, label, tzOffset);
+              } else if (selectedFile && selectedFile.path) {
+                if (submitBtn) {
+                  submitBtn.disabled = true;
+                  submitBtn.innerHTML = '<span class="btn-spinner"></span> Loading…';
+                }
+                ev = await API.addEvidence(caseId, selectedFile.path, label, tzOffset);
+              } else if (selectedFile) {
                 const progressBox = document.getElementById('modal-ev-progress-box');
                 const progressStatus = document.getElementById('modal-ev-progress-status');
                 const progressPct = document.getElementById('modal-ev-progress-pct');
@@ -225,7 +252,7 @@ async function renderCaseDetailScreen(params) {
                 progressBox.classList.remove('hidden');
                 if (submitBtn) {
                   submitBtn.disabled = true;
-                  submitBtn.textContent = 'Uploading...';
+                  submitBtn.innerHTML = '<span class="btn-spinner"></span> Uploading…';
                 }
 
                 ev = await API.uploadEvidence(caseId, selectedFile, tzOffset, (pct, loaded, total) => {
@@ -238,19 +265,15 @@ async function renderCaseDetailScreen(params) {
                     progressStatus.textContent = 'Upload complete. Calculating hashes...';
                   }
                 });
-              } else {
-                if (submitBtn) {
-                  submitBtn.disabled = true;
-                  submitBtn.textContent = 'Loading...';
-                }
-                ev = await API.addEvidence(caseId, path, label, tzOffset);
               }
 
+              if (typeof Toast !== 'undefined' && Toast.success) {
+                Toast.success('Evidence loaded successfully');
+              }
               closeModal();
               navigateTo('evidence-scan', { caseId, evidenceId: ev.evidence_id || ev.id });
             } catch (err) {
-              errMsgEl.textContent = err.message || 'Failed to load evidence image';
-              errDiv.classList.remove('hidden');
+              showModalError(err.message || 'Failed to load evidence image');
               const progressBox = document.getElementById('modal-ev-progress-box');
               if (progressBox) progressBox.classList.add('hidden');
               if (submitBtn) {
@@ -268,15 +291,37 @@ async function renderCaseDetailScreen(params) {
     // Wire up file picker controls
     const fileInput = document.getElementById('modal-ev-file-input');
     const browseBtn = document.getElementById('modal-ev-browse-btn');
+    const browsePathBtn = document.getElementById('modal-ev-browse-path-btn');
     const fileNameSpan = document.getElementById('modal-ev-file-name');
     const fileClearBtn = document.getElementById('modal-ev-file-clear');
     const fileChip = document.getElementById('modal-ev-file-chip');
     const pathInput = document.getElementById('modal-ev-path');
 
+    async function handleNativeOrBrowserPick() {
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.pick_file) {
+        try {
+          const chosen = await window.pywebview.api.pick_file();
+          if (chosen) {
+            pathInput.value = chosen;
+            fileNameSpan.textContent = chosen.split(/[\\/]/).pop();
+            fileNameSpan.style.color = 'var(--text-bright, #fff)';
+            fileNameSpan.style.fontWeight = '500';
+            fileClearBtn.classList.remove('hidden');
+            if (fileChip) fileChip.classList.add('show');
+            return;
+          }
+        } catch (_) {}
+      }
+      fileInput.click();
+    }
+
+    if (browsePathBtn) {
+      browsePathBtn.onclick = handleNativeOrBrowserPick;
+    }
+
     if (browseBtn && fileInput) {
-      browseBtn.onclick = () => fileInput.click();
-      browseBtn.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } };
-      // Drag & drop feeds the same file input, so it takes the exact same code path as browsing.
+      browseBtn.onclick = handleNativeOrBrowserPick;
+      browseBtn.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleNativeOrBrowserPick(); } };
       browseBtn.ondragover = (e) => { e.preventDefault(); browseBtn.classList.add('dragover'); };
       browseBtn.ondragleave = () => browseBtn.classList.remove('dragover');
       browseBtn.ondrop = (e) => {
@@ -294,13 +339,16 @@ async function renderCaseDetailScreen(params) {
         const file = e.target.files && e.target.files[0];
         if (file) {
           selectedFile = file;
+          // In WebView2, file.path contains full local path
+          if (file.path && pathInput) {
+            pathInput.value = file.path;
+          }
           const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
           fileNameSpan.textContent = `${file.name} (${sizeMb} MB)`;
           fileNameSpan.style.color = 'var(--text-bright, #fff)';
           fileNameSpan.style.fontWeight = '500';
           fileClearBtn.classList.remove('hidden');
           if (fileChip) fileChip.classList.add('show');
-          if (pathInput) pathInput.value = '';
         }
       };
     }
@@ -309,6 +357,7 @@ async function renderCaseDetailScreen(params) {
       fileClearBtn.onclick = () => {
         selectedFile = null;
         if (fileInput) fileInput.value = '';
+        if (pathInput) pathInput.value = '';
         fileNameSpan.textContent = 'No file chosen';
         fileNameSpan.style.color = 'var(--text-muted)';
         fileNameSpan.style.fontWeight = 'normal';
@@ -319,14 +368,13 @@ async function renderCaseDetailScreen(params) {
 
     if (pathInput) {
       pathInput.oninput = () => {
-        if (pathInput.value.trim() && selectedFile) {
-          selectedFile = null;
-          if (fileInput) fileInput.value = '';
-          fileNameSpan.textContent = 'No file chosen';
-          fileNameSpan.style.color = 'var(--text-muted)';
-          fileNameSpan.style.fontWeight = 'normal';
-          fileClearBtn.classList.add('hidden');
-          if (fileChip) fileChip.classList.remove('show');
+        const val = pathInput.value.trim().replace(/^["']|["']$/g, '');
+        if (val && !selectedFile) {
+          fileNameSpan.textContent = val.split(/[\\/]/).pop();
+          fileNameSpan.style.color = 'var(--text-bright, #fff)';
+          fileNameSpan.style.fontWeight = '500';
+          fileClearBtn.classList.remove('hidden');
+          if (fileChip) fileChip.classList.add('show');
         }
       };
     }

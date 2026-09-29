@@ -89,7 +89,7 @@ def main():
 
     # Check and delete existing asset if needed
     for a in release.get("assets", []):
-        if a["name"] in ("SIH-Forensic-Tool-Setup-1.0.0.exe", "SIH-Forensic-Tool-Setup.exe"):
+        if a["name"] in (f"SIH-Forensic-Tool-Setup-{version}.exe", "SIH-Forensic-Tool-Setup.exe", "SIH-Forensic-Tool-Setup-1.0.0.exe"):
             print(f"Deleting older asset {a['name']} (id {a['id']})...")
             del_req = urllib.request.Request(f"https://api.github.com/repos/{repo}/releases/assets/{a['id']}", headers=headers, method="DELETE")
             try:
