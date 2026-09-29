@@ -65,6 +65,23 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
+function _extractErrorMessage(b, fallback = 'Operation failed') {
+  if (!b) return fallback;
+  if (typeof b === 'string') return b;
+  if (typeof b.detail === 'string') return b.detail;
+  if (Array.isArray(b.detail)) {
+    return b.detail
+      .map(item => {
+        if (typeof item === 'string') return item;
+        const text = item.msg || item.message || JSON.stringify(item);
+        return text.replace(/^Value error,\s*/i, '');
+      })
+      .join('. ');
+  }
+  if (b.message) return b.message;
+  return fallback;
+}
+
 const API = {
   /** Throw a descriptive error when the server returns a non-2xx status. */
   async _checkOk(res, url) {
@@ -79,7 +96,7 @@ const API = {
     let serverMsg = '';
     try {
       const body = await res.json();
-      serverMsg = body.detail || body.message || JSON.stringify(body);
+      serverMsg = _extractErrorMessage(body);
     } catch (_) {
       try { serverMsg = await res.text(); } catch (_) { serverMsg = '(no body)'; }
     }
@@ -115,7 +132,10 @@ const API = {
     // Don't pass through _checkOk on 4xx because the caller handles the error
     if (!res.ok) {
       let msg = 'Setup failed.';
-      try { const b = await res.json(); msg = b.detail || msg; } catch (_) {}
+      try {
+        const b = await res.json();
+        msg = _extractErrorMessage(b, msg);
+      } catch (_) {}
       throw new Error(msg);
     }
     return res.json();
@@ -133,7 +153,10 @@ const API = {
     });
     if (!res.ok) {
       let msg = 'Could not create that account.';
-      try { const b = await res.json(); msg = b.detail || msg; } catch (_) {}
+      try {
+        const b = await res.json();
+        msg = _extractErrorMessage(b, msg);
+      } catch (_) {}
       throw new Error(msg);
     }
     return res.json();
@@ -202,7 +225,10 @@ const API = {
 
     if (!res.ok) {
       let msg = 'Login failed.';
-      try { const b = await res.json(); msg = b.detail || msg; } catch (_) {}
+      try {
+        const b = await res.json();
+        msg = _extractErrorMessage(b, msg);
+      } catch (_) {}
       throw new Error(msg);
     }
 

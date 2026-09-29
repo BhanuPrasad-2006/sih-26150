@@ -45,6 +45,7 @@ from typing import Any, AsyncGenerator, Optional
 import aiofiles
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, field_validator
@@ -278,6 +279,17 @@ app = FastAPI(
     redoc_url=None,
     lifespan=lifespan,
 )
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    errors = exc.errors()
+    msg = "Validation failed"
+    if errors:
+        first = errors[0]
+        msg = first.get("msg", str(first))
+        if msg.startswith("Value error, "):
+            msg = msg[len("Value error, "):]
+    return JSONResponse(status_code=422, content={"detail": msg})
 
 app.add_middleware(AuthMiddleware)
 app.add_middleware(HostOriginMiddleware)        # outside auth: reject bad Host / cross-origin first

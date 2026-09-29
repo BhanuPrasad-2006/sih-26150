@@ -77,7 +77,7 @@ function renderSetupScreen() {
         <div class="auth-icon">${_ICON_LOCK_PLUS}</div>
         <div class="auth-title">Create Local Profile</div>
         <div class="auth-subtitle">
-          First-run setup for this installation. Your account and evidence remain strictly offline on this computer.<br><strong>${_PASSWORD_RULE_TEXT}</strong>
+          First-run setup for this installation. Your account and evidence remain strictly offline on this computer.
         </div>
 
         <form id="setup-form" novalidate autocomplete="off">
@@ -87,13 +87,16 @@ function renderSetupScreen() {
               type="text"
               id="setup-username"
               class="form-control"
-              placeholder="Enter your username"
+              placeholder="e.g. examiner1"
               autocomplete="username"
               required
             />
           </div>
           <div class="form-group">
-            <label for="setup-password">Password</label>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <label for="setup-password">Password</label>
+              <button type="button" id="btn-toggle-setup-pw" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 12px; padding: 0;">Show Password</button>
+            </div>
             <input
               type="password"
               id="setup-password"
@@ -102,6 +105,13 @@ function renderSetupScreen() {
               autocomplete="new-password"
               required
             />
+            <div class="pw-rules-box" id="setup-pw-rules" style="margin-top: 8px; font-size: 11.5px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; padding: 8px 10px; background: rgba(255,255,255,0.03); border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);">
+              <div id="pw-rule-len" style="color: #94a3b8; transition: color 0.15s;">○ 8+ characters</div>
+              <div id="pw-rule-upper" style="color: #94a3b8; transition: color 0.15s;">○ 1 uppercase (A-Z)</div>
+              <div id="pw-rule-lower" style="color: #94a3b8; transition: color 0.15s;">○ 1 lowercase (a-z)</div>
+              <div id="pw-rule-num" style="color: #94a3b8; transition: color 0.15s;">○ 1 number (0-9)</div>
+              <div id="pw-rule-sym" style="color: #94a3b8; transition: color 0.15s; grid-column: span 2;">○ 1 special symbol (!@#$%^&*)</div>
+            </div>
           </div>
           <div class="form-group">
             <label for="setup-confirm">Confirm Password</label>
@@ -115,7 +125,7 @@ function renderSetupScreen() {
             />
           </div>
 
-          <div id="setup-error" class="error-inline hidden">
+          <div id="setup-error" class="error-inline" style="display: none; margin-bottom: 12px;">
             ${_ICON_WARN}
             <span id="setup-error-msg"></span>
           </div>
@@ -128,27 +138,108 @@ function renderSetupScreen() {
       </div>
     </div>`;
 
-  const form    = document.getElementById('setup-form');
-  const errEl   = document.getElementById('setup-error');
-  const errMsg  = document.getElementById('setup-error-msg');
+  const form     = document.getElementById('setup-form');
+  const errEl    = document.getElementById('setup-error');
+  const errMsg   = document.getElementById('setup-error-msg');
   const btnSetup = document.getElementById('btn-setup');
+  const pwInput  = document.getElementById('setup-password');
+  const pw2Input = document.getElementById('setup-confirm');
+  const userInput = document.getElementById('setup-username');
+  const btnTogglePw = document.getElementById('btn-toggle-setup-pw');
+
+  const ruleLen   = document.getElementById('pw-rule-len');
+  const ruleUpper = document.getElementById('pw-rule-upper');
+  const ruleLower = document.getElementById('pw-rule-lower');
+  const ruleNum   = document.getElementById('pw-rule-num');
+  const ruleSym   = document.getElementById('pw-rule-sym');
+
+  function updateRule(el, ok, label) {
+    if (ok) {
+      el.style.color = '#10b981';
+      el.textContent = '✔ ' + label;
+    } else {
+      el.style.color = '#94a3b8';
+      el.textContent = '○ ' + label;
+    }
+  }
+
+  pwInput.addEventListener('input', () => {
+    const val = pwInput.value;
+    updateRule(ruleLen, val.length >= 8, '8+ characters');
+    updateRule(ruleUpper, /[A-Z]/.test(val), '1 uppercase (A-Z)');
+    updateRule(ruleLower, /[a-z]/.test(val), '1 lowercase (a-z)');
+    updateRule(ruleNum, /\d/.test(val), '1 number (0-9)');
+    updateRule(ruleSym, /[^A-Za-z0-9]/.test(val), '1 special symbol (!@#$%^&*)');
+  });
+
+  if (btnTogglePw) {
+    btnTogglePw.addEventListener('click', () => {
+      const isPw = pwInput.type === 'password';
+      pwInput.type = isPw ? 'text' : 'password';
+      pw2Input.type = isPw ? 'text' : 'password';
+      btnTogglePw.textContent = isPw ? 'Hide Password' : 'Show Password';
+    });
+  }
+
+  function showError(msg) {
+    errMsg.textContent = msg;
+    errEl.style.display = 'flex';
+    if (typeof Toast !== 'undefined' && Toast.error) {
+      Toast.error(msg);
+    }
+  }
+
+  function hideError() {
+    errMsg.textContent = '';
+    errEl.style.display = 'none';
+  }
 
   form.onsubmit = async (e) => {
     e.preventDefault();
-    errEl.style.display = 'none';
+    hideError();
 
-    const username = document.getElementById('setup-username').value.trim();
-    const pw  = document.getElementById('setup-password').value;
-    const pw2 = document.getElementById('setup-confirm').value;
+    const username = userInput.value.trim();
+    const pw  = pwInput.value;
+    const pw2 = pw2Input.value;
 
     if (!username) {
-      errMsg.textContent = 'Choose a username.';
-      errEl.style.display = 'flex';
+      showError('Please choose a username.');
+      userInput.focus();
+      return;
+    }
+    if (username.length < 3 || username.length > 32) {
+      showError('Username must be 3-32 characters long.');
+      userInput.focus();
+      return;
+    }
+    if (pw.length < 8) {
+      showError('Password must be at least 8 characters long.');
+      pwInput.focus();
+      return;
+    }
+    if (!/[A-Z]/.test(pw)) {
+      showError('Password must include at least one uppercase letter (A-Z).');
+      pwInput.focus();
+      return;
+    }
+    if (!/[a-z]/.test(pw)) {
+      showError('Password must include at least one lowercase letter (a-z).');
+      pwInput.focus();
+      return;
+    }
+    if (!/\d/.test(pw)) {
+      showError('Password must include at least one number (0-9).');
+      pwInput.focus();
+      return;
+    }
+    if (!/[^A-Za-z0-9]/.test(pw)) {
+      showError('Password must include at least one special character (e.g. ! @ # $ %).');
+      pwInput.focus();
       return;
     }
     if (pw !== pw2) {
-      errMsg.textContent = 'Passwords do not match. Please re-enter both fields.';
-      errEl.style.display = 'flex';
+      showError('Passwords do not match. Please re-enter both fields.');
+      pw2Input.focus();
       return;
     }
 
@@ -157,6 +248,9 @@ function renderSetupScreen() {
 
     try {
       await API.setupAccount(username, pw);
+      if (typeof Toast !== 'undefined' && Toast.success) {
+        Toast.success('Profile created successfully! Welcome, ' + username);
+      }
       _restoreChromeAfterAuth();
       navigateTo('dashboard');
       initUpdateBanner();
@@ -164,10 +258,13 @@ function renderSetupScreen() {
       const isAlreadySet = err.message && err.message.toLowerCase().includes('already exists');
       if (isAlreadySet) {
         errMsg.innerHTML = 'An account already exists. <a href="#" data-nav="login" class="link-cyan">Go to sign in</a>';
+        errEl.style.display = 'flex';
+        if (typeof Toast !== 'undefined' && Toast.error) {
+          Toast.error('An account already exists. Please sign in.');
+        }
       } else {
-        errMsg.textContent = err.message || 'Setup failed. Please try again.';
+        showError(err.message || 'Setup failed. Please try again.');
       }
-      errEl.style.display = 'flex';
       btnSetup.disabled = false;
       btnSetup.innerHTML = 'Create Profile &amp; Open Tool ' + icon('arrow-right');
     }
@@ -224,7 +321,10 @@ async function renderLoginScreen() {
             />
           </div>
           <div class="form-group">
-            <label for="login-password">Password</label>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <label for="login-password">Password</label>
+              <button type="button" id="btn-toggle-login-pw" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 12px; padding: 0;">Show Password</button>
+            </div>
             <input
               type="password"
               id="login-password"
@@ -248,7 +348,7 @@ async function renderLoginScreen() {
                    placeholder="6-digit code, or XXXXX-XXXXX recovery code" autocomplete="one-time-code" />
           </div>
 
-          <div id="login-error" class="error-inline hidden">
+          <div id="login-error" class="error-inline" style="display: none; margin-bottom: 12px;">
             ${_ICON_WARN}
             <span id="login-error-msg"></span>
           </div>
@@ -354,10 +454,14 @@ async function renderLoginScreen() {
         btnLogin.innerHTML = 'Sign in ' + icon('arrow-right');
       } else {
         // Always show the same message regardless of failure reason
-        errMsg.textContent = totpRequired
+        const failMsg = totpRequired
           ? 'Incorrect username, password, or authentication code.'
-          : 'Incorrect username or password.';
+          : (err.message || 'Incorrect username or password.');
+        errMsg.textContent = failMsg;
         errEl.style.display = 'flex';
+        if (typeof Toast !== 'undefined' && Toast.error) {
+          Toast.error(failMsg);
+        }
         btnLogin.disabled = false;
         btnLogin.innerHTML = 'Sign in ' + icon('arrow-right');
       }
@@ -365,6 +469,17 @@ async function renderLoginScreen() {
       document.getElementById('login-password').value = '';
     }
   };
+
+  const btnToggleLoginPw = document.getElementById('btn-toggle-login-pw');
+  if (btnToggleLoginPw) {
+    btnToggleLoginPw.addEventListener('click', () => {
+      const pwInput = document.getElementById('login-password');
+      if (!pwInput) return;
+      const isPw = pwInput.type === 'password';
+      pwInput.type = isPw ? 'text' : 'password';
+      btnToggleLoginPw.textContent = isPw ? 'Hide Password' : 'Show Password';
+    });
+  }
 
   if (rememberedUser) {
     const pwInput = document.getElementById('login-password');
