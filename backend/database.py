@@ -548,7 +548,26 @@ class Database:
             row = conn.execute(
                 "SELECT value FROM auth_state WHERE key=?", (key,)
             ).fetchone()
-        return row["value"] if row else None
+        if row:
+            return row["value"]
+        try:
+            import sys
+            main_mod = sys.modules.get("backend.main")
+            if main_mod and getattr(main_mod, "auth_db", None):
+                val = main_mod.auth_db.get_auth_value(key)
+                if val is not None:
+                    return val
+            from backend.local_config import CONFIG_DIR
+            auth_db_file = CONFIG_DIR / "auth.db"
+            if auth_db_file.is_file():
+                with sqlite3.connect(str(auth_db_file)) as aconn:
+                    aconn.row_factory = sqlite3.Row
+                    arow = aconn.execute("SELECT value FROM auth_state WHERE key=?", (key,)).fetchone()
+                    if arow:
+                        return arow["value"]
+        except Exception:
+            pass
+        return None
 
     def set_auth_value(self, key: str, value: str) -> None:
         """Upsert key → value in auth_state.  Used only for the bcrypt hash."""

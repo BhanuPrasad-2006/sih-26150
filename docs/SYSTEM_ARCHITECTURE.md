@@ -70,8 +70,11 @@ flowchart TB
 | `timeline.py`, `correlation.py` | UTC normalisation with an examiner-set offset; cross-camera time-window clustering |
 | `audit.py` | Hash-chained log: `H_n = SHA-256(t_n ∥ action_n ∥ params_n ∥ H_{n-1})` |
 | `reporting.py` | ReportLab PDF: cover, hashes, segments, correlation, accuracy, object detection, method and limitations, audit dump, BSA §63(4) certificate |
-| `auth.py` | bcrypt password, sessions, idle timeout, lockout |
-| `database.py` / `db_postgres.py` | Same interface over SQLite (default) or Supabase Postgres (`DATABASE_URL`) |
+| `auth.py` | bcrypt password hashing, session tokens, idle timeout, lockout counters |
+| `auth_db.py` | Dedicated, isolated local SQLite store (`auth.db`) for examiner credentials and session state. 100% air-gapped, zero cloud dependency |
+| `desktop_app.py` | Native Windows desktop shell (`pywebview`), `_DesktopBridge` for native Win32 file/folder pickers, in-place zero-copy evidence loading |
+| `database.py` / `db_postgres.py` | Same interface over SQLite (`forensic.db`, default) or Supabase Postgres (`DATABASE_URL`) |
+| `tools/system_diagnostics.py` | Pre-flight workstation certification CLI: checks Python, BitLocker, 15 forensic formats, ONNX models, and dual-hash throughput |
 
 ## 4. Data model
 

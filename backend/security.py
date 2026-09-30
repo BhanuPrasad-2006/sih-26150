@@ -28,7 +28,7 @@ _UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 CSP = "; ".join([
     "default-src 'self'",
     "script-src 'self'",
-    "style-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "media-src 'self' blob:",
     "font-src 'self' data:",

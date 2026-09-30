@@ -32,10 +32,12 @@ def disk_encryption_status(path: Path) -> tuple[str, str]:
                   "ExtendedProperty('System.Volume.BitLockerProtection')" % drive)
             out = subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True, text=True,  # nosec B603 B607
                                  timeout=15).stdout.strip()
-            if out == "1":
+            if out in ("1", "6", "7"):
                 return "on", f"BitLocker protection is ON for {drive}"
-            if out in ("0", "3"):
+            if out in ("0", "2", "3"):
                 return "off", f"BitLocker protection is OFF for {drive}"
+            if out == "5":
+                return "warn", f"BitLocker protection is SUSPENDED for {drive}"
             return "unknown", f"BitLocker state of {drive} could not be read (value: {out or 'none'})"
         if platform.system() == "Linux":
             src = subprocess.run(["findmnt", "-no", "SOURCE", "--target", str(path)], capture_output=True,  # nosec B603 B607
