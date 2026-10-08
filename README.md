@@ -187,7 +187,7 @@ For Windows 10/11 x64 workstations, download and run the standalone, air-gapped 
 
 * **Direct Download:** [SIH-Forensic-Tool-Setup-2.0.0.exe](https://github.com/BhanuPrasad-2006/sih-26150/releases/download/v2.0.0/SIH-Forensic-Tool-Setup-2.0.0.exe)
 * **Release Page:** [GitHub Releases v2.0.0](https://github.com/BhanuPrasad-2006/sih-26150/releases/tag/v2.0.0)
-* **Release Artifact:** `SIH-Forensic-Tool-Setup-2.0.0.exe` (~100 MB)
+* **Release Artifact:** `SIH-Forensic-Tool-Setup-2.0.0.exe` (188.4 MB, SHA-256 `50e9707aeaea3877e614d4af0396bbb71b8164ec8aefdbd6f85d4d28009f98f2`)
 * **SHA-256 Checksum:** `AA09FF9B5AB39B53BFE9627C856B06D7E59E52F85D05164EA3F36F9A057B7796`
 
 Verify the installer checksum in PowerShell before running:
