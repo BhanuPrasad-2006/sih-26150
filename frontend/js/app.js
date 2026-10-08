@@ -19,12 +19,8 @@ function navigateTo(screen, params = {}) {
 
   // Auth screens: hide sidebar/breadcrumb — handled inside each render function.
   // Other screens: restore them.
-  const sidebar = document.getElementById('sidebar-root');
-  const breadcrumb = document.getElementById('breadcrumb-strip');
-
   if (screen !== 'login' && screen !== 'setup') {
-    if (sidebar) sidebar.style.display = '';
-    if (breadcrumb) breadcrumb.style.display = '';
+    _restoreChromeAfterAuth();
     renderSidebar(screen, params.caseId, params.evidenceId);
   }
 

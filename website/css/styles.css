@@ -599,3 +599,9 @@ h1, h2, h3, h4, h5 {
   .pipeline-flow::before { display: none; }
   .canvas-container { height: 300px; }
 }
+
+/* v2.0.0 release notes */
+.whats-new { margin: 14px 0 18px; padding: 14px 16px; border: 1px solid rgba(56,189,248,.25); border-radius: 10px; background: rgba(56,189,248,.06); }
+.whats-new-title { font-weight: 700; font-size: .85rem; letter-spacing: .5px; text-transform: uppercase; color: #38bdf8; margin-bottom: 8px; }
+.whats-new ul { margin: 0; padding-left: 18px; color: var(--text-muted); font-size: .9rem; line-height: 1.6; }
+.whats-new li { margin-bottom: 4px; }

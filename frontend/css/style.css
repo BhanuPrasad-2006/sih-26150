@@ -753,6 +753,52 @@ tbody tr:hover td { background: var(--primary-soft); }
 .auth-subtitle { font-size: 13.5px; color: var(--text-muted); text-align: center; line-height: 1.65; margin-bottom: 28px; }
 .auth-forgot-note { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border-color); font-size: 12px; line-height: 1.6; color: var(--text-muted); }
 .auth-forgot-note code { font-family: var(--font-mono); background: var(--bg-surface-2); padding: 1px 5px; border-radius: 4px; font-size: 11px; }
+.auth-forgot-note p { margin-top: 10px; }
+.auth-link { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 600; color: var(--accent-cyan); text-decoration: none; }
+.auth-link:hover { text-decoration: underline; }
+.auth-link svg { width: 14px; height: 14px; stroke: currentColor; fill: none; }
+.auth-error { margin: 0 0 12px; }
+.label-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 7px; }
+.label-row label { margin-bottom: 0; }
+
+/* Password field with a show/hide eye inside it */
+.pw-field { position: relative; }
+.pw-field .form-control { padding-right: 44px; }
+.pw-eye {
+  position: absolute; top: 50%; right: 6px; transform: translateY(-50%); width: 34px; height: 34px;
+  display: flex; align-items: center; justify-content: center; border: none; border-radius: 8px;
+  background: transparent; color: var(--text-dim); cursor: pointer; transition: color 0.15s, background 0.15s;
+}
+.pw-eye:hover { color: var(--text-main); background: var(--bg-surface-2); }
+.pw-eye:focus-visible { outline: 2px solid var(--accent-cyan); outline-offset: 1px; }
+.pw-eye svg { width: 18px; height: 18px; stroke: currentColor; fill: none; }
+
+/* Live password rules */
+.pw-rules {
+  margin-top: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; padding: 8px 10px; font-size: 11.5px;
+  background: var(--bg-surface-2); border: 1px solid var(--border-color); border-radius: 8px;
+}
+.pw-rule { color: var(--text-dim); transition: color 0.15s; }
+.pw-rule.ok { color: var(--status-complete); }
+.pw-rule-wide { grid-column: span 2; }
+
+.check-row { display: flex; align-items: center; gap: 8px; margin: 6px 0 14px; font-size: 13px; color: var(--text-muted); cursor: pointer; user-select: none; }
+
+/* Recovery key (shown once) */
+.recovery-key-box {
+  font-family: var(--font-mono); font-size: 19px; font-weight: 700; letter-spacing: 1.5px; text-align: center;
+  padding: 16px 12px; border-radius: 12px; color: var(--text-main); background: var(--bg-surface-2);
+  border: 1px dashed var(--accent-cyan); user-select: all; word-break: break-all;
+}
+.recovery-key-actions { display: flex; gap: 10px; justify-content: center; margin: 12px 0 14px; }
+.recovery-key-notes { margin: 0 0 14px 18px; font-size: 12.5px; line-height: 1.6; color: var(--text-muted); }
+.recovery-key-notes li { margin-bottom: 4px; }
+
+/* Locked certificate details */
+.lock-note { display: flex; gap: 10px; align-items: flex-start; padding: 10px 13px; margin-bottom: 14px; border-radius: 10px;
+  background: var(--primary-soft); color: var(--text-main); font-size: 13px; line-height: 1.5; }
+.lock-note svg { flex: none; width: 17px; height: 17px; margin-top: 1px; stroke: var(--accent-cyan); fill: none; }
+.form-control[readonly] { opacity: 0.75; cursor: not-allowed; }
 
 /* First-run wizard (terms + data folder) */
 .fr-terms-box {
@@ -1449,3 +1495,37 @@ tbody tr:hover td { background: var(--primary-soft); }
   border: 1px solid rgba(100, 116, 139, 0.32);
 }
 
+
+/* ── v1.1: classes replacing the last inline styles (CSP style-src 'self') ── */
+.mt-12 { margin-top: 12px; }
+.mb-12 { margin-bottom: 12px; }
+.meta-span-all { grid-column: 1 / -1; }
+.path-row { display: flex; gap: 8px; align-items: stretch; }
+.path-row .form-control { flex: 1; min-width: 0; }
+.path-row .btn { white-space: nowrap; flex: none; }
+.cases-title { font-weight: 600; font-size: 1rem; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
+.btn-profile { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; font-size: 0.85rem; font-weight: 500; }
+
+/* Examiner profile modal */
+.profile-head { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--border-color); }
+.profile-avatar { width: 46px; height: 46px; border-radius: 50%; background: var(--accent-cyan); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; font-weight: 700; flex: none; }
+.profile-name { font-weight: 600; font-size: 1.15rem; color: var(--text-main); }
+.profile-sub { font-size: 0.82rem; color: var(--text-muted); margin-top: 2px; }
+.profile-section { background: var(--bg-surface-2); border: 1px solid var(--border-color); border-radius: 10px; padding: 14px; margin-bottom: 14px; }
+.profile-section-title { font-weight: 600; font-size: 0.95rem; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; color: var(--text-main); }
+.profile-section-title svg { width: 16px; height: 16px; stroke: currentColor; fill: none; }
+.profile-check { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; user-select: none; }
+.profile-check input { margin-top: 3px; flex: none; }
+.profile-check-title { font-weight: 500; font-size: 0.9rem; color: var(--text-main); }
+.profile-check-sub { font-size: 0.8rem; color: var(--text-muted); margin-top: 6px; line-height: 1.45; }
+.profile-saved { font-size: 0.82rem; color: var(--status-complete); margin-top: 8px; font-weight: 500; }
+.profile-key-row { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+.profile-key-pw { flex: 1; }
+#prof-key-out .recovery-key-box { margin-top: 10px; font-size: 16px; }
+.confirm-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+.confirm-table td { padding: 7px 8px; border-bottom: 1px solid var(--border-color); vertical-align: top; }
+.confirm-table td:first-child { width: 42%; }
+.logo-h1-sub { font-weight: 600; color: var(--text-muted); font-size: 0.82em; margin-left: 4px; }
+.auth-brand-desc { font-size: 18px; font-weight: 600; color: rgba(255, 255, 255, 0.85); margin: -4px 0 10px; }
+.pw-rule::before { content: "\25CB"; display: inline-block; width: 14px; }
+.pw-rule.ok::before { content: "\2713"; }

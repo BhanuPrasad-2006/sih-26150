@@ -29,7 +29,7 @@ def test_security_headers_on_api_static_and_error_responses(auth_client):
         script_src = [d for d in h["content-security-policy"].split(";") if d.strip().startswith("script-src")][0]
         assert script_src.strip() == "script-src 'self'"                              # no inline script allowed
         style_src = [d for d in h["content-security-policy"].split(";") if d.strip().startswith("style-src")][0]
-        assert style_src.strip() in ("style-src 'self'", "style-src 'self' 'unsafe-inline'")
+        assert style_src.strip() == "style-src 'self'"                                # no inline style allowed
 
 
 def test_headers_also_on_unauthenticated_rejection(isolated_app):
@@ -265,17 +265,7 @@ def test_frontend_has_no_inline_handlers_or_javascript_urls():
 def test_frontend_has_no_inline_styles():
     """Verify frontend style compliance with Content Security Policy."""
     from backend.security import CSP
-    if "'unsafe-inline'" in CSP:
-        import re
-        pattern = re.compile(r'style="[^"]*javascript:[^"]*"', re.I)
-        offenders = []
-        for f in list(_FRONTEND.rglob("*.js")) + [_FRONTEND.parent / "index.html"]:
-            for n, line in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
-                if pattern.search(line):
-                    offenders.append(f"{f.name}:{n}")
-        assert not offenders, f"Found unsafe javascript in styles: {offenders}"
-        return
-
+    assert "'unsafe-inline'" not in CSP
     pattern = re.compile(r'style="[^"]*"')
     offenders = []
     for f in list(_FRONTEND.rglob("*.js")) + [_FRONTEND.parent / "index.html"]:

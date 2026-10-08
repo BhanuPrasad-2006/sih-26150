@@ -88,7 +88,7 @@ async function renderCaseDetailScreen(params) {
           <div class="meta-label">Incident / Seizure Date</div>
           <div class="meta-value">${caseObj.incident_date ? escapeHtml(caseObj.incident_date) : '—'}</div>
         </div>
-        <div style="grid-column: 1 / -1;">
+        <div class="meta-span-all">
           <div class="meta-label">Notes &amp; Scope</div>
           <div class="meta-value text-muted">${caseObj.notes ? escapeHtml(caseObj.notes) : '—'}</div>
         </div>
@@ -148,9 +148,9 @@ async function renderCaseDetailScreen(params) {
           <!-- Option 2: File Path -->
           <div class="option-card">
             <h4>${iconChip('server')} Option 2 · Disk Image Path on this Machine</h4>
-            <div style="display: flex; gap: 8px;">
-              <input type="text" id="modal-ev-path" class="form-control" placeholder="C:\\path\\to\\evidence_image.dd" style="flex: 1;">
-              <button type="button" id="modal-ev-browse-path-btn" class="btn btn-secondary" style="white-space: nowrap;">${icon('folder-open')} Browse…</button>
+            <div class="path-row">
+              <input type="text" id="modal-ev-path" class="form-control" placeholder="C:\\path\\to\\evidence_image.dd">
+              <button type="button" id="modal-ev-browse-path-btn" class="btn btn-secondary">${icon('folder-open')} Browse…</button>
             </div>
             <p class="form-hint">Fastest for large (multi-GB or TB) images: read in-place via read-only memory mapping, no copying needed.</p>
           </div>
@@ -185,7 +185,7 @@ async function renderCaseDetailScreen(params) {
           </div>
         </div>
 
-        <div id="modal-ev-error" class="error-inline" style="display: none; margin-top: 12px;">
+        <div id="modal-ev-error" class="error-inline hidden mt-12">
           <span>${icon('alert')}</span><span id="modal-ev-error-msg"></span>
         </div>
       `,
@@ -207,14 +207,14 @@ async function renderCaseDetailScreen(params) {
 
             function showModalError(msg) {
               errMsgEl.textContent = msg;
-              errDiv.style.display = 'flex';
+              errDiv.classList.remove('hidden');
               if (typeof Toast !== 'undefined' && Toast.error) {
                 Toast.error(msg);
               }
             }
             function hideModalError() {
               errMsgEl.textContent = '';
-              errDiv.style.display = 'none';
+              errDiv.classList.add('hidden');
             }
 
             hideModalError();
@@ -392,6 +392,8 @@ async function initAcquisitionPanel(caseId) {
     area.textContent = 'Could not check drive imaging: ' + err.message;
     return;
   }
+  // Listing drives can take a moment; if the dialog was closed meanwhile there is nothing to fill.
+  if (!area.isConnected) return;
   if (!info.enabled) {
     area.innerHTML = escapeHtml(info.message || 'Drive imaging is disabled on this server.');
     return;

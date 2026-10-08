@@ -2,6 +2,20 @@
  * DashboardScreen.js — Main cases overview list.
  * Clean, offline, single-examiner local installation UI.
  */
+
+/** Priority pill for the cases table (LOW / MEDIUM / HIGH / CRITICAL). */
+function priorityBadge(priority) {
+  const p = String(priority || 'MEDIUM').toUpperCase();
+  const cls = { LOW: 'badge-complete', MEDIUM: 'badge-pending', HIGH: 'badge-partial', CRITICAL: 'badge-error' }[p] || 'badge-pending';
+  return `<span class="badge badge-priority ${cls}">${escapeHtml(p)}</span>`;
+}
+
+/** Case status pill for the cases table. */
+function caseStatusBadge(status) {
+  const s = String(status || 'ACTIVE').toUpperCase();
+  const cls = { ACTIVE: 'badge-scanning', CLOSED: 'badge-complete', ARCHIVED: 'badge-pending' }[s] || 'badge-status';
+  return `<span class="badge badge-status ${cls}">${escapeHtml(s)}</span>`;
+}
 async function renderDashboardScreen() {
   const root = document.getElementById('content-root');
 
@@ -19,7 +33,7 @@ async function renderDashboardScreen() {
 
     <div class="card">
       <div class="case-tabs-container">
-        <div style="font-weight: 600; font-size: 1rem; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+        <div class="cases-title">
           ${icon('folder-open')} Forensic Cases <span class="tab-badge" id="count-cases">0</span>
         </div>
         <span class="badge badge-pending" id="stat-cases">–</span>
@@ -100,7 +114,7 @@ async function renderDashboardScreen() {
           <td>${c.fir_number ? `<span class="badge font-mono text-xs">${escapeHtml(c.fir_number)}</span>` : '<span class="text-muted">–</span>'}</td>
           <td>${priorityBadge(c.priority || 'MEDIUM')}</td>
           <td>${caseStatusBadge(c.status)}</td>
-          <td class="text-sm text-muted">${formatDate(c.created_at)}</td>
+          <td class="text-sm text-muted">${formatIST(c.created_at)}</td>
           <td>
             <button class="btn btn-secondary btn-sm" ${navAttrs('case-detail', { caseId: c.case_id })}>
               Open ${icon('arrow-right')}
@@ -114,7 +128,7 @@ async function renderDashboardScreen() {
         <tr>
           <td colspan="7">
             <div class="error-banner">
-              <div class="error-banner-icon">${icon('alert-circle')}</div>
+              <div class="error-banner-icon">${icon('alert')}</div>
               <div class="error-banner-body">
                 <div class="error-banner-title">Could not load forensic cases</div>
                 <div class="error-banner-msg">${escapeHtml(err.message)}</div>

@@ -100,7 +100,12 @@ const API = {
     } catch (_) {
       try { serverMsg = await res.text(); } catch (_) { serverMsg = '(no body)'; }
     }
-    throw new Error(`HTTP ${res.status} from ${url} — ${serverMsg}`);
+    // Show the server's own explanation to the examiner (not a raw "HTTP 500 from /api/..." line);
+    // the status stays available on err.status for callers that need it.
+    const err = new Error(serverMsg && serverMsg !== '(no body)' ? serverMsg : `Request failed (HTTP ${res.status}).`);
+    err.status = res.status;
+    err.url = url;
+    throw err;
   },
 
   // ── Auth endpoints ─────────────────────────────────────────────────────────
@@ -160,6 +165,45 @@ const API = {
       throw new Error(msg);
     }
     return res.json();
+  },
+
+  /**
+   * Forgotten password: username + recovery key + new password (no session needed).
+   * Returns { ok, recovery_key } — the NEW key, shown once. Throws with the server message.
+   */
+  async recoverPassword(username, recoveryKey, newPassword) {
+    const res = await fetch('/api/auth/recover', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, recovery_key: recoveryKey, new_password: newPassword }),
+    });
+    let body = {};
+    try { body = await res.json(); } catch (_) {}
+    if (!res.ok) {
+      const e = new Error(_extractErrorMessage(body, 'Could not reset the password.'));
+      e.status = res.status; e.retryAfter = body.retry_after;
+      throw e;
+    }
+    return body;
+  },
+
+  async recoveryKeyStatus() {
+    const res = await fetch('/api/auth/recovery-key');
+    await this._checkOk(res, '/api/auth/recovery-key');
+    return res.json();
+  },
+
+  /** Signed-in examiner: make a new recovery key (needs the current password). */
+  async regenerateRecoveryKey(password) {
+    const res = await fetch('/api/auth/recovery-key', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    });
+    let body = {};
+    try { body = await res.json(); } catch (_) {}
+    if (!res.ok) throw new Error(_extractErrorMessage(body, 'Could not create a new recovery key.'));
+    return body;
   },
 
   async listExaminers() {

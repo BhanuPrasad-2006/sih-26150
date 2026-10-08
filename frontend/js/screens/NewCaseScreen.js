@@ -15,7 +15,7 @@ function renderNewCaseScreen() {
   const root = document.getElementById('content-root');
   
   // Try to find current logged-in username to pre-fill investigator
-  const currentHeaderUser = document.getElementById('header-username')?.textContent?.replace(/^[👤\s]+|[▼\s]+$/g, '') || '';
+  const currentHeaderUser = document.getElementById('header-username')?.textContent?.replace(/^[\u{1F464}\s]+|[▼\s]+$/gu, '') || '';
 
   root.innerHTML = `
     <div class="page-header">
@@ -31,7 +31,7 @@ function renderNewCaseScreen() {
             <label for="input-case-number">Case Number / Reference ID <span class="text-error">*</span></label>
             <input type="text" id="input-case-number" class="form-control"
               placeholder="e.g. FIR-2026-892" required autocomplete="off" maxlength="64" />
-            <div id="err-case-number" class="field-error" style="display: none; color: #ef4444; font-size: 12px; margin-top: 4px;"></div>
+            <div id="err-case-number" class="field-error hidden"></div>
           </div>
           <div class="form-group">
             <label for="input-case-title">Case Title / Description</label>
@@ -46,13 +46,13 @@ function renderNewCaseScreen() {
             <label for="input-investigator">Lead Examiner / Investigator <span class="text-error">*</span></label>
             <input type="text" id="input-investigator" class="form-control"
               placeholder="e.g. Officer A. Sharma" required maxlength="128" value="${escapeHtml(currentHeaderUser)}" />
-            <div id="err-investigator" class="field-error" style="display: none; color: #ef4444; font-size: 12px; margin-top: 4px;"></div>
+            <div id="err-investigator" class="field-error hidden"></div>
           </div>
           <div class="form-group">
             <label for="input-agency">Agency / Police Unit <span class="text-dim text-xs">(optional)</span></label>
             <input type="text" id="input-agency" class="form-control"
               placeholder="e.g. Cyber Crime Division, State Police" maxlength="255" />
-            <div id="err-agency" class="field-error" style="display: none; color: #ef4444; font-size: 12px; margin-top: 4px;"></div>
+            <div id="err-agency" class="field-error hidden"></div>
           </div>
         </div>
 
@@ -107,7 +107,7 @@ function renderNewCaseScreen() {
         </div>
 
         <!-- inline error — hidden by default -->
-        <div id="case-error" class="error-inline" style="display: none; margin-bottom: 12px;">
+        <div id="case-error" class="error-inline hidden mb-12">
           <span>${icon('alert')}</span>
           <span id="case-error-msg"></span>
         </div>
@@ -138,17 +138,17 @@ function renderNewCaseScreen() {
   /** Show a per-field error message. */
   function _fieldError(id, msg) {
     const el = document.getElementById(id);
-    if (el) { el.textContent = msg; el.style.display = 'block'; }
+    if (el) { el.textContent = msg; el.classList.remove('hidden'); }
   }
   /** Clear a per-field error. */
   function _fieldClear(id) {
     const el = document.getElementById(id);
-    if (el) { el.textContent = ''; el.style.display = 'none'; }
+    if (el) { el.textContent = ''; el.classList.add('hidden'); }
   }
   /** Clear all per-field errors. */
   function _clearAll() {
     ['err-case-number', 'err-investigator', 'err-agency'].forEach(_fieldClear);
-    errEl.style.display = 'none';
+    errEl.classList.add('hidden');
   }
 
   form.onsubmit = async (e) => {
@@ -223,7 +223,7 @@ function renderNewCaseScreen() {
     } catch (err) {
       // Show verbatim server error (includes HTTP 409 duplicate message)
       errMsg.textContent = err.message;
-      errEl.style.display = 'flex';
+      errEl.classList.remove('hidden');
       if (typeof Toast !== 'undefined' && Toast.error) {
         Toast.error(err.message || 'Failed to create case');
       }

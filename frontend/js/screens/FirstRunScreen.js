@@ -127,7 +127,7 @@ async function renderFirstRunScreen(status) {
       }
 
       finishBtn.onclick = async () => {
-        errEl.style.display = 'none';
+        errEl.classList.add('hidden');
         finishBtn.disabled = true;
         try {
           const res = await fetch('/api/setup/first-run-complete', {
@@ -146,7 +146,7 @@ async function renderFirstRunScreen(status) {
           else navigateTo('dashboard');
         } catch (err) {
           errMsg.textContent = err.message || 'Could not use that folder.';
-          errEl.style.display = 'flex';
+          errEl.classList.remove('hidden');
           finishBtn.disabled = false;
         }
       };

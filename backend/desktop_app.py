@@ -28,7 +28,7 @@ if sys.stdout is None:
 if sys.stderr is None:
     sys.stderr = open(os.devnull, "w", encoding="utf-8")
 
-APP_TITLE = "SIH Forensic Tool — DVR/NVR Analysis (SIH26150)"
+APP_TITLE = "AEGIS — DVR/NVR Forensic Analysis Tool (SIH26150)"
 _STARTUP_ERROR: list[str] = []
 
 

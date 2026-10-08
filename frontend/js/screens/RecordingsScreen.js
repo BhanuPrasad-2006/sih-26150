@@ -426,6 +426,13 @@ async function renderRecordingsScreen(params) {
   }
 }
 
+/** "1 of 2 segments fully processed." — counts segments, so per-analysis failures cannot make it negative. */
+function batchSummary(res) {
+  const failedSegs = new Set(res.failures.map(f => String(f.segment_id ?? f.camera ?? '?'))).size;
+  const ok = Math.max(0, (res.total || 0) - failedSegs);
+  return `${ok} of ${res.total} segment${res.total === 1 ? '' : 's'} fully processed.`;
+}
+
 function handleBatchResult(actionName, res, caseId, evidenceId) {
   if (res.failures && res.failures.length > 0) {
     showModal(
@@ -433,7 +440,7 @@ function handleBatchResult(actionName, res, caseId, evidenceId) {
       `<div class="notice-card warning">
          <div>
            <h3>${icon('alert')} Some items could not be processed</h3>
-           <p>${res.completed - res.failures.length} of ${res.total} completed successfully. The following ${res.failures.length} item(s) failed:</p>
+           <p>${batchSummary(res)} The following ${res.failures.length} item(s) failed:</p>
            <ul class="text-sm mt-sm lh-relaxed pl-18">
              ${res.failures.map(f => `<li>Camera ${escapeHtml(String(f.camera ?? '?'))}${f.type ? ' (' + escapeHtml(f.type) + ')' : ''}: ${escapeHtml(f.error)}</li>`).join('')}
            </ul>

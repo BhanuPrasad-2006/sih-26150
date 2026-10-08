@@ -5,6 +5,9 @@ The tool cannot know who seized a device, which police station or FIR the case b
 serial number. The examiner types them in; they are stored per case and printed in the report exactly as entered,
 marked "as entered by the examiner (not verified by the tool)". Fields left blank are listed as not provided.
 
+Locking: once the first signed report has been generated, the details are frozen (``lock``), so every report
+for the case carries the same certificate details and nobody can quietly change them afterwards.
+
 Storage: one JSON value per case in the key/value table the database layer already has for both SQLite and
 Postgres (key ``case_meta:<case_id>:certificate``), so no schema change is needed.
 """
@@ -84,3 +87,20 @@ def missing_labels(details: Optional[dict]) -> list[str]:
     """Labels of the fields the examiner left blank (all of them when nothing was entered)."""
     cleaned = clean(details)
     return [LABELS[k] for k in FIELD_KEYS if not cleaned[k]]
+
+
+def _lock_key(case_id: str) -> str:
+    return f"case_meta:{case_id}:certificate_locked"
+
+
+def locked_at(db, case_id: str) -> Optional[str]:
+    """ISO time the details were locked (first signed report), or None while still editable."""
+    return db.get_auth_value(_lock_key(case_id)) or None
+
+
+def lock(db, case_id: str, when_iso: str) -> bool:
+    """Freeze the details. Returns True if this call locked them, False if they were already locked."""
+    if locked_at(db, case_id):
+        return False
+    db.set_auth_value(_lock_key(case_id), when_iso)
+    return True

@@ -247,6 +247,56 @@ class AuthManager:
             self._save_users(users)
             return True
 
+    # ── Password recovery key (forgotten password, fully offline) ─────────────
+    # Each examiner gets one 20-character key, shown once when the account is created (or when they
+    # generate a new one). Only its bcrypt hash is stored. With username + key, a forgotten password
+    # can be replaced from the sign-in screen; the key is then rotated, so each key works once.
+
+    @staticmethod
+    def _new_key_text() -> str:
+        raw = "".join(secrets.choice(_RECOVERY_ALPHABET) for _ in range(20))
+        return "-".join(raw[i:i + 5] for i in range(0, 20, 5))
+
+    def new_password_recovery_key(self, username: str) -> Optional[str]:
+        """Create (or replace) this examiner's recovery key. Returns the key once, or None if no such user."""
+        key_text = self._new_key_text()
+        hashed = bcrypt.hashpw(_norm_recovery(key_text).encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        with self._lock:
+            users = self._load_users()
+            rec = users.get(self._key(username))
+            if not rec:
+                return None
+            rec["pw_recovery_hash"] = hashed
+            rec["pw_recovery_created"] = time.time()
+            self._save_users(users)
+        return key_text
+
+    def has_password_recovery_key(self, username: str) -> bool:
+        with self._lock:
+            rec = self._load_users().get(self._key(username))
+        return bool(rec and rec.get("pw_recovery_hash"))
+
+    def reset_password_with_recovery_key(self, username: str, key_text: str, new_password: str) -> Optional[str]:
+        """
+        Replace a forgotten password using the account's recovery key. Returns the NEW recovery key on
+        success (the used one stops working), or None when the username/key pair is wrong — without
+        saying which. Raises ValueError for a weak new password (checked before anything else, so a
+        bad password never costs a lockout attempt). Lockout/attempt counting is the caller's job.
+        """
+        validate_password_strength(new_password)
+        with self._lock:
+            rec = self._load_users().get(self._key(username))
+        stored = (rec or {}).get("pw_recovery_hash")
+        candidate = _norm_recovery(key_text).encode("utf-8")
+        if not stored:
+            bcrypt.checkpw(candidate, bcrypt.hashpw(b"decoy", bcrypt.gensalt()))   # same timing as a real check
+            return None
+        if not bcrypt.checkpw(candidate, stored.encode("utf-8")):
+            return None
+        if not self.set_user_password(username, new_password):
+            return None
+        return self.new_password_recovery_key(username)
+
     def disable_totp_for(self, username: str) -> bool:
         """Used by the CLI reset tool when an examiner has lost both their password and their
         authenticator device. Returns False if the username does not exist."""

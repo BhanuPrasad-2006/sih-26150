@@ -144,6 +144,7 @@ _AUTH_EXEMPT_PATHS = {
     "/api/auth/auto-login",
     "/api/auth/login",
     "/api/auth/setup",
+    "/api/auth/recover",               # forgotten password: username + recovery key, rate-limited like login
     "/api/auth/security-prefs",
     "/api/setup/first-run-status",     # first-run wizard runs before any password exists
     "/api/setup/first-run-complete",
@@ -589,6 +590,17 @@ class SignupRequest(BaseModel):
         return validate_password_strength(v)
 
 
+class RecoverRequest(BaseModel):
+    """Forgotten password: username + the account's recovery key + a new password (unauthenticated)."""
+    username: str
+    recovery_key: str
+    new_password: str
+
+
+class PasswordConfirmRequest(BaseModel):
+    password: str
+
+
 @app.get("/api/version")
 async def get_app_version():
     """Unauthenticated: the running app's version, shown in the UI and used for update checks."""
@@ -798,8 +810,11 @@ async def setup_password(req: SetupRequest, response: Response, request: Request
     else:
         remember_token.clear_remember_token()
 
+    recovery_key = auth.new_password_recovery_key(req.username)
+
     # Audit: no password details logged
     _global_audit_event("examiner_account_created", f"username={req.username} (first-run)")
+    _global_audit_event("password_recovery_key_issued", f"username={req.username}")
 
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
@@ -809,7 +824,7 @@ async def setup_password(req: SetupRequest, response: Response, request: Request
         max_age=max_age,
         secure=(request.url.scheme == "https"),   # Secure whenever the session is served over HTTPS
     )
-    return {"ok": True}
+    return {"ok": True, "recovery_key": recovery_key}
 
 
 @app.post("/api/auth/signup")
@@ -828,7 +843,57 @@ async def signup(req: SignupRequest, request: Request):
     except ValueError as exc:
         raise HTTPException(400, str(exc))
     _global_audit_event("examiner_account_created", f"username={req.username} (added by {creator})")
-    return {"ok": True}
+    recovery_key = auth.new_password_recovery_key(req.username)
+    _global_audit_event("password_recovery_key_issued", f"username={req.username}")
+    return {"ok": True, "recovery_key": recovery_key}
+
+
+@app.post("/api/auth/recover")
+async def recover_password(req: RecoverRequest):
+    """
+    Forgotten password, fully offline: the examiner proves ownership with the recovery key that was
+    shown once when their account was created, and sets a new password. Shares the login lockout
+    (5 wrong attempts -> 60 s) and never says whether the username or the key was wrong. On success
+    every existing session for the account is signed out and a NEW recovery key is returned (shown once).
+    """
+    username = (req.username or "").strip()
+    locked, retry_after = auth.is_locked_out(username)
+    if locked:
+        return JSONResponse({"locked": True, "retry_after": retry_after,
+                             "detail": f"Too many failed attempts. Try again in {retry_after} seconds."}, status_code=429)
+    try:
+        new_key = await asyncio.to_thread(auth.reset_password_with_recovery_key, username, req.recovery_key, req.new_password)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    if not new_key:
+        count, just_locked = auth.record_failure(username)
+        _global_audit_event("password_recovery_failure", f"username={username} attempt={count} locked={just_locked}")
+        if just_locked:
+            return JSONResponse({"locked": True, "retry_after": AuthManager.LOCKOUT_SECONDS,
+                                 "detail": f"Too many failed attempts. Try again in {AuthManager.LOCKOUT_SECONDS} seconds."},
+                                status_code=429)
+        return JSONResponse({"ok": False, "detail": "That username and recovery key do not match."}, status_code=401)
+    auth.record_success(username)
+    auth.invalidate_other_sessions_for_user(username, keep_token=None)
+    remember_token.clear_remember_token()
+    _global_audit_event("password_reset_with_recovery_key", f"username={username}")
+    return {"ok": True, "recovery_key": new_key}
+
+
+@app.get("/api/auth/recovery-key")
+async def recovery_key_status(request: Request):
+    return {"has_recovery_key": auth.has_password_recovery_key(_current_username(request))}
+
+
+@app.post("/api/auth/recovery-key")
+async def regenerate_recovery_key(req: PasswordConfirmRequest, request: Request):
+    """Signed-in examiner creates a new recovery key (needs their current password). The old key stops working."""
+    username = _current_username(request)
+    if not await asyncio.to_thread(auth.verify_credentials, username, req.password):
+        raise HTTPException(401, "Incorrect password.")
+    key = auth.new_password_recovery_key(username)
+    _global_audit_event("password_recovery_key_issued", f"username={username} (regenerated)")
+    return {"recovery_key": key}
 
 
 @app.get("/api/auth/examiners")
@@ -1959,7 +2024,8 @@ async def get_certificate_details(case_id: str):
     if not await asyncio.to_thread(db.get_case, case_id):
         raise HTTPException(404, "Case not found")
     return {"fields": [{"key": k, "label": label} for k, label in certificate_meta.FIELDS],
-            "values": await asyncio.to_thread(certificate_meta.load, db, case_id)}
+            "values": await asyncio.to_thread(certificate_meta.load, db, case_id),
+            "locked_at": await asyncio.to_thread(certificate_meta.locked_at, db, case_id)}
 
 
 @app.put("/api/cases/{case_id}/certificate")
@@ -1967,6 +2033,11 @@ async def save_certificate_details(case_id: str, req: CertificateDetailsRequest)
     """Save the details printed on the certificate pages of the PDF report. Stored as entered; not verified."""
     if not await asyncio.to_thread(db.get_case, case_id):
         raise HTTPException(404, "Case not found")
+    when = await asyncio.to_thread(certificate_meta.locked_at, db, case_id)
+    if when:
+        _audit(case_id, "certificate_details_change_refused", "details are locked after the first signed report")
+        raise HTTPException(409, f"Certificate details are locked: a signed report was generated on {when[:19].replace('T', ' ')} UTC, "
+                                 "so they can no longer be changed.")
     values = await asyncio.to_thread(certificate_meta.save, db, case_id, req.model_dump())
     filled = [k for k in certificate_meta.FIELD_KEYS if values[k]]
     _audit(case_id, "certificate_details_saved", f"fields_filled={','.join(filled) or 'none'}")
@@ -2010,6 +2081,8 @@ async def get_report(case_id: str):
     signature = await asyncio.to_thread(report_signing.sign_report, pdf, case_id)   # detached, over the final bytes
     _audit(case_id, "report_generated",
            f"{pdf} sha256={signature['sha256']} signed_with_key={signature['key_id']} embedded_signature=yes")
+    if await asyncio.to_thread(certificate_meta.lock, db, case_id, datetime.now(timezone.utc).isoformat()):
+        _audit(case_id, "certificate_details_locked", "frozen after the first signed report")
     return FileResponse(str(pdf), media_type="application/pdf",
                         filename=f"report_case_{case.case_number}_{ts}.pdf")
 

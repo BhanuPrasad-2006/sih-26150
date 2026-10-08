@@ -16,13 +16,13 @@ function renderHeader(breadcrumbs = []) {
     <div class="logo-area">
       ${logoMark()}
       <div class="logo-text">
-        <h1>DVR/NVR Forensic Analysis Tool</h1>
+        <h1>AEGIS <span class="logo-h1-sub">DVR/NVR Forensic Analysis Tool</span></h1>
         <p>SIH26150 · Recover, verify and report CCTV evidence</p>
       </div>
     </div>
     <div class="header-meta">
       <div id="case-context-pill" class="case-context-pill hidden" role="region" aria-label="Case context"></div>
-      <button type="button" id="btn-user-profile" class="btn btn-secondary btn-sm" title="Examiner profile and security preferences" style="display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; font-size: 0.85rem; font-weight: 500;">
+      <button type="button" id="btn-user-profile" class="btn btn-secondary btn-sm btn-profile" title="Examiner profile and security preferences">
         ${icon('user')} <span id="header-user-label">Profile</span> <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
       </button>
       <button type="button" id="theme-toggle" class="icon-btn" aria-label="Switch light or dark theme" title="Switch light / dark theme">${icon(themeIcon)}</button>
@@ -103,6 +103,13 @@ async function updateHeaderContext(caseId, evidenceId = null) {
   try {
     const caseData = await API.getCase(caseId);
     if (activeHeaderCaseId !== caseId) return;
+
+    // Breadcrumbs are drawn before the case loads, with the internal id: swap in the case number.
+    document.querySelectorAll('#breadcrumb-strip .crumb-link, #breadcrumb-strip .crumb-current').forEach((el) => {
+      if (el.textContent.trim() === `Case #${caseId}` && caseData.case_number) {
+        el.lastChild.textContent = `Case ${caseData.case_number}`;
+      }
+    });
 
     const evidenceList = caseData.evidence || [];
     let currentEvidence = null;
@@ -204,31 +211,51 @@ async function openUserProfileModal() {
     requirePw = !!prefs.require_password_every_time;
   } catch (_) {}
 
+  let hasKey = null;
+  try { hasKey = (await API.recoveryKeyStatus()).has_recovery_key; } catch (_) {}
+
   const bodyHtml = `
-    <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 20px; padding-bottom: 14px; border-bottom: 1px solid var(--border-color, #334155);">
-      <div style="width: 46px; height: 46px; border-radius: 50%; background: #0284c7; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; font-weight: bold;">
-        ${escapeHtml((username || 'E')[0].toUpperCase())}
-      </div>
+    <div class="profile-head">
+      <div class="profile-avatar">${escapeHtml((username || 'E')[0].toUpperCase())}</div>
       <div>
-        <div style="font-weight: 600; font-size: 1.15rem; color: var(--text-primary);">${escapeHtml(username)}</div>
-        <div style="font-size: 0.82rem; color: var(--text-secondary); margin-top: 2px;">Local Installation Profile &middot; Offline Security</div>
+        <div class="profile-name">${escapeHtml(username)}</div>
+        <div class="profile-sub">Local Installation Profile &middot; Offline Security</div>
       </div>
     </div>
 
-    <div class="card p-md mb-md" style="background: var(--bg-surface, #1e293b); border: 1px solid var(--border-color, #334155); border-radius: 8px; padding: 14px;">
-      <div style="font-weight: 600; font-size: 0.95rem; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
-        ${icon('lock')} Security &amp; Login Preferences
-      </div>
-      <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer; user-select: none;">
-        <input type="checkbox" id="prof-require-pw" ${requirePw ? 'checked' : ''} style="cursor: pointer; width: 18px; height: 18px; margin-top: 3px;" />
+    <div class="profile-section">
+      <div class="profile-section-title">${icon('lock')} Security &amp; Login Preferences</div>
+      <label class="profile-check">
+        <input type="checkbox" id="prof-require-pw" ${requirePw ? 'checked' : ''} />
         <div>
-          <div style="font-weight: 500; font-size: 0.9rem; color: var(--text-primary);">Require password every time I open the application</div>
-          <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 4px; line-height: 1.4;">
+          <div class="profile-check-title">Require password every time I open the application</div>
+          <div class="profile-check-sub">
             When disabled (default), your login session is securely remembered on this computer for up to 7 days. When enabled, you must enter your password every time the application starts.
           </div>
         </div>
       </label>
-      <div id="prof-pref-status" style="font-size: 0.82rem; color: #10b981; margin-top: 8px; font-weight: 500; display: none;">Preference saved.</div>
+      <div id="prof-pref-status" class="profile-saved hidden">Preference saved.</div>
+    </div>
+
+    <div class="profile-section">
+      <div class="profile-section-title">${icon('key')} Password recovery key</div>
+      <div class="profile-check-sub">
+        ${hasKey === false
+          ? '<b>You have no recovery key yet.</b> Create one now so a forgotten password can be reset from the sign-in screen.'
+          : 'Used on the sign-in screen (<b>Forgot password?</b>) if you forget your password. Creating a new key makes the old one stop working.'}
+      </div>
+      <div class="profile-key-row">
+        <div class="pw-field profile-key-pw">
+          <input type="password" id="prof-key-pw" class="form-control" placeholder="Your current password" autocomplete="current-password" />
+          <button type="button" class="pw-eye" data-pw-for="prof-key-pw" aria-label="Show password" title="Show password">${icon('eye')}</button>
+        </div>
+        <button type="button" id="prof-key-btn" class="btn btn-secondary btn-sm">${icon('key')} Create new key</button>
+      </div>
+      <div id="prof-key-msg" class="profile-check-sub"></div>
+      <div id="prof-key-out" class="hidden">
+        <div class="recovery-key-box" id="prof-key-value"></div>
+        <div class="profile-check-sub">Shown only once. Copy it or write it down and keep it offline.</div>
+      </div>
     </div>
   `;
 
@@ -258,11 +285,36 @@ async function openUserProfileModal() {
         await API.setSecurityPrefs(e.target.checked);
         const st = document.getElementById('prof-pref-status');
         if (st) {
-          st.style.display = 'block';
-          setTimeout(() => { if (st) st.style.display = 'none'; }, 2000);
+          st.classList.remove('hidden');
+          setTimeout(() => { if (st) st.classList.add('hidden'); }, 2000);
         }
       } catch (err) {
-        alert('Could not update setting: ' + err.message);
+        showToast('Could not update setting: ' + err.message, 'error');
+      }
+    };
+  }
+
+  const modalRoot = document.getElementById('modal-root');
+  if (typeof _wireEyes === 'function') _wireEyes(modalRoot);
+  const keyBtn = document.getElementById('prof-key-btn');
+  if (keyBtn) {
+    keyBtn.onclick = async () => {
+      const msg = document.getElementById('prof-key-msg');
+      const pw = document.getElementById('prof-key-pw');
+      if (!pw.value) { msg.textContent = 'Enter your current password first.'; pw.focus(); return; }
+      keyBtn.disabled = true;
+      msg.textContent = 'Creating…';
+      try {
+        const r = await API.regenerateRecoveryKey(pw.value);
+        pw.value = '';
+        document.getElementById('prof-key-value').textContent = r.recovery_key;
+        document.getElementById('prof-key-out').classList.remove('hidden');
+        msg.textContent = 'New recovery key created. Your previous key no longer works.';
+        showToast('New recovery key created', 'success');
+      } catch (err) {
+        msg.textContent = err.message;
+      } finally {
+        keyBtn.disabled = false;
       }
     };
   }

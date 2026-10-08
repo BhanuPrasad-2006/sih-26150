@@ -5,7 +5,7 @@
 ### Air-gapped Evidence Gathering & Integrity Suite
 **Universal Offline DVR/NVR Surveillance Evidence Acquisition, Carving, Verification & Reporting**
 
-[![Release](https://img.shields.io/badge/Release-v1.0.1-brightgreen.svg?style=for-the-badge)](https://github.com/BhanuPrasad-2006/sih-26150/releases/tag/v1.0.1)
+[![Release](https://img.shields.io/badge/Release-v2.0.0-brightgreen.svg?style=for-the-badge)](https://github.com/BhanuPrasad-2006/sih-26150/releases/tag/v2.0.0)
 [![Architecture](https://img.shields.io/badge/Architecture-100%25%20Offline%20Air--Gapped-blue?style=for-the-badge)](docs/SYSTEM_ARCHITECTURE.md)
 [![Smart India Hackathon](https://img.shields.io/badge/Smart%20India%20Hackathon-2026-orange?style=for-the-badge)](https://www.sih.gov.in/)
 [![Problem Statement](https://img.shields.io/badge/Problem%20Statement-SIH26150-blue?style=for-the-badge)](#-problem-statement-checklist)
@@ -18,7 +18,7 @@
 [![Tests](https://img.shields.io/badge/tests-375%2B%20passing-brightgreen)](#-how-we-check-that-it-works)
 [![Compliance](https://img.shields.io/badge/Compliance-BSA%202023%20§63(4)-darkblue)](docs/SECURITY.md)
 
-[**Download Installer (v1.0.1)**](https://github.com/BhanuPrasad-2006/sih-26150/releases/download/v1.0.1/SIH_Forensic_Tool_Setup_v1.0.1.exe) · [**Live Web Portal**](https://bhanuprasad-2006.github.io/sih-26150/) · [**Architecture**](docs/SYSTEM_ARCHITECTURE.md) · [**SOP**](docs/SOP.md)
+[**Download Installer (v2.0.0)**](https://github.com/BhanuPrasad-2006/sih-26150/releases/download/v2.0.0/SIH-Forensic-Tool-Setup-2.0.0.exe) · [**Live Web Portal**](https://bhanuprasad-2006.github.io/sih-26150/) · [**Architecture**](docs/SYSTEM_ARCHITECTURE.md) · [**SOP**](docs/SOP.md)
 
 </div>
 
@@ -181,18 +181,18 @@ All analytics run on the **exported copy**, read-only, and never change the evid
 
 ## 🚀 Quick start
 
-### 💾 Option A: Windows Desktop Installer (v1.0.1) — Recommended
+### 💾 Option A: Windows Desktop Installer (v2.0.0) — Recommended
 
 For Windows 10/11 x64 workstations, download and run the standalone, air-gapped setup wizard:
 
-* **Direct Download:** [SIH_Forensic_Tool_Setup_v1.0.1.exe](https://github.com/BhanuPrasad-2006/sih-26150/releases/download/v1.0.1/SIH_Forensic_Tool_Setup_v1.0.1.exe)
-* **Release Page:** [GitHub Releases v1.0.1](https://github.com/BhanuPrasad-2006/sih-26150/releases/tag/v1.0.1)
-* **Release Artifact:** `SIH_Forensic_Tool_Setup_v1.0.1.exe` (~100 MB)
+* **Direct Download:** [SIH-Forensic-Tool-Setup-2.0.0.exe](https://github.com/BhanuPrasad-2006/sih-26150/releases/download/v2.0.0/SIH-Forensic-Tool-Setup-2.0.0.exe)
+* **Release Page:** [GitHub Releases v2.0.0](https://github.com/BhanuPrasad-2006/sih-26150/releases/tag/v2.0.0)
+* **Release Artifact:** `SIH-Forensic-Tool-Setup-2.0.0.exe` (~100 MB)
 * **SHA-256 Checksum:** `AA09FF9B5AB39B53BFE9627C856B06D7E59E52F85D05164EA3F36F9A057B7796`
 
 Verify the installer checksum in PowerShell before running:
 ```powershell
-Get-FileHash -Algorithm SHA256 .\SIH_Forensic_Tool_Setup_v1.0.1.exe
+Get-FileHash -Algorithm SHA256 .\SIH-Forensic-Tool-Setup-2.0.0.exe
 ```
 
 Or install via PowerShell automated one-liner:
@@ -309,7 +309,7 @@ All routes except login/setup require the session cookie. Interactive docs at `/
 <summary><b>Access control, integrity and audit design</b></summary>
 
 - **Local only**: binds to `127.0.0.1`; a loud warning is emitted if `SIH_HOST` says otherwise.
-- **Named examiner accounts**: each has their own bcrypt-hashed password (minimum 8 characters, with an uppercase letter, a lowercase letter, a digit and a special character) — the plaintext is never stored or logged. There are no separate permission levels: any signed-in examiner can see every case, but every action is attributed to the account that did it. A forgotten password has no in-app recovery (no email/SMS on an offline tool) — `tools/reset_user_password.py` resets it from a terminal with access to the machine.
+- **Named examiner accounts**: each has their own bcrypt-hashed password (minimum 8 characters, with an uppercase letter, a lowercase letter, a digit and a special character) — the plaintext is never stored or logged. There are no separate permission levels: any signed-in examiner can see every case, but every action is attributed to the account that did it. A forgotten password is reset offline with the examiner's one-time **recovery key** (shown once at account creation; *Forgot password?* on the sign-in screen); without a key, `tools/reset_user_password.py` resets it from a terminal with access to the machine.
 - **Sessions**: `HttpOnly`, `SameSite=Strict` cookie; 30-minute idle timeout (configurable).
 - **Brute-force lockout**: 5 failures on one account → 60 s lock with live countdown, never affecting other accounts; the count and lock time are stored in the database, so restarting the server does not reset them; messages never reveal whether a username exists or which field was wrong.
 - **Read-only evidence**: images are memory-mapped read-only; the evidence hash is re-checked after every scan and on demand.
@@ -409,6 +409,7 @@ Legend: ✅ done · 🟡 partly / unvalidated · ❌ not done.
 8. **Accuracy numbers** describe one test on one disk and are not a general recovery rate.
 9. Clock drift and time zones are examiner-supplied, never inferred. Recovered-video times are the recorder's own clock and are not converted to IST or UTC by the interface.
 10. Bound to localhost, not internet-facing. Multiple named examiner accounts can sign in, but there are no per-account permission levels — any signed-in examiner sees every case.
+11. **Dahua carving with the index wiped** skips a DHAV frame that is split across two non-adjacent clusters (common for large I-frames when clusters are small, e.g. 32 KB); the exported stream can then fail to remux and is offered as a raw stream instead. Large clusters are not affected.
 
 ## 🗺️ Roadmap
 

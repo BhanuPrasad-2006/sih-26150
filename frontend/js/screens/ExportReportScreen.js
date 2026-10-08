@@ -56,6 +56,7 @@ async function renderExportReportScreen(params) {
         certificate pages <strong>exactly as you enter them</strong> and marked as not verified by the tool. Anything left blank
         is listed in the report as not provided.
       </p>
+      <div id="cert-lock-note" class="lock-note hidden"></div>
       <div id="cert-form" class="cert-grid"><div class="spinner spinner-sm"></div></div>
       <div class="d-flex gap-10 flex-wrap items-center mt-lg">
         <button type="button" id="btn-save-cert" class="btn btn-secondary btn-sm">${icon('check')} Save details</button>
@@ -133,6 +134,19 @@ async function renderExportReportScreen(params) {
     return r;
   };
 
+  let certLocked = false;
+  const applyCertLock = (lockedAt) => {
+    certLocked = !!lockedAt;
+    if (!certLocked) return;
+    certFieldKeys.forEach((k) => { document.getElementById(`cert-${k}`).readOnly = true; });
+    document.getElementById('btn-save-cert').classList.add('hidden');
+    const when = formatIST(lockedAt);
+    document.getElementById('cert-lock-note').innerHTML =
+      `${icon('lock')}<span><b>Locked.</b> These details were frozen when the first signed report was generated (${escapeHtml(when)}), so every report for this case carries the same certificate details. They can no longer be changed.</span>`;
+    document.getElementById('cert-lock-note').classList.remove('hidden');
+    document.getElementById('cert-summary-note').textContent = 'Locked after the first signed report';
+  };
+
   try {
     const cert = await API.getCertificate(caseId);
     certFieldKeys = cert.fields.map((f) => f.key);
@@ -142,6 +156,7 @@ async function renderExportReportScreen(params) {
         <input type="text" id="cert-${escapeHtml(f.key)}" class="form-control" maxlength="200" autocomplete="off"
           placeholder="${escapeHtml(CERT_PLACEHOLDERS[f.key] || '')}" value="${escapeHtml(cert.values[f.key] || '')}">
       </div>`).join('');
+    applyCertLock(cert.locked_at);
   } catch (err) {
     document.getElementById('cert-form').innerHTML =
       `<div class="error-inline"><span>${icon('alert')}</span><span>Could not load the certificate details: ${escapeHtml(err.message)}</span></div>`;
@@ -177,6 +192,25 @@ async function renderExportReportScreen(params) {
     }
   };
 
+  /** Before the first signed report: the examiner confirms the certificate details, which then lock. */
+  const confirmLockDetails = () => new Promise((resolve) => {
+    const rows = certFieldKeys.map((k) => {
+      const label = document.querySelector(`label[for="cert-${k}"]`)?.textContent || k;
+      const v = document.getElementById(`cert-${k}`).value.trim();
+      return `<tr><td class="text-muted">${escapeHtml(label)}</td><td>${v ? escapeHtml(v) : '<span class="text-dim">not provided</span>'}</td></tr>`;
+    }).join('');
+    showModal(`${icon('lock')} Confirm certificate details`, `
+      <p class="card-lead mt-0">The first signed report <b>locks these details</b> for this case. After that they cannot be changed,
+      so every report carries the same information. Please check them now.</p>
+      <table class="confirm-table"><tbody>${rows}</tbody></table>`,
+      [
+        { label: 'Go back and edit', class: 'btn-secondary', onClick: () => resolve(false) },
+        { label: 'Confirm, lock and generate', class: 'btn-primary', onClick: () => resolve(true) },
+      ]);
+    document.getElementById('modal-close-btn').addEventListener('click', () => resolve(false));
+    document.querySelector('#modal-root .modal-overlay').addEventListener('click', (e) => { if (e.target === e.currentTarget) resolve(false); });
+  });
+
   // ── Generate PDF ───────────────────────────────────────────────────────────
   const genBtn = document.getElementById('btn-generate-pdf');
   genBtn.onclick = async () => {
@@ -186,8 +220,16 @@ async function renderExportReportScreen(params) {
     document.getElementById('report-result-card').classList.add('hidden');
     document.getElementById('report-error-card').classList.add('hidden');
 
+    if (!certLocked && certFieldKeys.length) {
+      const ok = await confirmLockDetails();
+      if (!ok) {
+        genBtn.disabled = false;
+        genBtn.innerHTML = icon('file-text') + ' Generate PDF Report';
+        return;
+      }
+    }
     try {
-      if (certFieldKeys.length) {
+      if (!certLocked && certFieldKeys.length) {
         try {
           await saveCertForm();
         } catch (saveErr) {
@@ -223,6 +265,7 @@ async function renderExportReportScreen(params) {
 
       genBtn.disabled = false;
       genBtn.innerHTML = icon('file-text') + ' Regenerate PDF Report';
+      try { applyCertLock((await API.getCertificate(caseId)).locked_at); } catch (_) {}
 
     } catch (err) {
       showToast('Report generation failed: ' + err.message, 'error');

@@ -1,42 +1,37 @@
 /**
  * LoginScreen.js — Multi-examiner authentication gate.
  *
- * Handles two flows:
- *   1. First-run setup  — called when no examiner account exists yet. Creates the first account.
- *   2. Normal login     — called on every subsequent launch or session expiry. Any existing
- *                         examiner signs in with their own username and password.
+ * Handles four flows:
+ *   1. First-run setup  — no examiner account exists yet. Creates the first account and shows its
+ *                         password recovery key once.
+ *   2. Normal login     — any existing examiner signs in with their own username and password.
+ *   3. Forgot password  — username + recovery key + a new password (fully offline; the key was shown
+ *                         once when the account was created and is replaced after every use).
+ *   4. Recovery key     — the one-time screen that shows a new key with Copy / Save buttons.
  *
  * Security UX rules enforced here:
- *   • Error message never distinguishes an unknown username from a wrong password.
- *   • Lockout: 5 failures for a given username → 60-second countdown banner (per-account, not
- *     shared — a lockout on one examiner's account never blocks another's).
+ *   • Error messages never distinguish an unknown username from a wrong password or key.
+ *   • Lockout: 5 failures for a given username → 60-second countdown banner (per-account).
  *   • Credentials are submitted via fetch (never as a URL query parameter).
  *   • Two-factor is per-examiner: the code field only appears after a correct password reveals
  *     that this particular account needs one (see API.login's totp_required response).
- *   • Forgotten password: there is no in-app recovery (no email/SMS on an offline tool) — an
- *     examiner locked out of their own account needs someone with terminal access to the machine
- *     to run tools/reset_user_password.py.
+ *   • No inline styles (the CSP is style-src 'self'): visibility is toggled with the .hidden class.
  */
 
 function _hideChromeForAuth() {
-  const sidebar = document.getElementById('sidebar-root');
-  const breadcrumb = document.getElementById('breadcrumb-strip');
-  const header = document.getElementById('header-root');
-  if (sidebar) sidebar.style.display = 'none';
-  if (breadcrumb) breadcrumb.style.display = 'none';
-  if (header) header.style.display = 'none';
+  ['sidebar-root', 'breadcrumb-strip', 'header-root'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('hidden');
+  });
 }
 
 function _restoreChromeAfterAuth() {
-  const sidebar = document.getElementById('sidebar-root');
-  const breadcrumb = document.getElementById('breadcrumb-strip');
-  const header = document.getElementById('header-root');
-  if (sidebar) sidebar.style.display = '';
-  if (breadcrumb) breadcrumb.style.display = '';
-  if (header) header.style.display = '';
+  ['sidebar-root', 'breadcrumb-strip', 'header-root'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('hidden');
+  });
 }
 
-const _ICON_SHIELD = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.4 9 8 11 4.6-2 8-6 8-11V5l-8-3z"/><path d="m9 12 2 2 4-4"/></svg>`;
 const _ICON_LOCK = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>`;
 const _ICON_LOCK_PLUS = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><path d="M12 14v4M10 16h4"/></svg>`;
 const _ICON_WARN = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon-block-alert"><path d="M10.3 3.9 1.8 18a1 1 0 0 0 .9 1.5h18.6a1 1 0 0 0 .9-1.5L13.7 3.9a1 1 0 0 0-1.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg>`;
@@ -49,7 +44,8 @@ function _brandPanelHtml() {
       <div class="auth-brand-mesh"></div>
       <div class="auth-brand-content">
         <div class="auth-brand-badge">${logoMark()}</div>
-        <div class="auth-brand-name">DVR/NVR Forensic<br>Analysis Tool</div>
+        <div class="auth-brand-name">AEGIS</div>
+        <div class="auth-brand-desc">DVR/NVR Forensic Analysis Tool</div>
         <div class="auth-brand-tag">SIH26150 &middot; NTRO</div>
         <div class="auth-brand-art">${authArt()}</div>
         <ul class="auth-feature-list">
@@ -65,205 +61,215 @@ function _brandPanelHtml() {
 // constant so the two can never describe different rules.
 const _PASSWORD_RULE_TEXT = 'At least 8 characters, with an uppercase letter, a lowercase letter, a digit, and a special character.';
 
+const _PW_RULES = [
+  ['len',   '8+ characters',              (v) => v.length >= 8],
+  ['upper', '1 uppercase (A-Z)',          (v) => /[A-Z]/.test(v)],
+  ['lower', '1 lowercase (a-z)',          (v) => /[a-z]/.test(v)],
+  ['num',   '1 number (0-9)',             (v) => /\d/.test(v)],
+  ['sym',   '1 special symbol (!@#$%^&*)', (v) => /[^A-Za-z0-9]/.test(v)],
+];
+
+/** A password input with an eye button inside it (show / hide). */
+function _pwFieldHtml(id, placeholder, autocomplete) {
+  return `
+    <div class="pw-field">
+      <input type="password" id="${id}" class="form-control" placeholder="${placeholder}" autocomplete="${autocomplete}" required />
+      <button type="button" class="pw-eye" data-pw-for="${id}" aria-label="Show password" title="Show password">${icon('eye')}</button>
+    </div>`;
+}
+
+function _pwRulesHtml(prefix) {
+  return `<div class="pw-rules" id="${prefix}-pw-rules">
+    ${_PW_RULES.map(([k, label]) => `<div class="pw-rule${k === 'sym' ? ' pw-rule-wide' : ''}" id="${prefix}-rule-${k}">${label}</div>`).join('')}
+  </div>`;
+}
+
+function _errorBoxHtml(id) {
+  return `<div id="${id}" class="error-inline auth-error hidden" role="alert">${_ICON_WARN}<span id="${id}-msg"></span></div>`;
+}
+
+/** Wire every eye button inside `scope`: toggles its input between hidden and visible text. */
+function _wireEyes(scope) {
+  scope.querySelectorAll('.pw-eye').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const input = document.getElementById(btn.dataset.pwFor);
+      if (!input) return;
+      const show = input.type === 'password';
+      input.type = show ? 'text' : 'password';
+      btn.innerHTML = icon(show ? 'eye-off' : 'eye');
+      btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+      btn.title = show ? 'Hide password' : 'Show password';
+    });
+  });
+}
+
+function _wireRules(input, prefix) {
+  input.addEventListener('input', () => {
+    _PW_RULES.forEach(([k, , test]) => {
+      const el = document.getElementById(`${prefix}-rule-${k}`);
+      const ok = test(input.value);
+      el.classList.toggle('ok', ok);   // the ring / tick marker is drawn by CSS (.pw-rule::before)
+    });
+  });
+}
+
+function _errorApi(id) {
+  const box = document.getElementById(id);
+  const msg = document.getElementById(`${id}-msg`);
+  return {
+    show(text, html = false) {
+      if (html) msg.innerHTML = text; else msg.textContent = text;
+      box.classList.remove('hidden');
+    },
+    hide() { msg.textContent = ''; box.classList.add('hidden'); },
+  };
+}
+
+/** Same checks as the server, so the examiner gets the reason before a round trip. */
+function _passwordProblem(pw, pw2) {
+  if (pw.length < 8) return 'Password must be at least 8 characters long.';
+  if (!/[A-Z]/.test(pw)) return 'Password must include at least one uppercase letter (A-Z).';
+  if (!/[a-z]/.test(pw)) return 'Password must include at least one lowercase letter (a-z).';
+  if (!/\d/.test(pw)) return 'Password must include at least one number (0-9).';
+  if (!/[^A-Za-z0-9]/.test(pw)) return 'Password must include at least one special character (e.g. ! @ # $ %).';
+  if (pw !== pw2) return 'Passwords do not match. Please re-enter both fields.';
+  return '';
+}
+
+function _authShell(iconSvg, title, subtitle, inner) {
+  return `
+    <div class="auth-screen-wrapper">
+      ${_brandPanelHtml()}
+      <div class="auth-form-panel">
+        <div class="auth-card">
+          <div class="auth-icon">${iconSvg}</div>
+          <div class="auth-title">${title}</div>
+          <div class="auth-subtitle">${subtitle}</div>
+          ${inner}
+        </div>
+      </div>
+    </div>`;
+}
+
+
+// ── Recovery key (shown once) ────────────────────────────────────────────────
+
+/**
+ * Show a freshly issued recovery key once. The examiner must tick "I have saved it" before
+ * continuing — there is no other way to see this key again (only its hash is stored).
+ */
+function renderRecoveryKeyScreen(username, key, { title, intro, continueLabel, onContinue }) {
+  const root = document.getElementById('content-root');
+  _hideChromeForAuth();
+  root.innerHTML = _authShell(icon('key'), title, intro, `
+    <div class="recovery-key-box" id="recovery-key-value">${escapeHtml(key)}</div>
+    <div class="recovery-key-actions">
+      <button type="button" class="btn btn-secondary btn-sm" id="btn-copy-key">${icon('file')} Copy</button>
+      <button type="button" class="btn btn-secondary btn-sm" id="btn-save-key">${icon('download')} Save as text file</button>
+    </div>
+    <ul class="recovery-key-notes">
+      <li>If you forget your password, choose <b>Forgot password?</b> on the sign-in screen and enter this key.</li>
+      <li>Keep it offline and private, like a spare house key. Anyone with it and your username can reset your password.</li>
+      <li>Each key works once. After a reset you will be given a new one.</li>
+    </ul>
+    <label class="check-row"><input type="checkbox" id="chk-saved-key"> <span>I have saved my recovery key somewhere safe</span></label>
+    <button type="button" id="btn-key-continue" class="btn btn-primary btn-lg w-full mt-sm" disabled>${continueLabel} ${icon('arrow-right')}</button>
+  `);
+
+  document.getElementById('btn-copy-key').onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(key);
+      if (typeof showToast === 'function') showToast('Recovery key copied', 'success');
+    } catch (_) {
+      if (typeof showToast === 'function') showToast('Could not copy automatically. Please write the key down.', 'error');
+    }
+  };
+  document.getElementById('btn-save-key').onclick = () => {
+    const text = `AEGIS / SIH26150 Forensic Tool - password recovery key\n\nUsername:     ${username}\nRecovery key: ${key}\nIssued:       ${new Date().toLocaleString()}\n\nUse it on the sign-in screen (Forgot password?). Each key works once.\n`;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+    a.download = `recovery-key-${username}.txt`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  };
+  const chk = document.getElementById('chk-saved-key');
+  const btn = document.getElementById('btn-key-continue');
+  chk.onchange = () => { btn.disabled = !chk.checked; };
+  btn.onclick = onContinue;
+}
+
+
+// ── 1. First-run setup ───────────────────────────────────────────────────────
+
 function renderSetupScreen() {
   const root = document.getElementById('content-root');
   _hideChromeForAuth();
 
-  root.innerHTML = `
-    <div class="auth-screen-wrapper">
-      ${_brandPanelHtml()}
-      <div class="auth-form-panel">
-      <div class="auth-card">
-        <div class="auth-icon">${_ICON_LOCK_PLUS}</div>
-        <div class="auth-title">Create Local Profile</div>
-        <div class="auth-subtitle">
-          First-run setup for this installation. Your account and evidence remain strictly offline on this computer.
-        </div>
-
-        <form id="setup-form" novalidate autocomplete="off">
-          <div class="form-group">
-            <label for="setup-username">Username</label>
-            <input
-              type="text"
-              id="setup-username"
-              class="form-control"
-              placeholder="e.g. examiner1"
-              autocomplete="username"
-              required
-            />
-          </div>
-          <div class="form-group">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <label for="setup-password">Password</label>
-              <button type="button" id="btn-toggle-setup-pw" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 12px; padding: 0;">Show Password</button>
-            </div>
-            <input
-              type="password"
-              id="setup-password"
-              class="form-control"
-              placeholder="Minimum 8 characters"
-              autocomplete="new-password"
-              required
-            />
-            <div class="pw-rules-box" id="setup-pw-rules" style="margin-top: 8px; font-size: 11.5px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; padding: 8px 10px; background: rgba(255,255,255,0.03); border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);">
-              <div id="pw-rule-len" style="color: #94a3b8; transition: color 0.15s;">○ 8+ characters</div>
-              <div id="pw-rule-upper" style="color: #94a3b8; transition: color 0.15s;">○ 1 uppercase (A-Z)</div>
-              <div id="pw-rule-lower" style="color: #94a3b8; transition: color 0.15s;">○ 1 lowercase (a-z)</div>
-              <div id="pw-rule-num" style="color: #94a3b8; transition: color 0.15s;">○ 1 number (0-9)</div>
-              <div id="pw-rule-sym" style="color: #94a3b8; transition: color 0.15s; grid-column: span 2;">○ 1 special symbol (!@#$%^&*)</div>
-            </div>
-          </div>
-          <div class="form-group">
-            <label for="setup-confirm">Confirm Password</label>
-            <input
-              type="password"
-              id="setup-confirm"
-              class="form-control"
-              placeholder="Re-enter password"
-              autocomplete="new-password"
-              required
-            />
-          </div>
-
-          <div id="setup-error" class="error-inline" style="display: none; margin-bottom: 12px;">
-            ${_ICON_WARN}
-            <span id="setup-error-msg"></span>
-          </div>
-
-          <button type="submit" id="btn-setup" class="btn btn-primary btn-lg w-full mt-sm">
-            Create Profile &amp; Open Tool ${icon('arrow-right')}
-          </button>
-        </form>
+  root.innerHTML = _authShell(_ICON_LOCK_PLUS, 'Create Local Profile',
+    'First-run setup for this installation. Your account and evidence remain strictly offline on this computer.', `
+    <form id="setup-form" novalidate autocomplete="off">
+      <div class="form-group">
+        <label for="setup-username">Username</label>
+        <input type="text" id="setup-username" class="form-control" placeholder="e.g. examiner1" autocomplete="username" required />
       </div>
+      <div class="form-group">
+        <label for="setup-password">Password</label>
+        ${_pwFieldHtml('setup-password', 'Minimum 8 characters', 'new-password')}
+        ${_pwRulesHtml('setup')}
       </div>
-    </div>`;
+      <div class="form-group">
+        <label for="setup-confirm">Confirm Password</label>
+        ${_pwFieldHtml('setup-confirm', 'Re-enter password', 'new-password')}
+      </div>
+      ${_errorBoxHtml('setup-error')}
+      <button type="submit" id="btn-setup" class="btn btn-primary btn-lg w-full mt-sm">
+        Create Profile &amp; Open Tool ${icon('arrow-right')}
+      </button>
+    </form>`);
 
-  const form     = document.getElementById('setup-form');
-  const errEl    = document.getElementById('setup-error');
-  const errMsg   = document.getElementById('setup-error-msg');
-  const btnSetup = document.getElementById('btn-setup');
-  const pwInput  = document.getElementById('setup-password');
-  const pw2Input = document.getElementById('setup-confirm');
+  const form      = document.getElementById('setup-form');
+  const err       = _errorApi('setup-error');
+  const btnSetup  = document.getElementById('btn-setup');
+  const pwInput   = document.getElementById('setup-password');
+  const pw2Input  = document.getElementById('setup-confirm');
   const userInput = document.getElementById('setup-username');
-  const btnTogglePw = document.getElementById('btn-toggle-setup-pw');
-
-  const ruleLen   = document.getElementById('pw-rule-len');
-  const ruleUpper = document.getElementById('pw-rule-upper');
-  const ruleLower = document.getElementById('pw-rule-lower');
-  const ruleNum   = document.getElementById('pw-rule-num');
-  const ruleSym   = document.getElementById('pw-rule-sym');
-
-  function updateRule(el, ok, label) {
-    if (ok) {
-      el.style.color = '#10b981';
-      el.textContent = '✔ ' + label;
-    } else {
-      el.style.color = '#94a3b8';
-      el.textContent = '○ ' + label;
-    }
-  }
-
-  pwInput.addEventListener('input', () => {
-    const val = pwInput.value;
-    updateRule(ruleLen, val.length >= 8, '8+ characters');
-    updateRule(ruleUpper, /[A-Z]/.test(val), '1 uppercase (A-Z)');
-    updateRule(ruleLower, /[a-z]/.test(val), '1 lowercase (a-z)');
-    updateRule(ruleNum, /\d/.test(val), '1 number (0-9)');
-    updateRule(ruleSym, /[^A-Za-z0-9]/.test(val), '1 special symbol (!@#$%^&*)');
-  });
-
-  if (btnTogglePw) {
-    btnTogglePw.addEventListener('click', () => {
-      const isPw = pwInput.type === 'password';
-      pwInput.type = isPw ? 'text' : 'password';
-      pw2Input.type = isPw ? 'text' : 'password';
-      btnTogglePw.textContent = isPw ? 'Hide Password' : 'Show Password';
-    });
-  }
-
-  function showError(msg) {
-    errMsg.textContent = msg;
-    errEl.style.display = 'flex';
-    if (typeof Toast !== 'undefined' && Toast.error) {
-      Toast.error(msg);
-    }
-  }
-
-  function hideError() {
-    errMsg.textContent = '';
-    errEl.style.display = 'none';
-  }
+  _wireEyes(root);
+  _wireRules(pwInput, 'setup');
 
   form.onsubmit = async (e) => {
     e.preventDefault();
-    hideError();
-
+    err.hide();
     const username = userInput.value.trim();
-    const pw  = pwInput.value;
-    const pw2 = pw2Input.value;
-
-    if (!username) {
-      showError('Please choose a username.');
-      userInput.focus();
-      return;
-    }
-    if (username.length < 3 || username.length > 32) {
-      showError('Username must be 3-32 characters long.');
-      userInput.focus();
-      return;
-    }
-    if (pw.length < 8) {
-      showError('Password must be at least 8 characters long.');
-      pwInput.focus();
-      return;
-    }
-    if (!/[A-Z]/.test(pw)) {
-      showError('Password must include at least one uppercase letter (A-Z).');
-      pwInput.focus();
-      return;
-    }
-    if (!/[a-z]/.test(pw)) {
-      showError('Password must include at least one lowercase letter (a-z).');
-      pwInput.focus();
-      return;
-    }
-    if (!/\d/.test(pw)) {
-      showError('Password must include at least one number (0-9).');
-      pwInput.focus();
-      return;
-    }
-    if (!/[^A-Za-z0-9]/.test(pw)) {
-      showError('Password must include at least one special character (e.g. ! @ # $ %).');
-      pwInput.focus();
-      return;
-    }
-    if (pw !== pw2) {
-      showError('Passwords do not match. Please re-enter both fields.');
-      pw2Input.focus();
-      return;
-    }
+    if (!username) { err.show('Please choose a username.'); userInput.focus(); return; }
+    if (username.length < 3 || username.length > 32) { err.show('Username must be 3-32 characters long.'); userInput.focus(); return; }
+    const problem = _passwordProblem(pwInput.value, pw2Input.value);
+    if (problem) { err.show(problem); (problem.includes('match') ? pw2Input : pwInput).focus(); return; }
 
     btnSetup.disabled = true;
     btnSetup.innerHTML = '<span class="btn-spinner"></span> Setting up…';
-
     try {
-      await API.setupAccount(username, pw);
-      if (typeof Toast !== 'undefined' && Toast.success) {
-        Toast.success('Profile created successfully! Welcome, ' + username);
-      }
-      _restoreChromeAfterAuth();
-      navigateTo('dashboard');
-      initUpdateBanner();
-    } catch (err) {
-      const isAlreadySet = err.message && err.message.toLowerCase().includes('already exists');
-      if (isAlreadySet) {
-        errMsg.innerHTML = 'An account already exists. <a href="#" data-nav="login" class="link-cyan">Go to sign in</a>';
-        errEl.style.display = 'flex';
-        if (typeof Toast !== 'undefined' && Toast.error) {
-          Toast.error('An account already exists. Please sign in.');
-        }
+      const res = await API.setupAccount(username, pwInput.value);
+      const goIn = () => {
+        _restoreChromeAfterAuth();
+        navigateTo('dashboard');
+        initUpdateBanner();
+        if (typeof Toast !== 'undefined' && Toast.success) Toast.success('Profile created. Welcome, ' + username);
+      };
+      if (res.recovery_key) {
+        renderRecoveryKeyScreen(username, res.recovery_key, {
+          title: 'Save your recovery key',
+          intro: 'This key lets you reset your password if you ever forget it. It is shown only once.',
+          continueLabel: 'Open the tool',
+          onContinue: goIn,
+        });
       } else {
-        showError(err.message || 'Setup failed. Please try again.');
+        goIn();
+      }
+    } catch (ex) {
+      if (ex.message && ex.message.toLowerCase().includes('already exists')) {
+        err.show('An account already exists. <a href="#" data-nav="login" class="link-cyan">Go to sign in</a>', true);
+      } else {
+        err.show(ex.message || 'Setup failed. Please try again.');
       }
       btnSetup.disabled = false;
       btnSetup.innerHTML = 'Create Profile &amp; Open Tool ' + icon('arrow-right');
@@ -271,6 +277,8 @@ function renderSetupScreen() {
   };
 }
 
+
+// ── 2. Sign in ───────────────────────────────────────────────────────────────
 
 async function renderLoginScreen() {
   const root = document.getElementById('content-root');
@@ -284,113 +292,75 @@ async function renderLoginScreen() {
     requirePwEveryTime = !!status.require_password_every_time;
   } catch (_) {}
 
-  function _esc(s) {
-    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  }
-
-  root.innerHTML = `
-    <div class="auth-screen-wrapper">
-      ${_brandPanelHtml()}
-      <div class="auth-form-panel">
-      <div class="auth-card">
-        <div class="auth-icon">${_ICON_LOCK}</div>
-        <div class="auth-title">Welcome back</div>
-        <div class="auth-subtitle">Sign in to open your cases. Everything you do here is recorded in the audit log.</div>
-
-        <div id="lockout-banner" class="error-banner hidden mb-lg">
-          <div class="error-banner-icon">${_ICON_BLOCK}</div>
-          <div class="error-banner-body">
-            <div class="error-banner-title">Login temporarily locked</div>
-            <div class="error-banner-msg">
-              Too many failed attempts. Try again in <span id="lockout-countdown">60</span> seconds.
-            </div>
-          </div>
-        </div>
-
-        <form id="login-form" novalidate autocomplete="off">
-          <div class="form-group">
-            <label for="login-username">Username</label>
-            <input
-              type="text"
-              id="login-username"
-              class="form-control"
-              placeholder="Enter your username"
-              autocomplete="username"
-              value="${_esc(rememberedUser)}"
-              required
-            />
-          </div>
-          <div class="form-group">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <label for="login-password">Password</label>
-              <button type="button" id="btn-toggle-login-pw" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 12px; padding: 0;">Show Password</button>
-            </div>
-            <input
-              type="password"
-              id="login-password"
-              class="form-control"
-              placeholder="Enter your password"
-              autocomplete="current-password"
-              required
-            />
-          </div>
-
-          <div class="form-group checkbox-group" id="remember-me-group" style="${requirePwEveryTime ? 'display:none;' : 'margin: 6px 0 14px 0;'}">
-            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.88rem; color: var(--text-secondary); user-select: none;">
-              <input type="checkbox" id="login-remember-me" checked style="cursor: pointer; width: 16px; height: 16px;" />
-              <span>Stay signed in for 7 days on this computer</span>
-            </label>
-          </div>
-
-          <div class="form-group hidden" id="totp-group">
-            <label for="login-totp">Authentication code (or a one-time recovery code)</label>
-            <input type="text" id="login-totp" class="form-control" maxlength="16"
-                   placeholder="6-digit code, or XXXXX-XXXXX recovery code" autocomplete="one-time-code" />
-          </div>
-
-          <div id="login-error" class="error-inline" style="display: none; margin-bottom: 12px;">
-            ${_ICON_WARN}
-            <span id="login-error-msg"></span>
-          </div>
-
-          <button type="submit" id="btn-login" class="btn btn-primary btn-lg w-full mt-sm">
-            Sign in ${icon('arrow-right')}
-          </button>
-        </form>
-
-        <div class="auth-forgot-note">
-          Forgotten your password? An examiner cannot reset it from this screen — an offline tool
-          has nowhere to send a reset email. Whoever has terminal access to this machine can run
-          <code>tools/reset_user_password.py</code> to set a new one.
-        </div>
+  root.innerHTML = _authShell(_ICON_LOCK, 'Welcome back',
+    'Sign in to open your cases. Everything you do here is recorded in the audit log.', `
+    <div id="lockout-banner" class="error-banner hidden mb-lg">
+      <div class="error-banner-icon">${_ICON_BLOCK}</div>
+      <div class="error-banner-body">
+        <div class="error-banner-title">Login temporarily locked</div>
+        <div class="error-banner-msg">Too many failed attempts. Try again in <span id="lockout-countdown">60</span> seconds.</div>
       </div>
-      </div>
-    </div>`;
+    </div>
 
-  const form      = document.getElementById('login-form');
-  const errEl     = document.getElementById('login-error');
-  const errMsg    = document.getElementById('login-error-msg');
-  const btnLogin  = document.getElementById('btn-login');
-  const lockoutEl = document.getElementById('lockout-banner');
+    <form id="login-form" novalidate autocomplete="off">
+      <div class="form-group">
+        <label for="login-username">Username</label>
+        <input type="text" id="login-username" class="form-control" placeholder="Enter your username"
+               autocomplete="username" value="${escapeHtml(rememberedUser)}" required />
+      </div>
+      <div class="form-group">
+        <div class="label-row">
+          <label for="login-password">Password</label>
+          <a href="#" id="link-forgot" class="auth-link">Forgot password?</a>
+        </div>
+        ${_pwFieldHtml('login-password', 'Enter your password', 'current-password')}
+      </div>
+
+      <label class="check-row${requirePwEveryTime ? ' hidden' : ''}" id="remember-me-group">
+        <input type="checkbox" id="login-remember-me" checked />
+        <span>Stay signed in for 7 days on this computer</span>
+      </label>
+
+      <div class="form-group hidden" id="totp-group">
+        <label for="login-totp">Authentication code (or a one-time 2FA recovery code)</label>
+        <input type="text" id="login-totp" class="form-control" maxlength="16"
+               placeholder="6-digit code, or XXXXX-XXXXX code" autocomplete="one-time-code" />
+      </div>
+
+      ${_errorBoxHtml('login-error')}
+
+      <button type="submit" id="btn-login" class="btn btn-primary btn-lg w-full mt-sm">Sign in ${icon('arrow-right')}</button>
+    </form>`);
+
+  const form        = document.getElementById('login-form');
+  const err         = _errorApi('login-error');
+  const btnLogin    = document.getElementById('btn-login');
+  const lockoutEl   = document.getElementById('lockout-banner');
   const countdownEl = document.getElementById('lockout-countdown');
-  const totpGroup = document.getElementById('totp-group');
-  let _lockoutTimer = null;
-  let totpRequired = false;   // only known AFTER a correct password reveals it (2FA is per-account)
+  const totpGroup   = document.getElementById('totp-group');
+  let lockoutTimer  = null;
+  let totpRequired  = false;   // only known AFTER a correct password reveals it (2FA is per-account)
+  _wireEyes(root);
 
-  function _startLockoutCountdown(seconds) {
-    lockoutEl.style.display = 'flex';
-    errEl.style.display = 'none';
+  document.getElementById('link-forgot').onclick = (e) => {
+    e.preventDefault();
+    if (lockoutTimer) clearInterval(lockoutTimer);
+    renderRecoverScreen(document.getElementById('login-username').value.trim());
+  };
+
+  function startLockoutCountdown(seconds) {
+    lockoutEl.classList.remove('hidden');
+    err.hide();
     btnLogin.disabled = true;
     let remaining = seconds;
     countdownEl.textContent = remaining;
-
-    if (_lockoutTimer) clearInterval(_lockoutTimer);
-    _lockoutTimer = setInterval(() => {
+    if (lockoutTimer) clearInterval(lockoutTimer);
+    lockoutTimer = setInterval(() => {
       remaining -= 1;
       countdownEl.textContent = Math.max(0, remaining);
       if (remaining <= 0) {
-        clearInterval(_lockoutTimer);
-        lockoutEl.style.display = 'none';
+        clearInterval(lockoutTimer);
+        lockoutEl.classList.add('hidden');
         btnLogin.disabled = false;
       }
     }, 1000);
@@ -398,94 +368,131 @@ async function renderLoginScreen() {
 
   form.onsubmit = async (e) => {
     e.preventDefault();
-    errEl.style.display = 'none';
-
+    err.hide();
     const username = document.getElementById('login-username').value.trim();
     const pw = document.getElementById('login-password').value;
-    if (!username || !pw) {
-      errMsg.textContent = 'Username and password are required.';
-      errEl.style.display = 'flex';
-      return;
-    }
+    if (!username || !pw) { err.show('Username and password are required.'); return; }
     const totpCode = document.getElementById('login-totp').value.trim();
     if (totpRequired && !(/^\d{3}\s?\d{3}$/.test(totpCode) || /^[A-Za-z0-9]{5}-?[A-Za-z0-9]{5}$/.test(totpCode))) {
-      errMsg.textContent = 'Enter the 6-digit code, or a recovery code (XXXXX-XXXXX).';
-      errEl.style.display = 'flex';
+      err.show('Enter the 6-digit code, or a 2FA recovery code (XXXXX-XXXXX).');
       return;
     }
 
     btnLogin.disabled = true;
     btnLogin.innerHTML = '<span class="btn-spinner"></span> Verifying…';
-
     try {
-      const rememberBox = document.getElementById('login-remember-me');
-      const rememberMe = rememberBox ? rememberBox.checked : true;
+      const rememberMe = document.getElementById('login-remember-me').checked;
       const result = await API.login(username, pw, totpCode, rememberMe);
 
       if (result.locked) {
-        _startLockoutCountdown(result.retry_after || 60);
+        startLockoutCountdown(result.retry_after || 60);
         btnLogin.innerHTML = 'Sign in ' + icon('arrow-right');
         return;
       }
-
       if (result.totp_required) {
-        // Correct username/password; this account has 2FA — reveal the code field and ask
-        // again without treating this as a failure or clearing what was typed.
+        // Correct username/password; this account has 2FA — reveal the code field and ask again
+        // without treating this as a failure or clearing what was typed.
         totpRequired = true;
-        totpGroup.style.display = 'block';
-        errMsg.textContent = 'Enter your two-factor authentication code to finish signing in.';
-        errEl.style.display = 'flex';
+        totpGroup.classList.remove('hidden');
+        err.show('Enter your two-factor authentication code to finish signing in.');
         btnLogin.disabled = false;
         btnLogin.innerHTML = 'Sign in ' + icon('arrow-right');
         document.getElementById('login-totp').focus();
         return;
       }
-
       _restoreChromeAfterAuth();
       navigateTo('dashboard');
       initUpdateBanner();
-
-    } catch (err) {
-      // Check if the error is a lockout (429)
-      const msg = err.message || '';
+    } catch (ex) {
+      const msg = ex.message || '';
       if (msg.includes('locked') || msg.includes('429')) {
-        const seconds = parseInt(msg.match(/(\d+) second/)?.[1] || '60', 10);
-        _startLockoutCountdown(seconds);
+        startLockoutCountdown(parseInt(msg.match(/(\d+) second/)?.[1] || '60', 10));
         btnLogin.innerHTML = 'Sign in ' + icon('arrow-right');
       } else {
-        // Always show the same message regardless of failure reason
-        const failMsg = totpRequired
-          ? 'Incorrect username, password, or authentication code.'
-          : (err.message || 'Incorrect username or password.');
-        errMsg.textContent = failMsg;
-        errEl.style.display = 'flex';
-        if (typeof Toast !== 'undefined' && Toast.error) {
-          Toast.error(failMsg);
-        }
+        // Always the same message regardless of which part was wrong
+        const failMsg = totpRequired ? 'Incorrect username, password, or authentication code.'
+                                     : (msg || 'Incorrect username or password.');
+        err.show(failMsg);
         btnLogin.disabled = false;
         btnLogin.innerHTML = 'Sign in ' + icon('arrow-right');
       }
-      // Clear password field on failure
       document.getElementById('login-password').value = '';
     }
   };
 
-  const btnToggleLoginPw = document.getElementById('btn-toggle-login-pw');
-  if (btnToggleLoginPw) {
-    btnToggleLoginPw.addEventListener('click', () => {
-      const pwInput = document.getElementById('login-password');
-      if (!pwInput) return;
-      const isPw = pwInput.type === 'password';
-      pwInput.type = isPw ? 'text' : 'password';
-      btnToggleLoginPw.textContent = isPw ? 'Hide Password' : 'Show Password';
-    });
-  }
+  document.getElementById(rememberedUser ? 'login-password' : 'login-username').focus();
+}
 
-  if (rememberedUser) {
-    const pwInput = document.getElementById('login-password');
-    if (pwInput) pwInput.focus();
-  } else {
-    const userInput = document.getElementById('login-username');
-    if (userInput) userInput.focus();
-  }
+
+// ── 3. Forgot password ───────────────────────────────────────────────────────
+
+function renderRecoverScreen(prefillUser = '') {
+  const root = document.getElementById('content-root');
+  _hideChromeForAuth();
+
+  root.innerHTML = _authShell(icon('key'), 'Reset your password',
+    'Enter your username and the recovery key you saved when your account was created, then choose a new password.', `
+    <form id="recover-form" novalidate autocomplete="off">
+      <div class="form-group">
+        <label for="recover-username">Username</label>
+        <input type="text" id="recover-username" class="form-control" placeholder="Your username" autocomplete="username"
+               value="${escapeHtml(prefillUser)}" required />
+      </div>
+      <div class="form-group">
+        <label for="recover-key">Recovery key</label>
+        <input type="text" id="recover-key" class="form-control font-mono" placeholder="XXXXX-XXXXX-XXXXX-XXXXX"
+               maxlength="29" autocomplete="off" spellcheck="false" required />
+      </div>
+      <div class="form-group">
+        <label for="recover-password">New password</label>
+        ${_pwFieldHtml('recover-password', 'Minimum 8 characters', 'new-password')}
+        ${_pwRulesHtml('recover')}
+      </div>
+      <div class="form-group">
+        <label for="recover-confirm">Confirm new password</label>
+        ${_pwFieldHtml('recover-confirm', 'Re-enter new password', 'new-password')}
+      </div>
+      ${_errorBoxHtml('recover-error')}
+      <button type="submit" id="btn-recover" class="btn btn-primary btn-lg w-full mt-sm">Reset password ${icon('arrow-right')}</button>
+    </form>
+    <div class="auth-forgot-note">
+      <a href="#" id="link-back-login" class="auth-link">${icon('arrow-left')} Back to sign in</a>
+      <p>No recovery key? An administrator of this computer can still set a new password with
+      <code>tools/reset_user_password.py</code>. Every reset is recorded in the audit log.</p>
+    </div>`);
+
+  const err = _errorApi('recover-error');
+  const btn = document.getElementById('btn-recover');
+  const pw  = document.getElementById('recover-password');
+  const pw2 = document.getElementById('recover-confirm');
+  _wireEyes(root);
+  _wireRules(pw, 'recover');
+  document.getElementById('link-back-login').onclick = (e) => { e.preventDefault(); renderLoginScreen(); };
+  document.getElementById(prefillUser ? 'recover-key' : 'recover-username').focus();
+
+  document.getElementById('recover-form').onsubmit = async (e) => {
+    e.preventDefault();
+    err.hide();
+    const username = document.getElementById('recover-username').value.trim();
+    const key = document.getElementById('recover-key').value.trim();
+    if (!username || !key) { err.show('Enter your username and recovery key.'); return; }
+    const problem = _passwordProblem(pw.value, pw2.value);
+    if (problem) { err.show(problem); return; }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="btn-spinner"></span> Checking…';
+    try {
+      const res = await API.recoverPassword(username, key, pw.value);
+      renderRecoveryKeyScreen(username, res.recovery_key, {
+        title: 'Password changed',
+        intro: 'Your old recovery key no longer works. Save this new one: it is shown only once.',
+        continueLabel: 'Go to sign in',
+        onContinue: () => renderLoginScreen(),
+      });
+    } catch (ex) {
+      err.show(ex.message || 'Could not reset the password.');
+      btn.disabled = false;
+      btn.innerHTML = 'Reset password ' + icon('arrow-right');
+    }
+  };
 }

@@ -58,8 +58,10 @@ _STATUS_COLOURS = {
     SegmentStatus.UNCERTAIN: colors.HexColor("#c62828"),
 }
 
-TOOL_VERSION = "v1.0.0-dev"
-TOOL_NAME    = "SIH26150 DVR/NVR Forensic Tool"
+from backend.local_config import get_version as _get_version
+
+TOOL_VERSION = f"v{_get_version()}"          # from the VERSION file, so reports name the exact release
+TOOL_NAME    = "AEGIS (SIH26150) DVR/NVR Forensic Tool"
 
 
 # ── Helper: watermarked canvas callback ──────────────────────────────────────
@@ -117,8 +119,8 @@ def _add_page_footer(canvas, doc):
 def _styles():
     base = getSampleStyleSheet()
     styles = {
-        "h1":    ParagraphStyle("h1",    fontSize=18, textColor=_C_DARK, spaceAfter=10, fontName="Helvetica-Bold"),
-        "h2":    ParagraphStyle("h2",    fontSize=13, textColor=_C_ACCENT, spaceAfter=6, spaceBefore=10, fontName="Helvetica-Bold"),
+        "h1":    ParagraphStyle("h1",    fontSize=18, leading=23, textColor=_C_DARK, spaceAfter=10, fontName="Helvetica-Bold"),
+        "h2":    ParagraphStyle("h2",    fontSize=13, leading=17, textColor=_C_ACCENT, spaceAfter=6, spaceBefore=10, fontName="Helvetica-Bold"),
         "h3":    ParagraphStyle("h3",    fontSize=11, textColor=_C_DARK, spaceAfter=4, spaceBefore=6, fontName="Helvetica-Bold"),
         "body":  ParagraphStyle("body",  fontSize=9,  leading=13, spaceAfter=4),
         "mono":  ParagraphStyle("mono",  fontSize=8,  fontName="Courier", leading=10, spaceAfter=2),
@@ -144,6 +146,28 @@ _TBL_HDR = TableStyle([
     ("LEFTPADDING", (0, 0), (-1, -1), 4),
     ("RIGHTPADDING",(0, 0), (-1, -1), 4),
 ])
+
+
+_CELL = ParagraphStyle("cell", fontSize=8, leading=10)
+_CELL_TOKEN = ParagraphStyle("cell_token", fontSize=8, leading=10, wordWrap="CJK")   # hashes/paths: break anywhere
+
+
+def _fit(rows: list, widths: list) -> list:
+    """Wrap any body cell too long for its column in a Paragraph so it breaks onto more lines instead of
+    running past the table edge. Short cells stay plain strings (identical output to before)."""
+    from xml.sax.saxutils import escape
+    out = [rows[0]] if rows else []
+    for row in rows[1:]:
+        new = []
+        for cell, w in zip(row, widths):
+            if isinstance(cell, str) and len(cell) * 0.155 * cm > w - 0.3 * cm:
+                long_token = max((len(t) for t in cell.split()), default=0) * 0.155 * cm > w - 0.3 * cm
+                new.append(Paragraph(escape(cell), _CELL_TOKEN if long_token else _CELL))
+            else:
+                new.append(cell)
+        new.extend(row[len(widths):])
+        out.append(new)
+    return out
 
 
 def _accuracy_section(results: list, S) -> list:
@@ -175,7 +199,7 @@ def _accuracy_section(results: list, S) -> list:
             f"{pl['byte_recall_pct']}%" if pl and pl.get("byte_recall_pct") is not None else "-",
             textwrap.shorten("; ".join(r.get("not_measured", [])) or "-", 40),
         ])
-    out.append(Table(rows, colWidths=[2*cm, 2.2*cm, 2.4*cm, 1.7*cm, 2.3*cm, 2.6*cm, 3.8*cm], style=_TBL_HDR))
+    out.append(Table(_fit(rows, [2*cm, 2.2*cm, 2.4*cm, 1.7*cm, 2.3*cm, 2.6*cm, 3.8*cm]), colWidths=[2*cm, 2.2*cm, 2.4*cm, 1.7*cm, 2.3*cm, 2.6*cm, 3.8*cm], style=_TBL_HDR))
     for r in results:
         pl = r.get("placement")
         if pl:
@@ -209,7 +233,7 @@ def _object_section(results: list, S) -> list:
             first = st.get("first_time_s")
             rows.append([seg, engine, name, f"{st['frames_with']} of {r.get('frames_sampled', 0)}",
                          str(st["max_in_frame"]), "-" if first is None else f"{first}"])
-    out.append(Table(rows, colWidths=[2*cm, 5*cm, 2.6*cm, 3.2*cm, 1.9*cm, 2.2*cm], style=_TBL_HDR))
+    out.append(Table(_fit(rows, [2*cm, 5*cm, 2.6*cm, 3.2*cm, 1.9*cm, 2.2*cm]), colWidths=[2*cm, 5*cm, 2.6*cm, 3.2*cm, 1.9*cm, 2.2*cm], style=_TBL_HDR))
     out.append(Spacer(1, 0.3 * cm))
     return out
 
@@ -281,7 +305,7 @@ def generate_report(
             ["Police station / agency", cert["police_station"] or NOT_GIVEN],
             ["FIR / crime reference", cert["fir_number"] or NOT_GIVEN],
         ]
-        elements.append(Table(cover_data, colWidths=[5 * cm, 12 * cm], style=_TBL_HDR))
+        elements.append(Table(_fit(cover_data, [5 * cm, 12 * cm]), colWidths=[5 * cm, 12 * cm], style=_TBL_HDR))
         elements.append(Spacer(1, 0.4 * cm))
 
 
@@ -314,7 +338,7 @@ def generate_report(
             ["Audit head / count", f"{audit_seal.get('head', '')[:32]}…  /  {audit_seal.get('count', 0)} entries "
                                    f"(keep a printed copy to detect later rewrites)"],
         ] if audit_seal else [])
-        elements.append(Table(integrity_data, colWidths=[5 * cm, 12 * cm], style=_TBL_HDR))
+        elements.append(Table(_fit(integrity_data, [5 * cm, 12 * cm]), colWidths=[5 * cm, 12 * cm], style=_TBL_HDR))
         elements.append(Spacer(1, 0.4 * cm))
 
         # ── 3. Brand detection ───────────────────────────────────────────────
@@ -325,7 +349,7 @@ def generate_report(
             ["Version",     evidence.brand_version or "—"],
             ["Confidence",  f"{evidence.confidence:.0%}" if evidence.confidence is not None else "—"],
         ]
-        elements.append(Table(det_data, colWidths=[5 * cm, 12 * cm], style=_TBL_HDR))
+        elements.append(Table(_fit(det_data, [5 * cm, 12 * cm]), colWidths=[5 * cm, 12 * cm], style=_TBL_HDR))
         elements.append(Spacer(1, 0.4 * cm))
 
         # ── 4. Recordings table ──────────────────────────────────────────────
@@ -351,7 +375,7 @@ def generate_report(
                 c = _STATUS_COLOURS.get(seg.status, colors.grey)
                 seg_style.add("BACKGROUND", (4, i), (4, i), c)
                 seg_style.add("TEXTCOLOR",  (4, i), (4, i), _C_WHITE)
-            elements.append(Table(seg_rows, colWidths=[1.5*cm, 3.5*cm, 3.5*cm, 1.5*cm, 2.5*cm, 3*cm, 3.5*cm], style=seg_style))
+            elements.append(Table(_fit(seg_rows, [1.5*cm, 3.5*cm, 3.5*cm, 1.5*cm, 2.5*cm, 3*cm, 3.5*cm]), colWidths=[1.5*cm, 3.5*cm, 3.5*cm, 1.5*cm, 2.5*cm, 3*cm, 3.5*cm], style=seg_style))
 
         elements.append(Spacer(1, 0.4 * cm))
 
@@ -375,7 +399,7 @@ def generate_report(
                     ", ".join(str(c) for c in d.get("cameras", [])),
                     str(len(d.get("segment_ids", []))),
                 ])
-            elements.append(Table(corr_rows, colWidths=[4*cm, 4*cm, 4.5*cm, 4.5*cm], style=_TBL_HDR))
+            elements.append(Table(_fit(corr_rows, [4*cm, 4*cm, 4.5*cm, 4.5*cm]), colWidths=[4*cm, 4*cm, 4.5*cm, 4.5*cm], style=_TBL_HDR))
             elements.append(Spacer(1, 0.4 * cm))
 
         # ── 4c. Accuracy against ground truth ────────────────────────────────
@@ -421,7 +445,7 @@ Recovery accuracy must be established on real recorders before figures are relie
                     textwrap.shorten(ev.detail, 60),
                     str(ev.source_offset) if ev.source_offset is not None else "—",
                 ])
-            elements.append(Table(log_rows, colWidths=[4*cm, 3*cm, 8*cm, 3*cm], style=_TBL_HDR))
+            elements.append(Table(_fit(log_rows, [4*cm, 3*cm, 8*cm, 3*cm]), colWidths=[4*cm, 3*cm, 8*cm, 3*cm], style=_TBL_HDR))
             elements.append(Spacer(1, 0.4 * cm))
 
         # ── 7. Section 63(4) certificate helper ──────────────────────────────
@@ -461,7 +485,7 @@ Recovery accuracy must be established on real recorders before figures are relie
             ["Designation",                  "____________________________ (to be signed)"],
             ["Date",                         "____________________________ (to be signed)"],
         ]
-        elements.append(Table(part_a_data, colWidths=[7*cm, 10*cm], style=_TBL_HDR))
+        elements.append(Table(_fit(part_a_data, [7*cm, 10*cm]), colWidths=[7*cm, 10*cm], style=_TBL_HDR))
         elements.append(Paragraph(
             "Police station, FIR, seizure officer and recorder details are as entered by the examiner; the tool "
             "has not verified them."
@@ -482,7 +506,7 @@ Recovery accuracy must be established on real recorders before figures are relie
             ["Qualifications",               "____________________________ (to be signed)"],
             ["Date",                         "____________________________ (to be signed)"],
         ]
-        elements.append(Table(part_b_data, colWidths=[7*cm, 10*cm], style=_TBL_HDR))
+        elements.append(Table(_fit(part_b_data, [7*cm, 10*cm]), colWidths=[7*cm, 10*cm], style=_TBL_HDR))
         elements.append(Spacer(1, 0.3 * cm))
         elements.append(Paragraph(
             "Draft for review — not legal advice. Copy the exact field layout from the official "
@@ -511,7 +535,7 @@ Recovery accuracy must be established on real recorders before figures are relie
                     textwrap.shorten(f"{entry.action}: {entry.details}", 70),
                     entry.entry_hash[:16] + "…",
                 ])
-            elements.append(Table(audit_rows, colWidths=[4.5*cm, 10*cm, 3.5*cm], style=_TBL_HDR))
+            elements.append(Table(_fit(audit_rows, [4.5*cm, 10*cm, 3.5*cm]), colWidths=[4.5*cm, 10*cm, 3.5*cm], style=_TBL_HDR))
         else:
             elements.append(Paragraph("No audit entries recorded.", S["body"]))
 
