@@ -273,7 +273,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
 
 app = FastAPI(
-    title="SIH26150 DVR/NVR Forensic Tool",
+    title="A.E.G.I.S — DVR/NVR Forensic Tool",
     version=local_config.get_version(),
     docs_url="/api/docs",
     openapi_url="/api/openapi.json",   # under /api/ so the auth middleware protects it (default /openapi.json was open)
@@ -2236,3 +2236,9 @@ if _FRONTEND_DIR.exists():
             return FileResponse(str(candidate), headers=_NO_CACHE_HEADERS)
         # Fallback to index.html for SPA routing
         return FileResponse(str(_FRONTEND_DIR / "index.html"), headers=_NO_CACHE_HEADERS)
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("backend.main:app", host="127.0.0.1", port=8000, reload=False)
+
