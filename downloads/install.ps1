@@ -9,10 +9,10 @@ Write-Host " Team Espada | Multi-Vendor DVR/NVR Video Recovery" -ForegroundColor
 Write-Host "=======================================================" -ForegroundColor Cyan
 Write-Host ""
 
-$installerUrl = "https://github.com/BhanuPrasad-2006/sih-26150/releases/download/v2.0.0/SIH-Forensic-Tool-Setup-2.0.0.exe"
-$destFile = Join-Path $env:TEMP "SIH-Forensic-Tool-Setup-2.0.0.exe"
+$installerUrl = "https://github.com/BhanuPrasad-2006/sih-26150/releases/download/v2.1.0/SIH-Forensic-Tool-Setup-2.1.0.exe"
+$destFile = Join-Path $env:TEMP "SIH-Forensic-Tool-Setup-2.1.0.exe"
 
-Write-Host "[1/3] Downloading Windows installer (~188 MB)..." -ForegroundColor Yellow
+Write-Host "[1/3] Downloading Windows installer (~191 MB)..." -ForegroundColor Yellow
 Write-Host "      Source: $installerUrl" -ForegroundColor Gray
 
 try {
