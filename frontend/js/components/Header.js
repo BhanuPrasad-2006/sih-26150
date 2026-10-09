@@ -331,9 +331,9 @@ async function openUserProfileModal() {
  * Allows examiner to inspect versions and trigger a live in-app update & restart.
  */
 async function openUpdateModal() {
-  let currentVer = '2.1.0';
+  let currentVer = '3.0.0';
   let updateAvail = false;
-  let latestVer = '2.1.0';
+  let latestVer = '3.0.0';
 
   try {
     const vRes = await fetch('/api/version');
