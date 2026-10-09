@@ -12,6 +12,25 @@
  * `getEvidence()` derives evidence from the parent case's evidence list.
  */
 
+// ── Seamless Backend Connection Interceptor ─────────────────────────────────
+// Ensures frontend and backend talk to each other whether loaded from 127.0.0.1:8000,
+// local WebView2, or any development environment.
+if (typeof window !== 'undefined' && window.fetch && !window._apiFetchHooked) {
+  window._apiFetchHooked = true;
+  const _SYS_FETCH = window.fetch.bind(window);
+  window.fetch = function(input, init = {}) {
+    let target = input;
+    if (typeof input === 'string' && input.startsWith('/api/')) {
+      if (window.location.protocol === 'file:' || (window.location.port !== '8000' && window.location.hostname !== '127.0.0.1')) {
+        target = 'http://127.0.0.1:8000' + input;
+      }
+    }
+    const options = { ...init };
+    if (!options.credentials) options.credentials = 'include';
+    return _SYS_FETCH(target, options);
+  };
+}
+
 /**
  * Escape a string for safe interpolation into innerHTML template strings.
  * Every value that originates as free-text user input (examiner name, case

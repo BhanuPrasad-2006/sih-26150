@@ -77,10 +77,9 @@ class HostOriginMiddleware(BaseHTTPMiddleware):
         if request.method in _UNSAFE_METHODS:
             origin = request.headers.get("origin")
             if origin and origin != "null":
-                if urlsplit(origin).netloc.lower() != host_header.strip().lower():
+                origin_host = (urlsplit(origin).hostname or "").lower()
+                if urlsplit(origin).netloc.lower() != host_header.strip().lower() and origin_host not in allowed_hosts():
                     return JSONResponse({"detail": "Cross-origin request blocked."}, status_code=403)
-            elif origin == "null":
-                return JSONResponse({"detail": "Cross-origin request blocked."}, status_code=403)
             if request.headers.get("sec-fetch-site", "").lower() == "cross-site":
                 return JSONResponse({"detail": "Cross-site request blocked."}, status_code=403)
         return await call_next(request)

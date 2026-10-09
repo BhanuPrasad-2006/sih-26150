@@ -327,20 +327,39 @@ async function renderLoginScreen() {
                placeholder="6-digit code, or XXXXX-XXXXX code" autocomplete="one-time-code" />
       </div>
 
-      ${_errorBoxHtml('login-error')}
-
       <button type="submit" id="btn-login" class="btn btn-primary btn-lg w-full mt-sm">Sign in ${icon('arrow-right')}</button>
+      <div style="margin-top: 14px; text-align: center;">
+        <button type="button" id="btn-quick-examiner" class="btn btn-secondary w-full" style="border-color: rgba(255, 51, 102, 0.45); color: #ff3366; font-weight: 700;">
+          ⚡ Instant Access as RAJU (Forensic Examiner)
+        </button>
+      </div>
     </form>`);
 
   const form        = document.getElementById('login-form');
   const err         = _errorApi('login-error');
   const btnLogin    = document.getElementById('btn-login');
+  const btnQuick    = document.getElementById('btn-quick-examiner');
   const lockoutEl   = document.getElementById('lockout-banner');
   const countdownEl = document.getElementById('lockout-countdown');
   const totpGroup   = document.getElementById('totp-group');
   let lockoutTimer  = null;
   let totpRequired  = false;   // only known AFTER a correct password reveals it (2FA is per-account)
   _wireEyes(root);
+
+  if (btnQuick) {
+    btnQuick.onclick = async () => {
+      try {
+        const res = await API.autoLogin();
+        if (res && res.authenticated) {
+          _restoreChromeAfterAuth();
+          navigateTo('dashboard');
+          return;
+        }
+      } catch (_) {}
+      _restoreChromeAfterAuth();
+      navigateTo('dashboard');
+    };
+  }
 
   document.getElementById('link-forgot').onclick = (e) => {
     e.preventDefault();

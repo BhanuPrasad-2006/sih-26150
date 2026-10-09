@@ -12,17 +12,32 @@ function renderHeader(breadcrumbs = []) {
   const hostLabel = isLocal ? '127.0.0.1' : `${host}`;
 
   const themeIcon = currentTheme() === 'dark' ? 'sun' : 'moon';
+  const savedPalette = (typeof localStorage !== 'undefined' && localStorage.getItem('sih-palette')) || 'coral';
+
   root.innerHTML = `
     <div class="logo-area">
       ${logoMark()}
       <div class="logo-text">
-        <h1>A.E.G.I.S <span class="logo-h1-sub">DVR/NVR Forensic Analysis Tool</span></h1>
-        <p>SIH26150 · Recover, verify and report CCTV evidence</p>
+        <h1>A.E.G.I.S <span class="logo-h1-sub">Forensic Workstation</span></h1>
+        <p>SIH26150 · Multi-Vendor Stream Carving &amp; Reconstruction</p>
       </div>
     </div>
     <div class="header-meta">
+      <div class="backend-status-pill" id="backend-status-pill" title="Live FastAPI Backend">
+        <span class="backend-dot"></span> <span id="backend-status-text">Engine v3.0.0 Online</span>
+      </div>
+
+      <!-- Live Color Palette Switcher -->
+      <div class="palette-picker" role="region" aria-label="Color Themes" title="Switch Aesthetic Color Theme">
+        <button type="button" class="palette-dot dot-coral ${savedPalette === 'coral' ? 'active' : ''}" data-palette-btn="coral" title="Cyber Coral"></button>
+        <button type="button" class="palette-dot dot-sunset ${savedPalette === 'sunset' ? 'active' : ''}" data-palette-btn="sunset" title="Sunset Flame"></button>
+        <button type="button" class="palette-dot dot-amethyst ${savedPalette === 'amethyst' ? 'active' : ''}" data-palette-btn="amethyst" title="Royal Amethyst"></button>
+        <button type="button" class="palette-dot dot-gold ${savedPalette === 'gold' ? 'active' : ''}" data-palette-btn="gold" title="Imperial Gold"></button>
+        <button type="button" class="palette-dot dot-ruby ${savedPalette === 'ruby' ? 'active' : ''}" data-palette-btn="ruby" title="Cosmic Ruby"></button>
+      </div>
+
       <button type="button" id="btn-quick-command" class="command-palette-trigger" title="Press Ctrl+K for command bar">
-        ${icon('search')} <span class="cmd-label">Search / Jump</span> <kbd class="cmd-kbd">Ctrl+K</kbd>
+        ${icon('search')} <span class="cmd-label">Jump</span> <kbd class="cmd-kbd">Ctrl+K</kbd>
       </button>
       <div id="case-context-pill" class="case-context-pill hidden" role="region" aria-label="Case context"></div>
       <button type="button" id="btn-restart-update" class="restart-update-btn" title="Click to restart and apply updates">
@@ -34,6 +49,26 @@ function renderHeader(breadcrumbs = []) {
       <button type="button" id="theme-toggle" class="icon-btn" aria-label="Switch light or dark theme" title="Switch light / dark theme">${icon(themeIcon)}</button>
     </div>
   `;
+
+  // Palette switcher wiring
+  root.querySelectorAll('[data-palette-btn]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const p = btn.dataset.paletteBtn;
+      document.documentElement.setAttribute('data-palette', p);
+      try { localStorage.setItem('sih-palette', p); } catch (_) {}
+      root.querySelectorAll('[data-palette-btn]').forEach(b => b.classList.toggle('active', b === btn));
+      if (typeof Toast !== 'undefined' && Toast.info) Toast.info(`Aesthetic Theme switched to: ${p.toUpperCase()}`);
+    });
+  });
+
+  // Check live backend version
+  fetch('/api/version').then(r => r.json()).then(b => {
+    const txt = document.getElementById('backend-status-text');
+    if (txt && b.version) txt.textContent = `Engine v${b.version} Online`;
+  }).catch(() => {
+    const txt = document.getElementById('backend-status-text');
+    if (txt) txt.textContent = 'Engine Offline';
+  });
   document.getElementById('theme-toggle').addEventListener('click', () => {
     const next = toggleTheme();
     document.getElementById('theme-toggle').innerHTML = icon(next === 'dark' ? 'sun' : 'moon');
