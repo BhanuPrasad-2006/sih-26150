@@ -16,7 +16,7 @@ function renderHeader(breadcrumbs = []) {
     <div class="logo-area">
       ${logoMark()}
       <div class="logo-text">
-        <h1>AEGIS <span class="logo-h1-sub">DVR/NVR Forensic Analysis Tool</span></h1>
+        <h1>A.E.G.I.S <span class="logo-h1-sub">DVR/NVR Forensic Analysis Tool</span></h1>
         <p>SIH26150 · Recover, verify and report CCTV evidence</p>
       </div>
     </div>

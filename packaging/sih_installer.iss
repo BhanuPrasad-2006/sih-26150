@@ -17,7 +17,7 @@
   #expr FileClose(FileHandle)
 #endif
 
-#define MyAppName "SIH Forensic Tool"
+#define MyAppName "A.E.G.I.S Forensic Tool"
 #define MyAppPublisher "Team Espada - SIH26150"
 #define MyAppExeName "SIH Forensic Tool.exe"
 ; Fixed GUID: keeps Windows treating future versions as upgrades of the same app, not a new one.
