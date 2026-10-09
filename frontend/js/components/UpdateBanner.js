@@ -58,6 +58,12 @@ async function _checkOnce() {
     const res = await fetch('/api/update/check');
     if (!res.ok) return;
     const body = await res.json();
+    const headerBtn = document.getElementById('btn-restart-update');
+    if (headerBtn) {
+      if (body.update_available && body.latest) {
+        headerBtn.innerHTML = `Restart to Update (v${escapeHtml(body.latest)}) &rarr;`;
+      }
+    }
     if (body.update_available && body.latest) {
       _renderUpdateBanner(body.latest);
     }

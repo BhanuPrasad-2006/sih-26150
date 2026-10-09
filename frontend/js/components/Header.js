@@ -22,6 +22,9 @@ function renderHeader(breadcrumbs = []) {
     </div>
     <div class="header-meta">
       <div id="case-context-pill" class="case-context-pill hidden" role="region" aria-label="Case context"></div>
+      <button type="button" id="btn-restart-update" class="restart-update-btn" title="Click to restart and apply updates">
+        Restart to Update &rarr;
+      </button>
       <button type="button" id="btn-user-profile" class="btn btn-secondary btn-sm btn-profile" title="Examiner profile and security preferences">
         ${icon('user')} <span id="header-user-label">Profile</span> <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
       </button>
@@ -32,6 +35,9 @@ function renderHeader(breadcrumbs = []) {
     const next = toggleTheme();
     document.getElementById('theme-toggle').innerHTML = icon(next === 'dark' ? 'sun' : 'moon');
   });
+
+  const updateBtn = document.getElementById('btn-restart-update');
+  if (updateBtn) updateBtn.addEventListener('click', openUpdateModal);
 
   const profBtn = document.getElementById('btn-user-profile');
   if (profBtn) profBtn.addEventListener('click', openUserProfileModal);
@@ -319,3 +325,94 @@ async function openUserProfileModal() {
     };
   }
 }
+
+/**
+ * Open Update & Restart Modal
+ * Allows examiner to inspect versions and trigger a live in-app update & restart.
+ */
+async function openUpdateModal() {
+  let currentVer = '2.1.0';
+  let updateAvail = false;
+  let latestVer = '2.1.0';
+
+  try {
+    const vRes = await fetch('/api/version');
+    if (vRes.ok) {
+      const vData = await vRes.json();
+      if (vData.version) currentVer = vData.version;
+    }
+  } catch (_) {}
+
+  try {
+    const uRes = await fetch('/api/update/check');
+    if (uRes.ok) {
+      const uData = await uRes.json();
+      updateAvail = !!uData.update_available;
+      if (uData.latest) latestVer = uData.latest;
+    }
+  } catch (_) {}
+
+  const bodyHtml = `
+    <div style="display:flex; flex-direction:column; gap:16px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-radius:12px; background:var(--bg-surface-2); border:1px solid var(--border-color);">
+        <div>
+          <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.7px; color:var(--text-dim); font-weight:700;">Installed Version</div>
+          <div style="font-size:17px; font-weight:800; font-family:var(--font-mono); color:var(--accent-cyan); margin-top:2px;">v${escapeHtml(currentVer)}</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.7px; color:var(--text-dim); font-weight:700;">Release Status</div>
+          <span class="badge ${updateAvail ? 'badge-partial' : 'badge-complete'}" style="margin-top:4px;">
+            ${updateAvail ? `Update Available (v${escapeHtml(latestVer)})` : 'Active Build · Ready to Apply'}
+          </span>
+        </div>
+      </div>
+
+      <div style="font-size:13px; color:var(--text-muted); line-height:1.65;">
+        <strong style="color:var(--text-main); display:block; margin-bottom:6px;">Latest Engine Highlights (v${escapeHtml(latestVer)}):</strong>
+        <ul style="padding-left:18px; margin:0;">
+          <li>Multi-vendor H.265 / HEVC stream carving &amp; <code>0x03</code> emulation prevention byte stripping.</li>
+          <li>Proprietary storage plugins for Dahua, Hikvision, Hanwha Vision (Samsung), and WFS (Xiongmai).</li>
+          <li>Synchronized multi-channel forensic timeline with gap identification &amp; CSV export.</li>
+          <li>iPhone frosted liquid glassmorphism UI/UX design (zero blue palette).</li>
+        </ul>
+      </div>
+
+      <div id="update-action-status" class="hidden" style="padding:12px 14px; border-radius:10px; background:var(--status-complete-soft); border:1px solid var(--border-glow); font-size:13px; color:var(--text-main);">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span class="btn-spinner"></span>
+          <span id="update-status-msg" style="font-weight:600;">Applying update to latest code...</span>
+        </div>
+      </div>
+    </div>
+  `;
+
+  showModal('Update &amp; Restart AEGIS', bodyHtml, [
+    {
+      label: 'Close',
+      class: 'btn-secondary',
+      autoClose: true,
+    },
+    {
+      label: 'Restart to Update &rarr;',
+      class: 'btn-primary',
+      autoClose: false,
+      onClick: async () => {
+        const statusBox = document.getElementById('update-action-status');
+        const statusMsg = document.getElementById('update-status-msg');
+        const btn = document.getElementById('modal-btn-1');
+        if (btn) btn.disabled = true;
+        if (statusBox) statusBox.classList.remove('hidden');
+
+        try {
+          await fetch('/api/update/apply', { method: 'POST' }).catch(() => {});
+        } catch (_) {}
+
+        if (statusMsg) statusMsg.textContent = 'Restarting AEGIS forensic suite... Reloading app in 2 seconds...';
+        setTimeout(() => {
+          window.location.reload();
+        }, 2200);
+      }
+    }
+  ]);
+}
+

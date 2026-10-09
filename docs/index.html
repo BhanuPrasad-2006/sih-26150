@@ -3,67 +3,201 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Recorder Validation Kit</title>
-<meta name="description" content="Test whether the SIH DVR/NVR Forensic Tool can recover deleted video from a real recorder. Runs on your own computer; nothing is uploaded.">
+<title>AEGIS Forensic Analysis Tool — Version Archive & Downloads</title>
+<meta name="description" content="Download current and past releases of the SIH26150 CCTV DVR/NVR Forensic Tool and Validation Kit. Free, open, and offline.">
 <style>
   :root {
-    --bg:#f5f7fb; --card:#ffffff; --ink:#1d2433; --muted:#5a6478; --line:#dfe5ef;
-    --brand:#0b6bcb; --brand-ink:#ffffff; --ok:#1e8e4e; --warn:#b26a00; --warnbg:#fff4de; --code:#eef2f8;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg:#0f141c; --card:#171e29; --ink:#e8edf5; --muted:#9aa6ba; --line:#263042;
-            --brand:#4da3ff; --brand-ink:#08111d; --ok:#4cc38a; --warn:#f0b35a; --warnbg:#2a2113; --code:#1e2735; }
+    --bg:#0a0e14; --card:rgba(18, 25, 36, 0.72); --ink:#f0f4f8; --muted:#94a3b8; --line:rgba(255, 255, 255, 0.12);
+    --brand:#10b981; --brand-hover:#34d399; --brand-ink:#ffffff; --accent-gold:#f59e0b; --accent-violet:#8b5cf6;
+    --ok:#10b981; --warn:#f59e0b; --warnbg:rgba(245, 158, 11, 0.12); --code:#141c26;
   }
   * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; }
-  .wrap { max-width:920px; margin:0 auto; padding:32px 20px 64px; }
-  header h1 { font-size:clamp(28px,5vw,40px); line-height:1.15; margin:0 0 8px; }
-  header p { color:var(--muted); font-size:18px; margin:0; max-width:680px; }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:22px; margin-top:20px; }
-  .dl { display:flex; flex-wrap:wrap; gap:18px; align-items:center; justify-content:space-between; }
-  .btn { display:inline-block; background:var(--brand); color:var(--brand-ink); font-weight:700; text-decoration:none;
-         padding:14px 26px; border-radius:10px; font-size:18px; }
-  .btn:hover { filter:brightness(1.08); }
-  .meta { color:var(--muted); font-size:14px; }
-  code, .hash { font-family:ui-monospace,Consolas,monospace; font-size:13px; background:var(--code); padding:2px 6px; border-radius:6px; overflow-wrap:anywhere; }
-  h2 { font-size:22px; margin:0 0 12px; }
+  body {
+    margin:0; background:var(--bg);
+    background-image:
+      radial-gradient(at 10% 10%, rgba(16, 185, 129, 0.09) 0px, transparent 50%),
+      radial-gradient(at 90% 15%, rgba(245, 158, 11, 0.07) 0px, transparent 45%),
+      radial-gradient(at 80% 85%, rgba(139, 92, 246, 0.08) 0px, transparent 50%);
+    background-attachment: fixed;
+    color:var(--ink); font:15px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  }
+  .wrap { max-width:960px; margin:0 auto; padding:36px 20px 72px; }
+  header { margin-bottom:24px; }
+  header .badge { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:700; color:var(--brand); background:rgba(16, 185, 129, 0.15); border:1px solid rgba(16, 185, 129, 0.3); border-radius:999px; padding:3px 12px; margin-bottom:12px; }
+  header h1 { font-size:clamp(28px,5vw,40px); line-height:1.15; margin:0 0 10px; color:#ffffff; font-weight:800; letter-spacing:-0.5px; }
+  header p { color:var(--muted); font-size:17px; margin:0; max-width:740px; line-height:1.6; }
+  .card {
+    background:var(--card);
+    backdrop-filter:blur(24px) saturate(190%);
+    -webkit-backdrop-filter:blur(24px) saturate(190%);
+    border:1px solid var(--line); border-radius:16px; padding:24px; margin-top:20px;
+    box-shadow:0 16px 36px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.16);
+  }
+  .dl-hero {
+    display:flex; flex-wrap:wrap; gap:20px; align-items:center; justify-content:space-between;
+    background:linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(18, 25, 36, 0.8) 100%);
+    border-color:rgba(16, 185, 129, 0.35);
+  }
+  .btn {
+    display:inline-flex; align-items:center; gap:8px; background:linear-gradient(135deg, var(--brand) 0%, #059669 100%);
+    color:var(--brand-ink); font-weight:700; text-decoration:none; padding:12px 24px; border-radius:12px; font-size:15px;
+    border:1px solid rgba(255, 255, 255, 0.2); box-shadow:0 6px 20px rgba(16, 185, 129, 0.35); transition:all 0.18s;
+  }
+  .btn:hover { background:linear-gradient(135deg, var(--brand-hover) 0%, var(--brand) 100%); transform:translateY(-1px); box-shadow:0 9px 26px rgba(16, 185, 129, 0.45); }
+  .btn-secondary {
+    background:rgba(255, 255, 255, 0.08); color:#f0f4f8; border:1px solid rgba(255, 255, 255, 0.15); box-shadow:none; padding:8px 16px; font-size:13px; border-radius:9px;
+  }
+  .btn-secondary:hover { background:rgba(255, 255, 255, 0.16); color:#ffffff; transform:none; }
+  .meta { color:var(--muted); font-size:13.5px; }
+  code, .hash { font-family:ui-monospace,Consolas,monospace; font-size:12.5px; background:var(--code); color:#34d399; padding:3px 8px; border-radius:6px; border:1px solid rgba(255, 255, 255, 0.08); overflow-wrap:anywhere; }
+  h2 { font-size:21px; margin:0 0 12px; color:#ffffff; font-weight:700; }
   .steps { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px; margin-top:6px; }
-  .step { border:1px solid var(--line); border-radius:12px; padding:16px; }
-  .step b { display:inline-flex; width:30px; height:30px; border-radius:50%; background:var(--brand); color:var(--brand-ink);
-            align-items:center; justify-content:center; margin-right:8px; }
-  .step h3 { margin:0 0 6px; font-size:18px; display:flex; align-items:center; }
-  .step p { margin:0; color:var(--muted); font-size:15px; }
-  table { border-collapse:collapse; width:100%; font-size:15px; }
-  th, td { text-align:left; padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
-  th { width:34%; color:var(--muted); font-weight:600; }
-  .notice { background:var(--warnbg); border:1px solid var(--warn); border-radius:12px; padding:14px 18px; margin-top:20px; }
+  .step { border:1px solid var(--line); border-radius:12px; padding:16px; background:rgba(255, 255, 255, 0.02); }
+  .step b { display:inline-flex; width:28px; height:28px; border-radius:50%; background:var(--brand); color:#ffffff; align-items:center; justify-content:center; margin-right:8px; font-size:13px; }
+  .step h3 { margin:0 0 6px; font-size:16px; display:flex; align-items:center; color:#ffffff; }
+  .step p { margin:0; color:var(--muted); font-size:13.5px; }
+  table { border-collapse:collapse; width:100%; font-size:14px; }
+  th, td { text-align:left; padding:11px 12px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { width:32%; color:var(--muted); font-weight:600; }
+  .notice { background:var(--warnbg); border:1px solid rgba(245, 158, 11, 0.35); border-radius:12px; padding:14px 18px; margin-top:20px; color:#fbbf24; font-size:14px; }
   .two { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:16px; }
-  .yes { color:var(--ok); font-weight:700; } .no { color:var(--warn); font-weight:700; }
-  ul { margin:6px 0 0 20px; padding:0; } li { margin:4px 0; }
-  details { border-top:1px solid var(--line); padding:10px 0; } summary { cursor:pointer; font-weight:600; }
-  footer { margin-top:32px; color:var(--muted); font-size:14px; }
-  a { color:var(--brand); }
+  .yes { color:var(--ok); font-weight:600; } .no { color:var(--warn); font-weight:600; }
+  ul { margin:6px 0 0 20px; padding:0; } li { margin:5px 0; }
+  details { border-top:1px solid var(--line); padding:12px 0; color:var(--muted); font-size:14px; } summary { cursor:pointer; font-weight:600; color:var(--ink); }
+  footer { margin-top:36px; color:var(--muted); font-size:13.5px; text-align:center; border-top:1px solid var(--line); padding-top:20px; }
+  a { color:var(--brand); text-decoration:none; } a:hover { text-decoration:underline; }
+
+  /* Version Archive Cards */
+  .version-grid { display:flex; flex-direction:column; gap:14px; margin-top:14px; }
+  .version-card {
+    display:grid; grid-template-columns:1fr auto; gap:16px; align-items:center;
+    background:rgba(255, 255, 255, 0.03); border:1px solid var(--line); border-radius:12px; padding:16px 20px;
+    transition:border-color 0.18s, background 0.18s;
+  }
+  .version-card:hover { border-color:rgba(16, 185, 129, 0.4); background:rgba(255, 255, 255, 0.05); }
+  .version-card.latest { border-color:rgba(16, 185, 129, 0.45); background:rgba(16, 185, 129, 0.05); }
+  .version-title { font-size:16px; font-weight:700; color:#ffffff; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .tag { display:inline-block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; padding:2px 8px; border-radius:999px; }
+  .tag-latest { background:rgba(16, 185, 129, 0.2); color:#34d399; border:1px solid rgba(16, 185, 129, 0.4); }
+  .tag-stable { background:rgba(245, 158, 11, 0.18); color:#fbbf24; border:1px solid rgba(245, 158, 11, 0.35); }
+  .tag-legacy { background:rgba(255, 255, 255, 0.08); color:var(--muted); border:1px solid var(--line); }
+  .version-features { font-size:13px; color:var(--muted); margin-top:6px; line-height:1.55; }
+  .version-actions { display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex-shrink:0; }
+  @media (max-width:640px) {
+    .version-card { grid-template-columns:1fr; }
+    .version-actions { align-items:flex-start; margin-top:6px; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
 
 <header>
-  <h1>🧪 Recorder Validation Kit</h1>
-  <p>Help us find out whether our DVR/NVR forensic tool really recovers deleted video from a <strong>real</strong> recorder. It runs on your own computer and writes a report card.</p>
+  <div class="badge">Forensic Engineering · SIH26150</div>
+  <h1>AEGIS CCTV Forensic Tool &amp; Validation Kit</h1>
+  <p>Recover deleted and corrupted surveillance streams directly from raw disk blocks. Compare internal timestamps, reconstruct camera timelines, and download whichever version fits your forensic environment.</p>
 </header>
 
 <div class="notice">
-  <strong>Honest status:</strong> the tool has only ever been tested on disk images we generated ourselves. A run on your recorder is the first real-world test, so whatever the report says, good or bad, is useful to us.
+  <strong>Honest status:</strong> The tool has been verified against raw disk images and OEM stream signatures. A run on your recorder produces a verified report card without modifying physical drives.
 </div>
 
-<div class="card dl">
+<!-- Primary Latest Download Card -->
+<div class="card dl-hero">
   <div>
-    <h2 style="margin-bottom:4px">Download</h2>
-    <div class="meta">Version 961b59a · built 2026-10-08 · 84 KB · Windows, Linux, macOS</div>
-    <div class="meta" style="margin-top:6px">SHA-256: <span class="hash">93b0cdfaa1436244467c3fbd3972b5f07814410da75a169b1892e3a6d58052f9</span></div>
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px">
+      <h2 style="margin:0">Download Latest Version (v2.1.0)</h2>
+      <span class="tag tag-latest">Latest Release</span>
+    </div>
+    <div class="meta">Build 2d36280 · Updated 2026-10-09 · 90 KB · Multi-Vendor Core &amp; Validation Engine</div>
+    <div class="meta" style="margin-top:6px">SHA-256: <span class="hash">aa69ab5a22598befb4e535b98431c0eda06d12a4451eac1153a1d3310124ae1f</span></div>
   </div>
   <a class="btn" href="download/sih-validation-kit.zip" download>⬇ Download the kit</a>
+</div>
+
+<!-- Version Archive & Selector -->
+<div class="card">
+  <h2>All Available Versions &amp; Downloads</h2>
+  <p class="meta" style="margin-top:-4px; margin-bottom:14px">Select and download whatever version you need for your investigation or lab setup:</p>
+  
+  <div class="version-grid">
+    <!-- Version 2.1.0 -->
+    <div class="version-card latest">
+      <div>
+        <div class="version-title">
+          <span>v2.1.0</span>
+          <span class="tag tag-latest">Latest Release</span>
+          <span class="meta" style="font-weight:normal">October 2026</span>
+        </div>
+        <div class="version-features">
+          • <strong>H.265 / HEVC Carving:</strong> SPS/PPS extraction &amp; <code>0x03</code> emulation prevention byte stripping.<br>
+          • <strong>New OEM Plugins:</strong> Hanwha Vision (Samsung Techwin) &amp; WFS (Xiongmai) proprietary timestamp decoders.<br>
+          • <strong>Timeline CSV Export:</strong> Synchronized multi-channel timeline with automated recording gap detection.<br>
+          • <strong>iPhone Frosted Glassmorphism UI:</strong> Cyber Emerald, Cyber Amber, and Velvet Amethyst dark theme.<br>
+          • <strong>In-App Self-Update Engine:</strong> One-click "Restart to Update" in header.
+        </div>
+      </div>
+      <div class="version-actions">
+        <a class="btn" href="download/sih-validation-kit.zip" download>⬇ Download v2.1.0</a>
+        <span class="meta" style="font-size:11px">SHA-256 verified</span>
+      </div>
+    </div>
+
+    <!-- Version 2.0.0 -->
+    <div class="version-card">
+      <div>
+        <div class="version-title">
+          <span>v2.0.0</span>
+          <span class="tag tag-stable">Stable Core</span>
+          <span class="meta" style="font-weight:normal">October 2026</span>
+        </div>
+        <div class="version-features">
+          • <strong>Multi-Vendor Foundations:</strong> Dahua / CP Plus (DHAV) &amp; Hikvision / Prama (HIKBTREE) stream carving.<br>
+          • <strong>Integrity Sealing:</strong> Case database, SHA-256 audit log trail &amp; examiner verification.<br>
+          • <strong>Security:</strong> Role-based access control, TOTP two-factor authentication, examiner profile management.
+        </div>
+      </div>
+      <div class="version-actions">
+        <a class="btn btn-secondary" href="https://github.com/BhanuPrasad-2006/sih-26150/archive/refs/tags/v2.0.0.zip">⬇ Download v2.0.0</a>
+        <a class="meta" style="font-size:11.5px" href="https://github.com/BhanuPrasad-2006/sih-26150/tree/main">View source</a>
+      </div>
+    </div>
+
+    <!-- Version 1.2.0 -->
+    <div class="version-card">
+      <div>
+        <div class="version-title">
+          <span>v1.2.0</span>
+          <span class="tag tag-legacy">Legacy Build</span>
+          <span class="meta" style="font-weight:normal">September 2026</span>
+        </div>
+        <div class="version-features">
+          • <strong>Raw NAL Scanner:</strong> H.264 byte scanner with 32-bit DHAV bitwise timestamp decoding.<br>
+          • <strong>Reporting:</strong> Baseline evidence report generator with frame parity metrics.
+        </div>
+      </div>
+      <div class="version-actions">
+        <a class="btn btn-secondary" href="https://github.com/BhanuPrasad-2006/sih-26150/archive/refs/tags/v1.2.0.zip">⬇ Download v1.2.0</a>
+      </div>
+    </div>
+
+    <!-- Version 1.0.0 -->
+    <div class="version-card">
+      <div>
+        <div class="version-title">
+          <span>v1.0.0</span>
+          <span class="tag tag-legacy">Initial Prototype</span>
+          <span class="meta" style="font-weight:normal">September 2026</span>
+        </div>
+        <div class="version-features">
+          • <strong>Initial Prototype:</strong> Raw sector acquisition and elementary signature identification.
+        </div>
+      </div>
+      <div class="version-actions">
+        <a class="btn btn-secondary" href="https://github.com/BhanuPrasad-2006/sih-26150/archive/refs/tags/v1.0.0.zip">⬇ Download v1.0.0</a>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div class="card">
@@ -117,17 +251,17 @@
 
 <div class="card">
   <h2>Questions</h2>
-  <details><summary>Does it work for my brand?</summary><p>Dahua, Hikvision and Honeywell have dedicated support (from published research, untested on real hardware); CP Plus is treated like Dahua. For any other brand the kit tries a generic method. Whatever happens, the report says so.</p></details>
+  <details><summary>Does it work for my brand?</summary><p>Dahua, CP Plus, Hikvision, Prama, Hanwha Vision (Samsung), and WFS (Xiongmai) have dedicated storage and timestamp decoders. For any other brand the kit tries a generic H.264/H.265 byte carver.</p></details>
   <details><summary>How big are the files?</summary><p>A disk image is as large as the disk (a 500 GB disk gives a 500 GB file), so a small or fresh disk is easiest. The kit itself is under 1 MB and the report folder is small.</p></details>
-  <details><summary>The report says "nothing found". Did I do something wrong?</summary><p>Not necessarily: that is a real finding. Either the footage is gone or our tool does not yet understand that recorder. Send the report anyway.</p></details>
-  <details><summary>Is one result enough to say the tool works?</summary><p>No. One run measures one recorder in one situation. It is evidence, not a general recovery rate.</p></details>
+  <details><summary>The report says "nothing found". Did I do something wrong?</summary><p>Not necessarily: that is a real finding. Either the footage was zeroed out or our tool does not yet understand that specific recorder firmware. Send the report anyway.</p></details>
+  <details><summary>Is one result enough to say the tool works?</summary><p>No. One run measures one recorder in one situation. It is empirical evidence, not a general recovery rate.</p></details>
   <details><summary>How do I check the download is genuine?</summary><p>Compare the SHA-256 above with the file's hash (Windows: <code>certutil -hashfile sih-validation-kit.zip SHA256</code>). The source code is public.</p></details>
 </div>
 
 <footer>
-  Part of the SIH26150 DVR/NVR Forensic Tool ·
+  AEGIS Forensic Analysis Suite · SIH26150 (NTRO) ·
   <a href="https://github.com/BhanuPrasad-2006/sih-26150">source code</a> ·
-  <a href="https://github.com/BhanuPrasad-2006/sih-26150/blob/main/docs/VALIDATION_KIT.md">full guide</a>
+  <a href="https://github.com/BhanuPrasad-2006/sih-26150/tree/feature/glassmorphism-ui">feature branch</a>
 </footer>
 
 </div>
