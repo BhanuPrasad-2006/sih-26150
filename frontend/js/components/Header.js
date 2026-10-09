@@ -21,6 +21,9 @@ function renderHeader(breadcrumbs = []) {
       </div>
     </div>
     <div class="header-meta">
+      <button type="button" id="btn-quick-command" class="command-palette-trigger" title="Press Ctrl+K for command bar">
+        ${icon('search')} <span class="cmd-label">Search / Jump</span> <kbd class="cmd-kbd">Ctrl+K</kbd>
+      </button>
       <div id="case-context-pill" class="case-context-pill hidden" role="region" aria-label="Case context"></div>
       <button type="button" id="btn-restart-update" class="restart-update-btn" title="Click to restart and apply updates">
         Restart to Update &rarr;
@@ -41,6 +44,9 @@ function renderHeader(breadcrumbs = []) {
 
   const profBtn = document.getElementById('btn-user-profile');
   if (profBtn) profBtn.addEventListener('click', openUserProfileModal);
+
+  const cmdBtn = document.getElementById('btn-quick-command');
+  if (cmdBtn) cmdBtn.addEventListener('click', openCommandPaletteModal);
 
   API.authStatus().then(st => {
     const lbl = document.getElementById('header-user-label');
@@ -415,4 +421,97 @@ async function openUpdateModal() {
     }
   ]);
 }
+
+/**
+ * VisionOS Command Palette modal (triggered by Ctrl+K or search button)
+ */
+function openCommandPaletteModal() {
+  const bodyHtml = `
+    <div class="cmd-palette-container">
+      <div class="cmd-palette-search-row">
+        ${icon('search')}
+        <input type="text" id="cmd-palette-input" class="cmd-palette-input" placeholder="Type a case ID, examiner, or screen name..." autofocus autocomplete="off">
+        <span class="cmd-esc-tag">ESC to close</span>
+      </div>
+      <div id="cmd-palette-results" class="cmd-palette-results">
+        <div class="cmd-section-title">QUICK ACTIONS</div>
+        <div class="cmd-item" data-action="dashboard">
+          <span class="cmd-icon-chip">${icon('dashboard')}</span>
+          <div class="cmd-item-info">
+            <strong>Cases Dashboard</strong>
+            <span>Return to forensic command center</span>
+          </div>
+          <span class="cmd-hint-key">⏎</span>
+        </div>
+        <div class="cmd-item" data-action="new-case">
+          <span class="cmd-icon-chip">${icon('plus-circle')}</span>
+          <div class="cmd-item-info">
+            <strong>Register New Case</strong>
+            <span>Create new evidence intake dossier</span>
+          </div>
+          <span class="cmd-hint-key">⏎</span>
+        </div>
+        <div id="cmd-case-results"></div>
+      </div>
+    </div>
+  `;
+
+  showModal('Forensic Command Bar', bodyHtml, [
+    { label: 'Close', class: 'btn-secondary', autoClose: true }
+  ]);
+
+  const input = document.getElementById('cmd-palette-input');
+  if (input) {
+    setTimeout(() => input.focus(), 50);
+
+    const caseContainer = document.getElementById('cmd-case-results');
+    const cases = window._cachedCases || [];
+    if (cases.length > 0 && caseContainer) {
+      caseContainer.innerHTML = `
+        <div class="cmd-section-title">ACTIVE CASES</div>
+        ${cases.slice(0, 5).map(c => `
+          <div class="cmd-item" data-case-id="${c.case_id}">
+            <span class="cmd-icon-chip">${icon('folder')}</span>
+            <div class="cmd-item-info">
+              <strong>${escapeHtml(c.case_number)}</strong>
+              <span>${escapeHtml(c.examiner || 'Examiner')} · ${c.fir_number ? escapeHtml(c.fir_number) : 'Active'}</span>
+            </div>
+            <span class="cmd-hint-key">Open &rarr;</span>
+          </div>
+        `).join('')}
+      `;
+    }
+
+    input.oninput = () => {
+      const q = input.value.trim().toLowerCase();
+      const allItems = document.querySelectorAll('.cmd-item');
+      allItems.forEach(el => {
+        const text = el.textContent.toLowerCase();
+        el.style.display = (!q || text.includes(q)) ? 'flex' : 'none';
+      });
+    };
+  }
+
+  // Handle click on items
+  document.querySelectorAll('.cmd-item').forEach(el => {
+    el.addEventListener('click', () => {
+      closeModal();
+      if (el.dataset.action === 'dashboard') navigateTo('dashboard');
+      else if (el.dataset.action === 'new-case') navigateTo('new-case');
+      else if (el.dataset.caseId) navigateTo('case-detail', { caseId: el.dataset.caseId });
+    });
+  });
+}
+
+// Global Ctrl+K / Cmd+K listener
+if (!window._cmdPaletteBound) {
+  window._cmdPaletteBound = true;
+  window.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      openCommandPaletteModal();
+    }
+  });
+}
+
 
