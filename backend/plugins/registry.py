@@ -12,12 +12,14 @@ from typing import TYPE_CHECKING, Any
 from backend.plugins.cpplus import CPPlusPlugin
 from backend.plugins.dahua import DahuaPlugin
 from backend.plugins.godrej import GodrejPlugin
+from backend.plugins.hanwha import HanwhaPlugin
 from backend.plugins.hikvision import HikvisionPlugin
 from backend.plugins.honeywell import HoneywellPlugin
 from backend.plugins.matrix import MatrixPlugin
 from backend.plugins.tplink import TPLinkPlugin
 from backend.plugins.uniview import UniviewPlugin
 from backend.plugins.unknown import UnknownPlugin
+from backend.plugins.wfs import WFSPlugin
 
 if TYPE_CHECKING:
     from backend.acquisition import EvidenceImage
@@ -26,6 +28,8 @@ PLUGINS = [
     CPPlusPlugin(),
     DahuaPlugin(),
     HikvisionPlugin(),
+    WFSPlugin(),
+    HanwhaPlugin(),
     UniviewPlugin(),
     MatrixPlugin(),
     HoneywellPlugin(),

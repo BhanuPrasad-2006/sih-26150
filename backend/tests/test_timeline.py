@@ -88,3 +88,19 @@ def test_build_timeline_retains_unplaceable_segments_separately():
         "missing-end", "reversed",
     ]
     assert [lane.camera for lane in timeline.lanes] == [3]
+
+
+def test_timeline_to_csv():
+    from backend.timeline import timeline_to_csv
+
+    timeline = build_timeline([
+        _segment("seg-1", 1, 0, 10, SegmentStatus.COMPLETE),
+        _segment("seg-2", 2, 5, 15, SegmentStatus.PARTIAL),
+    ])
+    csv_str = timeline_to_csv(timeline)
+
+    assert "Segment ID,Camera Channel,Start Time (UTC),End Time (UTC)" in csv_str
+    assert "seg-1,Ch 1" in csv_str
+    assert "seg-2,Ch 2" in csv_str
+    assert "COMPLETE" in csv_str
+    assert "PARTIAL" in csv_str

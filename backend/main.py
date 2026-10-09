@@ -114,7 +114,7 @@ from backend.security import evidence_roots as security_module_roots
 from backend import object_detection
 from backend.reconstructor import label_all
 from backend.reporting import generate_report
-from backend.timeline import TimelineData, build_timeline, normalize_to_utc
+from backend.timeline import TimelineData, build_timeline, normalize_to_utc, timeline_to_csv
 
 logging.basicConfig(
     level=logging.INFO,
@@ -1431,6 +1431,33 @@ async def case_timeline(case_id: str):
     for item in evidence:
         segments.extend(await asyncio.to_thread(db.list_segments_for_evidence, item.evidence_id))
     return await asyncio.to_thread(build_timeline, segments)
+
+
+@app.get("/api/cases/{case_id}/timeline/csv")
+async def case_timeline_csv(case_id: str):
+    """Export the synchronized case timeline to CSV for court and reporting use."""
+    from fastapi.responses import Response
+
+    case = await asyncio.to_thread(db.get_case, case_id)
+    if not case:
+        raise HTTPException(404, "Case not found")
+
+    evidence = await asyncio.to_thread(db.list_evidence_for_case, case_id)
+    segments: list[Segment] = []
+    for item in evidence:
+        segments.extend(await asyncio.to_thread(db.list_segments_for_evidence, item.evidence_id))
+
+    timeline = await asyncio.to_thread(build_timeline, segments)
+    csv_content = await asyncio.to_thread(timeline_to_csv, timeline)
+
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="timeline_{case_id[:8]}.csv"',
+            "Content-Type": "text/csv; charset=utf-8",
+        },
+    )
 
 
 @app.get("/api/cases/{case_id}/correlation")

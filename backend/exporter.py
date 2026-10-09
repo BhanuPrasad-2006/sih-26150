@@ -138,17 +138,35 @@ def remux_dhav_to_mp4(raw_path: Path, mp4_path: Path) -> tuple[bool, str]:
 
 def remux_h264_to_mp4(raw_path: Path, mp4_path: Path) -> tuple[bool, str]:
     """
-    Remux a carved Hikvision stream to MP4 with FFmpeg (-c copy, no re-encoding).
-    The carver emits either an MPEG program stream (starts with 00 00 01 BA —
-    let FFmpeg autodetect it) or a raw H.264 Annex B stream (-f h264).
+    Remux a carved video stream to MP4 with FFmpeg (-c copy, no re-encoding).
+    The carver emits an MPEG program stream (starts with 00 00 01 BA), an
+    H.265/HEVC stream (-f hevc), or a raw H.264 Annex B stream (-f h264).
     Returns (success, stderr_summary).
     """
     if not ffmpeg_available():
         return False, "ffmpeg not on PATH"
     try:
         with open(raw_path, "rb") as fh:
-            is_program_stream = fh.read(4) == b"\x00\x00\x01\xBA"
-        input_fmt = [] if is_program_stream else ["-f", "h264"]
+            buf = fh.read(16)
+        is_program_stream = buf[:4] == b"\x00\x00\x01\xBA"
+        if is_program_stream:
+            input_fmt = []
+        else:
+            sc_offset = 0
+            if buf.startswith(b"\x00\x00\x00\x01"):
+                sc_offset = 4
+            elif buf.startswith(b"\x00\x00\x01"):
+                sc_offset = 3
+            if sc_offset > 0 and len(buf) > sc_offset:
+                b0 = buf[sc_offset]
+                hevc_type = (b0 >> 1) & 0x3F
+                if (b0 & 0x80) == 0 and hevc_type in (32, 33):
+                    input_fmt = ["-f", "hevc"]
+                else:
+                    input_fmt = ["-f", "h264"]
+            else:
+                input_fmt = ["-f", "h264"]
+
         result = run_limited(
             [
                 "ffmpeg", "-y", "-nostdin",

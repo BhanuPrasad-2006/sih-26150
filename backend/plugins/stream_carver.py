@@ -9,6 +9,8 @@ PUBLIC standards — no reverse-engineered vendor layout:
     walked by their length fields, so run extents are exact.
   * H.264 Annex B byte streams (ITU-T H.264): must open with a valid SPS, then
     PPS, then a slice; NAL extents follow the Annex B rules.
+  * H.265 / HEVC Annex B byte streams (ITU-T H.265): must open with a valid
+    VPS or SPS, then PPS, then a slice; 2-byte NAL headers parsed per standard.
 
 Timestamps/channels are NOT available from these streams, so units carry
 camera=0 and timestamp=None. Results are only trustworthy once FFmpeg decodes
@@ -34,6 +36,14 @@ from backend.plugins.constants import (
     H264_TAIL_IDENTICAL_RUN,
     H264_VALID_NAL_TYPES,
     H264_VALID_PROFILE_IDC,
+    H265_KEYFRAME_NAL_TYPES,
+    H265_MAX_PARAM_SET_BYTES,
+    H265_MAX_TAIL_NAL_BYTES,
+    H265_NAL_PPS,
+    H265_NAL_SPS,
+    H265_NAL_VPS,
+    H265_SLICE_NAL_TYPES,
+    H265_VALID_NAL_TYPES,
     MPEG_PS_MIN_ELEMENTS,
     MPEG_PS_PES_STREAM_IDS,
     MPEG_PS_VIDEO_STREAM_ID_MAX,
@@ -44,6 +54,25 @@ if TYPE_CHECKING:
     from backend.acquisition import EvidenceImage
 
 log = logging.getLogger(__name__)
+
+
+def strip_emulation_prevention_bytes(payload: bytes) -> bytes:
+    """
+    Remove ITU-T H.264 / H.265 emulation prevention bytes (0x03) from raw NAL payload.
+    Converts 0x00000300 -> 0x000000, 0x00000301 -> 0x000001, 0x00000302 -> 0x000002, 0x00000303 -> 0x000003.
+    """
+    out = bytearray()
+    i = 0
+    n = len(payload)
+    while i < n:
+        if i + 2 < n and payload[i] == 0x00 and payload[i + 1] == 0x00 and payload[i + 2] == 0x03:
+            out.append(0x00)
+            out.append(0x00)
+            i += 3
+        else:
+            out.append(payload[i])
+            i += 1
+    return bytes(out)
 
 
 @dataclass(frozen=True)
@@ -73,7 +102,8 @@ def carve_standard_streams(
         regions = [CarveRegion(0, total)]
     frames: list[RawFrame] = []
     ps_runs = 0
-    annexb_runs = 0
+    h264_runs = 0
+    hevc_runs = 0
     counter = 0
 
     try:
@@ -85,12 +115,19 @@ def carve_standard_streams(
             if m is None:
                 break
             p = m.start()
-            if mm[p + 3] == 0xBA:
+            b = mm[p + 3]
+            if b == 0xBA:
                 run = _carve_ps_run(mm, p, limit)
                 kind = "ps"
-            else:
+            elif b in (0x27, 0x47, 0x67):
                 run = _carve_annexb_run(mm, p, limit)
-                kind = "annexb"
+                kind = "h264"
+            elif b in (0x40, 0x42):
+                run = _carve_hevc_run(mm, p, limit)
+                kind = "hevc"
+            else:
+                run = None
+                kind = "unknown"
 
             if run is None:
                 pos = p + 3
@@ -107,8 +144,10 @@ def carve_standard_streams(
                 counter += 1
             if kind == "ps":
                 ps_runs += 1
-            else:
-                annexb_runs += 1
+            elif kind == "h264":
+                h264_runs += 1
+            elif kind == "hevc":
+                hevc_runs += 1
             pos = max(end, p + 3)
 
             if progress_cb:
@@ -125,11 +164,11 @@ def carve_standard_streams(
         return frames, note
 
     note = (
-        f"Standards-based stream carving complete: {ps_runs} MPEG-PS run(s) and "
-        f"{annexb_runs} H.264 Annex B run(s), {len(frames)} unit(s). Only the "
-        "standard stream structure was validated — vendor index, channel and "
-        "timestamps are NOT parsed. All results are UNCERTAIN until ffprobe "
-        "decodes the export."
+        f"Standards-based stream carving complete: {ps_runs} MPEG-PS run(s), "
+        f"{h264_runs} H.264 Annex B run(s), and {hevc_runs} H.265/HEVC Annex B run(s), "
+        f"{len(frames)} unit(s). Only the standard stream structure was validated — vendor "
+        "index, channel and timestamps are NOT parsed. All results are UNCERTAIN until "
+        "ffprobe decodes the export."
     )
     log.info(note)
     return frames, note
@@ -137,9 +176,10 @@ def carve_standard_streams(
 
 
 
-# A candidate is an MPEG-PS pack start (00 00 01 BA) or an H.264 SPS start code
-# (00 00 01 + nal_ref_idc!=0, type 7 => 0x27/0x47/0x67).
-_CANDIDATE_RE = re.compile(rb"\x00\x00\x01(?:\xBA|[\x27\x47\x67])")
+# A candidate is an MPEG-PS pack start (00 00 01 BA), an H.264 SPS start code
+# (00 00 01 + nal_ref_idc!=0, type 7 => 0x27/0x47/0x67), or an H.265 VPS/SPS start code
+# (00 00 01 + type 32 => 0x40 / type 33 => 0x42).
+_CANDIDATE_RE = re.compile(rb"\x00\x00\x01(?:\xBA|[\x27\x47\x67]|[\x40\x42])")
 # Inside an Annex B NAL payload, emulation prevention forbids 00 00 00 / 00 00 01,
 # so the first occurrence marks the end of the NAL (trailing zeros / next start code).
 _NAL_END_RE = re.compile(rb"\x00\x00[\x00\x01]")
@@ -317,6 +357,117 @@ def _carve_annexb_run(mm, sps_code_pos: int, size: int):
     tail = _IDENTICAL_RUN_RE.search(mm, last_vcl_code_pos + 4, s_end)
     if tail is not None:
         if tail.start() <= last_vcl_code_pos + 4:
+            spans.pop()
+            if not spans:
+                return None
+        else:
+            spans[-1] = (s_start, tail.start(), s_type, s_key)
+    return spans, spans[-1][1]
+
+
+def _carve_hevc_run(mm, param_code_pos: int, size: int):
+    """
+    Walk an H.265 / HEVC Annex B run starting at a VPS or SPS start code. Returns
+    ([(start, stop, nal_type, is_keyframe), ...], end) with one span per slice NAL
+    (each span also covers parameter sets and SEI NALs that precede it), or None if
+    this isn't a valid VPS/SPS -> PPS -> slice opening.
+    """
+    if param_code_pos + 5 > size:
+        return None
+
+    b0 = mm[param_code_pos + 3]
+    b1 = mm[param_code_pos + 4]
+    if (b0 & 0x80) != 0:  # forbidden_zero_bit must be 0
+        return None
+    start_nal_type = (b0 >> 1) & 0x3F
+    if start_nal_type not in (H265_NAL_VPS, H265_NAL_SPS):
+        return None
+    if (b1 & 0x07) == 0:  # nuh_temporal_id_plus1 must be >= 1
+        return None
+
+    nals: list[tuple[int, int, int, int]] = []  # (unit_start, end, nal_type, code_pos)
+    p = param_code_pos
+    unit_start = p - 1 if p > 0 and mm[p - 1] == 0 else p
+
+    has_sps = False
+    has_pps = False
+
+    while p + 5 <= size:
+        header_byte = mm[p + 3]
+        if header_byte in (0xBA, 0xBB, 0xBC):
+            hdr_end = _ps_header_end(mm, p, size)
+            if hdr_end is None:
+                break
+            nals.append((unit_start, hdr_end, 0, p))
+            q = hdr_end
+            zeros = 0
+            while q < size and mm[q] == 0 and zeros < _MAX_TRAILING_ZEROS:
+                zeros += 1
+                q += 1
+            if q < size and mm[q] == 1 and zeros >= 2:
+                p = q - 2
+                unit_start = hdr_end
+                continue
+            break
+
+        b0 = header_byte
+        b1 = mm[p + 4]
+        if (b0 & 0x80) != 0:
+            break
+        nal_type = (b0 >> 1) & 0x3F
+        tid_plus1 = b1 & 0x07
+        if tid_plus1 == 0 or nal_type not in H265_VALID_NAL_TYPES:
+            break
+
+        if nal_type == H265_NAL_SPS:
+            has_sps = True
+        elif nal_type == H265_NAL_PPS:
+            has_pps = True
+
+        m = _NAL_END_RE.search(mm, p + 5)
+        end = m.start() if m is not None else min(size, p + 5 + H265_MAX_TAIL_NAL_BYTES)
+        if end <= p + 5:
+            break
+
+        if nal_type in (H265_NAL_VPS, H265_NAL_SPS, H265_NAL_PPS) and end - p > H265_MAX_PARAM_SET_BYTES:
+            break
+
+        nals.append((unit_start, end, nal_type, p))
+
+        next_p = None
+        if m is not None:
+            q = end
+            zeros = 0
+            while q < size and mm[q] == 0 and zeros < _MAX_TRAILING_ZEROS:
+                zeros += 1
+                q += 1
+            if q < size and mm[q] == 1 and zeros >= 2:
+                next_p = q - 2
+        if next_p is None:
+            break
+        p = next_p
+        unit_start = end
+
+    if not (has_sps and has_pps):
+        return None
+
+    spans: list[tuple[int, int, int, bool]] = []
+    group_start = nals[0][0]
+    last_vcl_code_pos = 0
+    for u_start, end, t, code_pos in nals:
+        if t in H265_SLICE_NAL_TYPES:
+            is_key = t in H265_KEYFRAME_NAL_TYPES
+            spans.append((group_start, end, t, is_key))
+            group_start = end
+            last_vcl_code_pos = code_pos
+
+    if not spans:
+        return None
+
+    s_start, s_end, s_type, s_key = spans[-1]
+    tail = _IDENTICAL_RUN_RE.search(mm, last_vcl_code_pos + 5, s_end)
+    if tail is not None:
+        if tail.start() <= last_vcl_code_pos + 5:
             spans.pop()
             if not spans:
                 return None

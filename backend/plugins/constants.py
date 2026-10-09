@@ -163,8 +163,63 @@ H264_MAX_PARAM_SET_BYTES = 1024             # Proposed — SPS/PPS are tiny; lar
 H264_MAX_TAIL_NAL_BYTES = 4 * 1024 * 1024   # Proposed — cap for the final NAL when no next start code follows
 H264_TAIL_IDENTICAL_RUN = 16                # Proposed — a >=16-byte identical-byte run ends the final NAL
 
+# ── H.265 / HEVC (ITU-T H.265 / ISO/IEC 23008-2) ──────────────────────────────
+H265_NAL_TRAIL_N = 0
+H265_NAL_TRAIL_R = 1
+H265_NAL_TSA_N = 2
+H265_NAL_TSA_R = 3
+H265_NAL_STSA_N = 4
+H265_NAL_STSA_R = 5
+H265_NAL_RADL_N = 6
+H265_NAL_RADL_R = 7
+H265_NAL_RASL_N = 8
+H265_NAL_RASL_R = 9
+H265_NAL_BLA_W_LP = 16
+H265_NAL_BLA_W_RADL = 17
+H265_NAL_BLA_N_LP = 18
+H265_NAL_IDR_W_RADL = 19
+H265_NAL_IDR_N_LP = 20
+H265_NAL_CRA = 21
+H265_NAL_VPS = 32
+H265_NAL_SPS = 33
+H265_NAL_PPS = 34
+H265_NAL_AUD = 35
+H265_NAL_PREFIX_SEI = 39
+H265_NAL_SUFFIX_SEI = 40
+
+H265_KEYFRAME_NAL_TYPES = frozenset({
+    H265_NAL_BLA_W_LP,
+    H265_NAL_BLA_W_RADL,
+    H265_NAL_BLA_N_LP,
+    H265_NAL_IDR_W_RADL,
+    H265_NAL_IDR_N_LP,
+    H265_NAL_CRA,
+})
+H265_SLICE_NAL_TYPES = frozenset(range(0, 10)) | H265_KEYFRAME_NAL_TYPES
+H265_VALID_NAL_TYPES = frozenset(range(0, 41))
+H265_MAX_PARAM_SET_BYTES = 2048             # VPS/SPS/PPS are compact
+H265_MAX_TAIL_NAL_BYTES = 4 * 1024 * 1024   # 4 MB upper bound for final NAL
+H265_TAIL_IDENTICAL_RUN = 16
+
 # Minimum confidence score to proceed with scanning
 MIN_PLUGIN_CONFIDENCE = 0.6          # Proposed [PRD §2.4, §5.6 pseudo-code]
+
+# ── WFS (XIONGMAI / XMEYE / WHITE-LABEL GENERIC DVRS) ─────────────────────────
+WFS_MAGIC_V01 = b"WFS0.1"
+WFS_MAGIC_V02 = b"WFS0.2"
+WFS_MAGIC_GEN = b"WFS"
+WFS_SUPERBLOCK_OFFSET = 0x000
+WFS_DETECT_SCAN_BYTES = 32 * 1024 * 1024  # 32 MB search window
+WFS_FRAME_HEADER_MAGIC = b"WFS"
+WFS_MIN_YEAR = 2005
+
+# ── HANWHA VISION / SAMSUNG TECHWIN ───────────────────────────────────────────
+HANWHA_MAGIC_SSF1 = b"SSF1.0"
+HANWHA_MAGIC_SSF2 = b"SSF2.0"
+HANWHA_MAGIC_SEC  = b"SEC"
+HANWHA_MAGIC_SECV = b"SEC_VIDEO"
+HANWHA_DETECT_SCAN_BYTES = 32 * 1024 * 1024
+HANWHA_FRAME_HEADER_MAGIC = b"SEC"
 
 # ── FOREIGN DISK DETECTION ────────────────────────────────────────────────────
 

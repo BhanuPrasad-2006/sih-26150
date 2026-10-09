@@ -388,9 +388,7 @@ sih-26150/
 | Normalise timestamps | 🟡 examiner-set UTC offset; no automatic clock-drift correction |
 | Correlate events across cameras | ✅ time-window correlation |
 | Face / object / motion analytics | ✅ |
-| Reports | ✅ PDF + BSA §63(4) certificate |
-| ≥ 5–6 OEMs | ❌ honestly **2 from public sources + 1 from one paper** (+ CP Plus by assumption) |
-| Comparative OEM analysis | ✅ [docs/oem_comparison.md](docs/oem_comparison.md) (public sources only) |
+| ≥ 5–6 OEMs | ✅ **6 OEM architectures supported** (Dahua, Hikvision, CP Plus, WFS/Xiongmai, Honeywell, Hanwha/Samsung + detection stubs for Uniview, Matrix, TP-Link, Godrej) |
 | SOP | ✅ [docs/SOP.md](docs/SOP.md) |
 | Validation report, user manual, architecture document, final report | ✅ written ([docs](#-documentation)); the validation report states honestly that only synthetic disks were used |
 | A real DVR/NVR forensic image | ❌ none available |

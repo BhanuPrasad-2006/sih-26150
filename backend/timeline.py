@@ -158,3 +158,56 @@ def build_timeline(segments: Iterable[Segment]) -> TimelineData:
         lanes=lanes,
         unplaced_segments=unplaced_segments,
     )
+
+
+def timeline_to_csv(timeline: TimelineData) -> str:
+    """
+    Export the synchronized forensic timeline to a standard CSV string
+    for court submission and investigator review.
+    """
+    import csv
+    import io
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "Segment ID",
+        "Camera Channel",
+        "Start Time (UTC)",
+        "End Time (UTC)",
+        "Duration (Seconds)",
+        "Frame Count",
+        "Physical Disk Offsets (Start-End)",
+        "Forensic Status",
+        "SHA-256 Hash",
+        "Notes",
+    ])
+
+    all_segments: list[Segment] = []
+    for lane in timeline.lanes:
+        all_segments.extend(lane.segments)
+    all_segments.extend(timeline.unplaced_segments)
+
+    for seg in all_segments:
+        start_str = seg.start_time.isoformat() if seg.start_time else "N/A"
+        end_str = seg.end_time.isoformat() if seg.end_time else "N/A"
+        duration = ""
+        if seg.start_time and seg.end_time:
+            duration = f"{(seg.end_time - seg.start_time).total_seconds():.2f}"
+
+        offset_ranges = "; ".join(f"0x{o.start:X}-0x{o.end:X}" for o in seg.disk_offsets)
+
+        writer.writerow([
+            seg.segment_id,
+            f"Ch {seg.camera}",
+            start_str,
+            end_str,
+            duration,
+            seg.frame_count,
+            offset_ranges,
+            seg.status.value if hasattr(seg.status, "value") else str(seg.status),
+            seg.sha256 or "Pending",
+            seg.notes or "",
+        ])
+
+    return output.getvalue()
