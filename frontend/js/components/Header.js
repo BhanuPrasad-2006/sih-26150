@@ -12,7 +12,7 @@ function renderHeader(breadcrumbs = []) {
   const hostLabel = isLocal ? '127.0.0.1' : `${host}`;
 
   const themeIcon = currentTheme() === 'dark' ? 'sun' : 'moon';
-  const savedPalette = (typeof localStorage !== 'undefined' && localStorage.getItem('sih-palette')) || 'coral';
+  const savedPalette = (typeof localStorage !== 'undefined' && localStorage.getItem('sih-palette')) || 'amethyst';
 
   root.innerHTML = `
     <div class="logo-area">
@@ -27,13 +27,12 @@ function renderHeader(breadcrumbs = []) {
         <span class="backend-dot"></span> <span id="backend-status-text">Engine v3.0.0 Online</span>
       </div>
 
-      <!-- Live Color Palette Switcher -->
+      <!-- Live Color Palette Switcher (Zero Red, Zero Blue, Zero Green) -->
       <div class="palette-picker" role="region" aria-label="Color Themes" title="Switch Aesthetic Color Theme">
-        <button type="button" class="palette-dot dot-coral ${savedPalette === 'coral' ? 'active' : ''}" data-palette-btn="coral" title="Cyber Coral"></button>
-        <button type="button" class="palette-dot dot-sunset ${savedPalette === 'sunset' ? 'active' : ''}" data-palette-btn="sunset" title="Sunset Flame"></button>
-        <button type="button" class="palette-dot dot-amethyst ${savedPalette === 'amethyst' ? 'active' : ''}" data-palette-btn="amethyst" title="Royal Amethyst"></button>
-        <button type="button" class="palette-dot dot-gold ${savedPalette === 'gold' ? 'active' : ''}" data-palette-btn="gold" title="Imperial Gold"></button>
-        <button type="button" class="palette-dot dot-ruby ${savedPalette === 'ruby' ? 'active' : ''}" data-palette-btn="ruby" title="Cosmic Ruby"></button>
+        <button type="button" class="palette-dot dot-amethyst ${savedPalette === 'amethyst' ? 'active' : ''}" data-palette-btn="amethyst" title="Royal Amethyst (Default)"></button>
+        <button type="button" class="palette-dot dot-amber ${savedPalette === 'amber' ? 'active' : ''}" data-palette-btn="amber" title="Solar Amber & Gold"></button>
+        <button type="button" class="palette-dot dot-orchid ${savedPalette === 'orchid' ? 'active' : ''}" data-palette-btn="orchid" title="Electric Orchid"></button>
+        <button type="button" class="palette-dot dot-tangerine ${savedPalette === 'tangerine' ? 'active' : ''}" data-palette-btn="tangerine" title="Sunset Tangerine"></button>
       </div>
 
       <button type="button" id="btn-quick-command" class="command-palette-trigger" title="Press Ctrl+K for command bar">

@@ -62,7 +62,7 @@ async function renderDashboardScreen() {
             <div class="radar-sweep"></div>
             <div class="radar-center-shield">
               <svg viewBox="0 0 48 48" width="34" height="34" fill="none">
-                <path d="M24 9.5 12.5 14v9.2c0 7 4.6 12.2 11.5 14.8 6.9-2.6 11.5-7.8 11.5-14.8V14z" fill="rgba(255, 51, 102, 0.25)" stroke="#ff3366" stroke-width="2.5" stroke-linejoin="round"/>
+                <path d="M24 9.5 12.5 14v9.2c0 7 4.6 12.2 11.5 14.8 6.9-2.6 11.5-7.8 11.5-14.8V14z" fill="rgba(168, 85, 247, 0.22)" stroke="#a855f7" stroke-width="2.5" stroke-linejoin="round"/>
                 <path d="M20 23l3 3 6-6" stroke="#fbbf24" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </div>

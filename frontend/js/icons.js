@@ -78,7 +78,7 @@ function iconChip(name, tone) {
 /** Brand mark: a shield with a lens/play glyph, on a radiant coral-violet glass tile. */
 function logoMark() {
   return `<svg class="logo-icon" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
-    <defs><linearGradient id="lm-g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff3366"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs>
+    <defs><linearGradient id="lm-g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a855f7"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs>
     <rect width="48" height="48" rx="13" fill="url(#lm-g)"/>
     <path d="M24 9.5 12.5 14v9.2c0 7 4.6 12.2 11.5 14.8 6.9-2.6 11.5-7.8 11.5-14.8V14z" fill="rgba(255,255,255,0.22)" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>
     <circle cx="24" cy="24" r="6" fill="none" stroke="#fff" stroke-width="2"/>
@@ -90,49 +90,49 @@ function logoMark() {
 function heroArt() {
   return `<svg viewBox="0 0 340 250" aria-hidden="true" focusable="false">
     <defs>
-      <linearGradient id="ha-a" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff3366"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient>
+      <linearGradient id="ha-a" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a855f7"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient>
       <linearGradient id="ha-b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity="0.22"/><stop offset="1" stop-color="#ffffff" stop-opacity="0.06"/></linearGradient>
     </defs>
     <ellipse cx="170" cy="222" rx="130" ry="14" fill="#000" opacity="0.25"/>
-    <rect x="34" y="70" width="200" height="106" rx="16" fill="url(#ha-b)" stroke="#ff3366" stroke-opacity="0.5" stroke-width="1.6"/>
+    <rect x="34" y="70" width="200" height="106" rx="16" fill="url(#ha-b)" stroke="#a855f7" stroke-opacity="0.5" stroke-width="1.6"/>
     <rect x="50" y="86" width="168" height="18" rx="6" fill="#181420" opacity="0.75"/>
-    <circle cx="62" cy="95" r="3.5" fill="#ff3366"/><circle cx="76" cy="95" r="3.5" fill="#fbbf24"/>
+    <circle cx="62" cy="95" r="3.5" fill="#a855f7"/><circle cx="76" cy="95" r="3.5" fill="#fbbf24"/>
     <rect x="130" y="91" width="76" height="8" rx="4" fill="#8b5cf6" opacity="0.8"/>
     <rect x="50" y="116" width="168" height="10" rx="5" fill="#fff" opacity="0.16"/>
     <rect x="50" y="134" width="168" height="10" rx="5" fill="#fff" opacity="0.16"/>
     <rect x="50" y="152" width="110" height="10" rx="5" fill="#fff" opacity="0.16"/>
-    <path d="M236 124h26" stroke="#ff3366" stroke-width="2.4" stroke-dasharray="4 5" stroke-linecap="round"/>
+    <path d="M236 124h26" stroke="#a855f7" stroke-width="2.4" stroke-dasharray="4 5" stroke-linecap="round"/>
     <g transform="translate(262 82)">
       <rect width="56" height="88" rx="12" fill="#1d1628" stroke="#8b5cf6" stroke-width="1.6"/>
       <circle cx="28" cy="34" r="17" fill="none" stroke="url(#ha-a)" stroke-width="3"/>
       <circle cx="28" cy="34" r="6" fill="url(#ha-a)"/>
-      <rect x="12" y="62" width="32" height="6" rx="3" fill="#ff3366" opacity="0.8"/>
+      <rect x="12" y="62" width="32" height="6" rx="3" fill="#a855f7" opacity="0.8"/>
       <rect x="12" y="73" width="20" height="4" rx="2" fill="#fbbf24" opacity="0.7"/>
     </g>
     <g transform="translate(92 138)">
       <circle cx="44" cy="44" r="34" fill="#181420" opacity="0.85" stroke="url(#ha-a)" stroke-width="5"/>
-      <path d="M32 44a12 12 0 0 1 24 0" fill="none" stroke="#ff3366" stroke-width="3" stroke-linecap="round"/>
-      <path d="M38 47l5 5 10-11" fill="none" stroke="#ff3366" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M32 44a12 12 0 0 1 24 0" fill="none" stroke="#a855f7" stroke-width="3" stroke-linecap="round"/>
+      <path d="M38 47l5 5 10-11" fill="none" stroke="#a855f7" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
       <path d="m70 70 22 22" stroke="url(#ha-a)" stroke-width="9" stroke-linecap="round"/>
     </g>
-    <circle cx="40" cy="38" r="4" fill="#ff3366" opacity="0.8"/><circle cx="300" cy="44" r="3" fill="#fff" opacity="0.5"/><circle cx="286" cy="200" r="5" fill="#fbbf24" opacity="0.7"/>
+    <circle cx="40" cy="38" r="4" fill="#a855f7" opacity="0.8"/><circle cx="300" cy="44" r="3" fill="#fff" opacity="0.5"/><circle cx="286" cy="200" r="5" fill="#fbbf24" opacity="0.7"/>
   </svg>`;
 }
 
 /** Login panel illustration: shield + chain of custody blocks. */
 function authArt() {
   return `<svg viewBox="0 0 300 190" aria-hidden="true" focusable="false">
-    <defs><linearGradient id="aa-a" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff3366"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient></defs>
-    <g stroke="#ff3366" stroke-opacity="0.55" stroke-width="2" stroke-dasharray="3 5" fill="none"><path d="M60 150h60M180 150h60"/></g>
-    <rect x="16" y="128" width="50" height="44" rx="10" fill="#fff" fill-opacity="0.1" stroke="#ff3366" stroke-opacity="0.7" stroke-width="1.6"/>
-    <rect x="234" y="128" width="50" height="44" rx="10" fill="#fff" fill-opacity="0.1" stroke="#ff3366" stroke-opacity="0.7" stroke-width="1.6"/>
-    <rect x="125" y="128" width="50" height="44" rx="10" fill="#fff" fill-opacity="0.1" stroke="#ff3366" stroke-opacity="0.7" stroke-width="1.6"/>
-    <path d="M28 150h26M28 158h16M246 150h26M246 158h16M137 150h26M137 158h16" stroke="#ff3366" stroke-width="2.4" stroke-linecap="round" opacity="0.8"/>
+    <defs><linearGradient id="aa-a" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a855f7"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient></defs>
+    <g stroke="#a855f7" stroke-opacity="0.55" stroke-width="2" stroke-dasharray="3 5" fill="none"><path d="M60 150h60M180 150h60"/></g>
+    <rect x="16" y="128" width="50" height="44" rx="10" fill="#fff" fill-opacity="0.1" stroke="#a855f7" stroke-opacity="0.7" stroke-width="1.6"/>
+    <rect x="234" y="128" width="50" height="44" rx="10" fill="#fff" fill-opacity="0.1" stroke="#a855f7" stroke-opacity="0.7" stroke-width="1.6"/>
+    <rect x="125" y="128" width="50" height="44" rx="10" fill="#fff" fill-opacity="0.1" stroke="#a855f7" stroke-opacity="0.7" stroke-width="1.6"/>
+    <path d="M28 150h26M28 158h16M246 150h26M246 158h16M137 150h26M137 158h16" stroke="#a855f7" stroke-width="2.4" stroke-linecap="round" opacity="0.8"/>
     <path d="M150 12 96 34v40c0 32 22 56 54 66 32-10 54-34 54-66V34z" fill="url(#aa-a)" fill-opacity="0.25" stroke="url(#aa-a)" stroke-width="3.5" stroke-linejoin="round"/>
-    <path d="M150 30 112 45v28c0 22 15 39 38 47 23-8 38-25 38-47V45z" fill="#181420" fill-opacity="0.75" stroke="#ff3366" stroke-opacity="0.6" stroke-width="1.5"/>
-    <rect x="133" y="66" width="34" height="26" rx="6" fill="none" stroke="#fecdd3" stroke-width="3"/>
-    <path d="M139 66v-6a11 11 0 0 1 22 0v6" fill="none" stroke="#fecdd3" stroke-width="3" stroke-linecap="round"/>
-    <circle cx="150" cy="79" r="3.4" fill="#fecdd3"/>
+    <path d="M150 30 112 45v28c0 22 15 39 38 47 23-8 38-25 38-47V45z" fill="#181420" fill-opacity="0.75" stroke="#a855f7" stroke-opacity="0.6" stroke-width="1.5"/>
+    <rect x="133" y="66" width="34" height="26" rx="6" fill="none" stroke="#e9d5ff" stroke-width="3"/>
+    <path d="M139 66v-6a11 11 0 0 1 22 0v6" fill="none" stroke="#e9d5ff" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="150" cy="79" r="3.4" fill="#e9d5ff"/>
   </svg>`;
 }
 
@@ -174,4 +174,11 @@ function toggleTheme() {
   try { localStorage.setItem('sih-theme', next); } catch (e) { /* ignore */ }
   return next;
 }
+function applySavedPalette() {
+  try {
+    const p = localStorage.getItem('sih-palette') || 'amethyst';
+    document.documentElement.setAttribute('data-palette', p);
+  } catch (_) {}
+}
 applySavedTheme();
+applySavedPalette();

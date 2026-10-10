@@ -329,7 +329,7 @@ async function renderLoginScreen() {
 
       <button type="submit" id="btn-login" class="btn btn-primary btn-lg w-full mt-sm">Sign in ${icon('arrow-right')}</button>
       <div style="margin-top: 14px; text-align: center;">
-        <button type="button" id="btn-quick-examiner" class="btn btn-secondary w-full" style="border-color: rgba(255, 51, 102, 0.45); color: #ff3366; font-weight: 700;">
+        <button type="button" id="btn-quick-examiner" class="btn btn-secondary w-full" style="border-color: rgba(168, 85, 247, 0.45); color: #c084fc; font-weight: 700;">
           ⚡ Instant Access as RAJU (Forensic Examiner)
         </button>
       </div>
