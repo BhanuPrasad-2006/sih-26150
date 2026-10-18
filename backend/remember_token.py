@@ -20,11 +20,11 @@ from backend.secure_store import decrypt_text, encrypt_text
 log = logging.getLogger("remember_token")
 
 REMEMBER_TOKEN_FILE = CONFIG_DIR / "remember_session.enc"
-REMEMBER_MAX_AGE_SECONDS = 7 * 24 * 3600  # 7 days
+REMEMBER_MAX_AGE_SECONDS = 90 * 24 * 3600  # 90 days
 
 
 def save_remember_token(username: str, token: str) -> None:
-    """Save an encrypted persistent token valid for 7 days."""
+    """Save an encrypted persistent token valid for 90 days."""
     try:
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
         payload = {
