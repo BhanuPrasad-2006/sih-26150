@@ -245,10 +245,10 @@ async function renderDashboardScreen() {
       container.innerHTML = `
         <div class="dossier-cards-grid">
           ${cases.map(c => `
-            <div class="dossier-card" ${navAttrs('case-detail', { caseId: c.case_id })} role="button" tabindex="0" style="cursor: pointer;">
+            <div class="dossier-card cursor-pointer" ${navAttrs('case-detail', { caseId: c.case_id })} role="button" tabindex="0">
               <div class="dossier-card-top">
                 <div class="dossier-stamp">
-                  <span class="dossier-security-badge">🔒 SECURED</span>
+                  <span class="dossier-security-badge">${icon('shield-check')} SECURED</span>
                   ${caseStatusBadge(c.status)}
                 </div>
                 ${priorityBadge(c.priority || 'MEDIUM')}
@@ -305,7 +305,7 @@ async function renderDashboardScreen() {
             </thead>
             <tbody>
               ${cases.map(c => `
-                <tr ${navAttrs('case-detail', { caseId: c.case_id })} style="cursor: pointer;">
+                <tr ${navAttrs('case-detail', { caseId: c.case_id })} class="cursor-pointer">
                   <td>
                     <strong class="text-coral font-mono text-base">${escapeHtml(c.case_number)}</strong>
                     ${c.case_title ? `<div class="text-xs text-muted mt-1">${escapeHtml(c.case_title)}</div>` : ''}

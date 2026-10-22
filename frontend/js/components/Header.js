@@ -374,23 +374,23 @@ async function openUpdateModal() {
   } catch (_) {}
 
   const bodyHtml = `
-    <div style="display:flex; flex-direction:column; gap:16px;">
-      <div style="display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-radius:12px; background:var(--bg-surface-2); border:1px solid var(--border-color);">
+    <div class="upd-stack">
+      <div class="upd-version-row">
         <div>
-          <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.7px; color:var(--text-dim); font-weight:700;">Installed Version</div>
-          <div style="font-size:17px; font-weight:800; font-family:var(--font-mono); color:var(--accent-cyan); margin-top:2px;">v${escapeHtml(currentVer)}</div>
+          <div class="upd-label">Installed Version</div>
+          <div class="upd-version-num">v${escapeHtml(currentVer)}</div>
         </div>
-        <div style="text-align:right;">
-          <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.7px; color:var(--text-dim); font-weight:700;">Release Status</div>
-          <span class="badge ${updateAvail ? 'badge-partial' : 'badge-complete'}" style="margin-top:4px;">
+        <div class="upd-col-right">
+          <div class="upd-label">Release Status</div>
+          <span class="badge ${updateAvail ? 'badge-partial' : 'badge-complete'} mt-xs">
             ${updateAvail ? `Update Available (v${escapeHtml(latestVer)})` : 'Active Build · Ready to Apply'}
           </span>
         </div>
       </div>
 
-      <div style="font-size:13px; color:var(--text-muted); line-height:1.65;">
-        <strong style="color:var(--text-main); display:block; margin-bottom:6px;">Latest Engine Highlights (v${escapeHtml(latestVer)}):</strong>
-        <ul style="padding-left:18px; margin:0;">
+      <div class="upd-highlights">
+        <strong>Latest Engine Highlights (v${escapeHtml(latestVer)}):</strong>
+        <ul>
           <li>Multi-vendor H.265 / HEVC stream carving &amp; <code>0x03</code> emulation prevention byte stripping.</li>
           <li>Proprietary storage plugins for Dahua, Hikvision, Hanwha Vision (Samsung), and WFS (Xiongmai).</li>
           <li>Synchronized multi-channel forensic timeline with gap identification &amp; CSV export.</li>
@@ -398,10 +398,10 @@ async function openUpdateModal() {
         </ul>
       </div>
 
-      <div id="update-action-status" class="hidden" style="padding:12px 14px; border-radius:10px; background:var(--status-complete-soft); border:1px solid var(--border-glow); font-size:13px; color:var(--text-main);">
-        <div style="display:flex; align-items:center; gap:10px;">
+      <div id="update-action-status" class="upd-status-box hidden">
+        <div class="upd-status-row">
           <span class="btn-spinner"></span>
-          <span id="update-status-msg" style="font-weight:600;">Applying update to latest code...</span>
+          <span id="update-status-msg" class="upd-status-msg">Applying update to latest code...</span>
         </div>
       </div>
     </div>

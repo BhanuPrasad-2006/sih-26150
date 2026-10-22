@@ -329,9 +329,9 @@ async function renderLoginScreen() {
 
       ${_errorBoxHtml('login-error')}
       <button type="submit" id="btn-login" class="btn btn-primary btn-lg w-full mt-sm">Sign in ${icon('arrow-right')}</button>
-      <div style="margin-top: 14px; text-align: center;">
-        <button type="button" id="btn-quick-examiner" class="btn btn-secondary w-full" style="border-color: rgba(168, 85, 247, 0.45); color: #c084fc; font-weight: 700;">
-          ⚡ Instant Access as ${escapeHtml(rememberedUser || 'RAJU')} (Forensic Examiner)
+      <div class="quick-examiner-wrap">
+        <button type="button" id="btn-quick-examiner" class="btn btn-secondary btn-quick-examiner w-full">
+          ${icon('sparkles')} Instant Access as ${escapeHtml(rememberedUser || 'RAJU')} (Forensic Examiner)
         </button>
       </div>
     </form>`);
@@ -372,7 +372,7 @@ async function renderLoginScreen() {
         }
       } catch (_) {}
       btnQuick.disabled = false;
-      btnQuick.innerHTML = '⚡ Instant Access as ' + escapeHtml(rememberedUser || 'RAJU') + ' (Forensic Examiner)';
+      btnQuick.innerHTML = icon('sparkles') + ' Instant Access as ' + escapeHtml(rememberedUser || 'RAJU') + ' (Forensic Examiner)';
       err.show('Instant access could not authenticate automatically. Please enter your password or reset it.');
     };
   }
