@@ -27,19 +27,11 @@ function renderHeader(breadcrumbs = []) {
         <span class="backend-dot"></span> <span id="backend-status-text">Engine v3.0.0 Online</span>
       </div>
 
-      <!-- Live Color Palette Switcher (Zero Red, Zero Blue, Zero Green) -->
-      <div class="palette-picker" role="region" aria-label="Color Themes" title="Switch Aesthetic Color Theme">
-        <button type="button" class="palette-dot dot-amethyst ${savedPalette === 'amethyst' ? 'active' : ''}" data-palette-btn="amethyst" title="Royal Amethyst (Default)"></button>
-        <button type="button" class="palette-dot dot-amber ${savedPalette === 'amber' ? 'active' : ''}" data-palette-btn="amber" title="Solar Amber & Gold"></button>
-        <button type="button" class="palette-dot dot-orchid ${savedPalette === 'orchid' ? 'active' : ''}" data-palette-btn="orchid" title="Electric Orchid"></button>
-        <button type="button" class="palette-dot dot-tangerine ${savedPalette === 'tangerine' ? 'active' : ''}" data-palette-btn="tangerine" title="Sunset Tangerine"></button>
-      </div>
-
       <button type="button" id="btn-quick-command" class="command-palette-trigger" title="Press Ctrl+K for command bar">
         ${icon('search')} <span class="cmd-label">Jump</span> <kbd class="cmd-kbd">Ctrl+K</kbd>
       </button>
       <div id="case-context-pill" class="case-context-pill hidden" role="region" aria-label="Case context"></div>
-      <button type="button" id="btn-restart-update" class="restart-update-btn" title="Click to restart and apply updates">
+      <button type="button" id="btn-restart-update" class="restart-update-btn hidden" title="Click to restart and apply updates">
         Restart to Update &rarr;
       </button>
       <button type="button" id="btn-user-profile" class="btn btn-secondary btn-sm btn-profile" title="Examiner profile and security preferences">
@@ -48,17 +40,6 @@ function renderHeader(breadcrumbs = []) {
       <button type="button" id="theme-toggle" class="icon-btn" aria-label="Switch light or dark theme" title="Switch light / dark theme">${icon(themeIcon)}</button>
     </div>
   `;
-
-  // Palette switcher wiring
-  root.querySelectorAll('[data-palette-btn]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const p = btn.dataset.paletteBtn;
-      document.documentElement.setAttribute('data-palette', p);
-      try { localStorage.setItem('sih-palette', p); } catch (_) {}
-      root.querySelectorAll('[data-palette-btn]').forEach(b => b.classList.toggle('active', b === btn));
-      if (typeof Toast !== 'undefined' && Toast.info) Toast.info(`Aesthetic Theme switched to: ${p.toUpperCase()}`);
-    });
-  });
 
   // Check live backend version
   fetch('/api/version').then(r => r.json()).then(b => {

@@ -156,19 +156,19 @@ _AUTH_EXEMPT_PATHS = {
 def _create_database():
     """
     Database backend selection:
-    By default, SIH Forensic Tool is a 100% local, offline desktop application.
-    All case data, evidence metadata, and recovered segments are stored locally
-    in the user's local forensic.db (via backend.database.Database).
-    
-    Cloud/server databases (Supabase or PostgreSQL) are only enabled if explicitly
-    configured via USE_CLOUD_DB=1 or USE_POSTGRES=1.
+    Connects to Supabase whenever SUPABASE_URL and SUPABASE_ANON_KEY are present
+    (or if USE_CLOUD_DB=1). If USE_POSTGRES=1 is set, connects to Postgres.
+    Otherwise defaults to local SQLite forensic.db (or if USE_LOCAL_DB=1).
     """
-    if os.environ.get("USE_CLOUD_DB") == "1":
+    if os.environ.get("USE_LOCAL_DB") != "1":
         supabase_url = os.environ.get("SUPABASE_URL", "").strip()
         anon_key = os.environ.get("SUPABASE_ANON_KEY", "").strip()
         if supabase_url and anon_key:
-            from backend.db_supabase_client import SupabaseDatabase
-            return SupabaseDatabase(supabase_url, anon_key)
+            try:
+                from backend.db_supabase_client import SupabaseDatabase
+                return SupabaseDatabase(supabase_url, anon_key)
+            except Exception as exc:
+                log.warning("Could not connect to Supabase: %s, falling back to local SQLite", exc)
 
     if os.environ.get("USE_POSTGRES") == "1":
         database_url = os.environ.get("DATABASE_URL", "").strip()

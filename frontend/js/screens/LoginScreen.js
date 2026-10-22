@@ -327,6 +327,7 @@ async function renderLoginScreen() {
                placeholder="6-digit code, or XXXXX-XXXXX code" autocomplete="one-time-code" />
       </div>
 
+      ${_errorBoxHtml('login-error')}
       <button type="submit" id="btn-login" class="btn btn-primary btn-lg w-full mt-sm">Sign in ${icon('arrow-right')}</button>
       <div style="margin-top: 14px; text-align: center;">
         <button type="button" id="btn-quick-examiner" class="btn btn-secondary w-full" style="border-color: rgba(168, 85, 247, 0.45); color: #c084fc; font-weight: 700;">

@@ -26,10 +26,28 @@ function renderSidebar(activeScreen = 'dashboard', currentCaseId = null, current
     caseItems.push({ id: 'case-detail', icon: 'folder-open', label: 'Case Dossier', action: () => navigateTo('case-detail', { caseId: currentCaseId }) });
     caseItems.push({ id: 'timeline', icon: 'clock', label: 'Timeline Matrix', action: () => navigateTo('timeline', { caseId: currentCaseId }) });
 
-    if (currentEvidenceId) {
-      caseItems.push({ id: 'evidence-scan', icon: 'search', label: 'Carve & Scan', action: () => navigateTo('evidence-scan', { caseId: currentCaseId, evidenceId: currentEvidenceId }) });
-      caseItems.push({ id: 'recordings', icon: 'film', label: 'Recovered Video', action: () => navigateTo('recordings', { caseId: currentCaseId, evidenceId: currentEvidenceId }) });
-      caseItems.push({ id: 'export-report', icon: 'file-text', label: 'Signed Certificate', action: () => navigateTo('export-report', { caseId: currentCaseId, evidenceId: currentEvidenceId }) });
+    const effectiveEvId = currentEvidenceId || (typeof activeHeaderEvidenceId !== 'undefined' ? activeHeaderEvidenceId : null);
+    if (effectiveEvId) {
+      caseItems.push({ id: 'evidence-scan', icon: 'search', label: 'Carve & Scan', action: () => navigateTo('evidence-scan', { caseId: currentCaseId, evidenceId: effectiveEvId }) });
+      caseItems.push({ id: 'recordings', icon: 'film', label: 'Recovered Video', action: () => navigateTo('recordings', { caseId: currentCaseId, evidenceId: effectiveEvId }) });
+      caseItems.push({ id: 'export-report', icon: 'file-text', label: 'Signed Certificate', action: () => navigateTo('export-report', { caseId: currentCaseId, evidenceId: effectiveEvId }) });
+    } else {
+      caseItems.push({ id: 'evidence-scan', icon: 'search', label: 'Carve & Scan', action: async () => {
+        try {
+          const c = await API.getCase(currentCaseId);
+          const firstEv = (c.evidence && c.evidence[0]) ? c.evidence[0].evidence_id : null;
+          if (firstEv) navigateTo('evidence-scan', { caseId: currentCaseId, evidenceId: firstEv });
+          else navigateTo('case-detail', { caseId: currentCaseId });
+        } catch (_) { navigateTo('case-detail', { caseId: currentCaseId }); }
+      }});
+      caseItems.push({ id: 'recordings', icon: 'film', label: 'Recovered Video', action: async () => {
+        try {
+          const c = await API.getCase(currentCaseId);
+          const firstEv = (c.evidence && c.evidence[0]) ? c.evidence[0].evidence_id : null;
+          if (firstEv) navigateTo('recordings', { caseId: currentCaseId, evidenceId: firstEv });
+          else navigateTo('case-detail', { caseId: currentCaseId });
+        } catch (_) { navigateTo('case-detail', { caseId: currentCaseId }); }
+      }});
     }
 
     caseItems.push({ id: 'audit-log', icon: 'lock', label: 'Cryptographic Audit', action: () => navigateTo('audit-log', { caseId: currentCaseId }) });
@@ -61,7 +79,7 @@ function renderSidebar(activeScreen = 'dashboard', currentCaseId = null, current
         <span class="airgap-dot"></span> AIR-GAPPED SECURE
       </div>
       <div class="foot-desc">Hardware-enforced Read-Only MMAP. Every operation is cryptographically signed.</div>
-      <button type="button" class="sidebar-version" id="sidebar-version">${_sidebarAppVersion ? `A.E.G.I.S v${_sidebarAppVersion}` : 'A.E.G.I.S v3.0.0'}</button>
+      <button type="button" class="sidebar-version" id="sidebar-version">${_sidebarAppVersion ? `A.E.G.I.S v${_sidebarAppVersion}` : 'A.E.G.I.S v3.0.1'}</button>
     </div>
   `;
 

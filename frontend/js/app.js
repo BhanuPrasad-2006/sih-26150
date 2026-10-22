@@ -136,6 +136,18 @@ window.addEventListener('auth:expired', () => {
 // ── App Initialization ────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   try {
+    // 0. Check first-run wizard (must happen before auth checks)
+    let firstRunStatus = null;
+    try {
+      const frRes = await fetch('/api/setup/first-run-status');
+      if (frRes.ok) firstRunStatus = await frRes.json();
+    } catch (_) {}
+
+    if (firstRunStatus && !firstRunStatus.complete) {
+      renderFirstRunScreen(firstRunStatus);
+      return;
+    }
+
     const status = await API.authStatus();
 
     // 1. First run / new install: no local account exists

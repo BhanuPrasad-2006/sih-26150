@@ -37,7 +37,7 @@ async function renderDashboardScreen() {
       <div class="bento-card bento-hero-chamber">
         <div class="bento-hero-content">
           <div class="bento-tag">
-            <span class="laser-dot"></span> AIR-GAPPED FORENSIC WORKSTATION · v3.0.0
+            <span class="laser-dot"></span> AIR-GAPPED FORENSIC WORKSTATION · v3.0.1
           </div>
           <h2 class="bento-hero-title">Recover DVR/NVR Evidence with Zero Alteration</h2>
           <p class="bento-hero-desc">
@@ -231,7 +231,7 @@ async function renderDashboardScreen() {
           <div class="empty-vault-radar">${emptyArt()}</div>
           <h4>No Forensic Cases Found</h4>
           <p>Register an investigation case to lock disk evidence and begin stream reconstruction.</p>
-          <button class="btn-vision-primary" onclick="navigateTo('new-case')">
+          <button class="btn-vision-primary" data-nav="new-case" data-params="{}">
             <span class="btn-glow-layer"></span>
             ${icon('plus-circle')} Register Case Dossier
           </button>
@@ -245,7 +245,7 @@ async function renderDashboardScreen() {
       container.innerHTML = `
         <div class="dossier-cards-grid">
           ${cases.map(c => `
-            <div class="dossier-card" data-case-id="${c.case_id}">
+            <div class="dossier-card" ${navAttrs('case-detail', { caseId: c.case_id })} role="button" tabindex="0" style="cursor: pointer;">
               <div class="dossier-card-top">
                 <div class="dossier-stamp">
                   <span class="dossier-security-badge">🔒 SECURED</span>
@@ -279,7 +279,7 @@ async function renderDashboardScreen() {
               </div>
 
               <div class="dossier-footer">
-                <button class="dossier-open-btn" onclick="navigateTo('case-detail', { caseId: '${c.case_id}' })">
+                <button class="dossier-open-btn" ${navAttrs('case-detail', { caseId: c.case_id })}>
                   Open Dossier ${icon('arrow-right')}
                 </button>
               </div>
@@ -305,7 +305,7 @@ async function renderDashboardScreen() {
             </thead>
             <tbody>
               ${cases.map(c => `
-                <tr>
+                <tr ${navAttrs('case-detail', { caseId: c.case_id })} style="cursor: pointer;">
                   <td>
                     <strong class="text-coral font-mono text-base">${escapeHtml(c.case_number)}</strong>
                     ${c.case_title ? `<div class="text-xs text-muted mt-1">${escapeHtml(c.case_title)}</div>` : ''}
@@ -319,7 +319,7 @@ async function renderDashboardScreen() {
                   <td>${caseStatusBadge(c.status)}</td>
                   <td class="text-xs text-muted">${formatIST(c.created_at)}</td>
                   <td>
-                    <button class="dossier-open-btn-sm" onclick="navigateTo('case-detail', { caseId: '${c.case_id}' })">
+                    <button class="dossier-open-btn-sm" ${navAttrs('case-detail', { caseId: c.case_id })}>
                       Open ${icon('arrow-right')}
                     </button>
                   </td>
@@ -330,6 +330,26 @@ async function renderDashboardScreen() {
         </div>
       `;
     }
+
+    // Direct event listener fallback to ensure clicking cards or buttons always works
+    container.querySelectorAll('[data-nav]').forEach(el => {
+      el.addEventListener('click', (e) => {
+        e.preventDefault();
+        const screen = el.dataset.nav;
+        let params = {};
+        try { params = JSON.parse(el.dataset.params || '{}'); } catch (_) {}
+        navigateTo(screen, params);
+      });
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          const screen = el.dataset.nav;
+          let params = {};
+          try { params = JSON.parse(el.dataset.params || '{}'); } catch (_) {}
+          navigateTo(screen, params);
+        }
+      });
+    });
   }
 
   // Load cases asynchronously
