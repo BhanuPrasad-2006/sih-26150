@@ -425,13 +425,19 @@ async function openUpdateModal() {
         if (statusBox) statusBox.classList.remove('hidden');
 
         try {
-          await fetch('/api/update/apply', { method: 'POST' }).catch(() => {});
-        } catch (_) {}
-
-        if (statusMsg) statusMsg.textContent = 'Restarting AEGIS forensic suite... Reloading app in 2 seconds...';
-        setTimeout(() => {
-          window.location.reload();
-        }, 2200);
+          const res = await fetch('/api/update/apply', { method: 'POST' });
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            throw new Error(body.detail || 'Could not start update.');
+          }
+          if (statusMsg) statusMsg.textContent = 'Pulling newest version from GitHub and restarting...';
+          setTimeout(() => {
+            window.location.reload();
+          }, 3000);
+        } catch (err) {
+          if (statusMsg) statusMsg.textContent = 'Update error: ' + err.message;
+          if (btn) btn.disabled = false;
+        }
       }
     }
   ]);

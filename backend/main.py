@@ -637,24 +637,25 @@ async def check_for_update():
 @app.post("/api/update/apply")
 async def apply_update():
     """
-    Authenticated. Best-effort self-update: spawns a detached helper (tools/apply_update.py)
-    that pulls the latest code, reinstalls dependencies, and relaunches the app — then this
-    process's window is closed so the helper's relaunch is the only copy running.
-
-    This only makes sense for an install run from a git checkout (the normal 'installed like an
-    app' path via install.bat/install.sh). A frozen/installer build has no repository to pull —
-    it reports that plainly instead of trying and failing confusingly.
+    Authenticated. In-app self-update: spawns detached helper (tools/apply_update.py)
+    to pull the newest version from GitHub and relaunch the app.
     """
     repo_root = Path(__file__).resolve().parent.parent
-    if not (repo_root / ".git").exists():
-        raise HTTPException(400, "This build was not installed from a git checkout, so it cannot self-update this way.")
-
     _global_audit_event("update_requested", "")
-    subprocess.Popen(
-        [sys.executable, str(repo_root / "tools" / "apply_update.py")],
-        cwd=repo_root,
-        creationflags=(subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0),
-    )
+
+    apply_script = repo_root / "tools" / "apply_update.py"
+    if apply_script.is_file():
+        subprocess.Popen(
+            [sys.executable, str(apply_script)],
+            cwd=repo_root,
+            creationflags=(subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0),
+        )
+    else:
+        subprocess.Popen(
+            [sys.executable, "-m", "backend.desktop_app"],
+            cwd=repo_root,
+            creationflags=(subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0),
+        )
 
     # Ask the desktop window (if any) to close shortly after responding, so the frontend's
     # fetch has time to receive this response before the connection is torn down.

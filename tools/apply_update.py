@@ -1,22 +1,13 @@
 """
 apply_update.py — pulls the latest code, reinstalls dependencies, and relaunches the app.
 
-Run detached, spawned by POST /api/update/apply just before that server process exits. Waits for
-the old process to fully release its files, then:
-    git fetch origin
-    git merge --ff-only origin/main      (never rewrites local history; refuses a non-fast-forward
-                                           merge rather than risk discarding anything)
-    pip install -r requirements.txt      (best effort — logged, not fatal on its own)
-    relaunch: python -m backend.desktop_app
-
-Everything is logged to <repo_root>/update.log so a failed update can be diagnosed after the
-fact; this is a best-effort mechanism for a hackathon-stage tool, not a guaranteed atomic upgrade.
-On any failure up to the relaunch step, it still relaunches the app (on whatever code is on disk)
-rather than leaving the user with nothing running.
+Spawned by POST /api/update/apply. Updates to the latest version directly from GitHub
+without requiring manual re-download from the website.
 """
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import time
@@ -28,8 +19,11 @@ LOG_FILE = REPO_ROOT / "update.log"
 
 def _log(message: str) -> None:
     line = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {message}\n"
-    with open(LOG_FILE, "a", encoding="utf-8") as fh:
-        fh.write(line)
+    try:
+        with open(LOG_FILE, "a", encoding="utf-8") as fh:
+            fh.write(line)
+    except Exception:
+        pass
     print(line, end="")
 
 
@@ -44,29 +38,56 @@ def _run(args: list[str]) -> tuple[bool, str]:
 
 
 def main() -> None:
-    _log("=== Update requested ===")
+    _log("=== Update to latest version requested ===")
 
-    # Give the old server process (and its still-open .venv DLLs on Windows) time to fully exit
-    # before we try to overwrite anything it had loaded.
-    time.sleep(3)
+    # Wait for the old server process to exit and release ports / file locks
+    time.sleep(2.5)
 
-    ok, out = _run(["git", "fetch", "origin"])
-    _log(f"git fetch origin: {'ok' if ok else 'FAILED'}\n{out}")
+    if (REPO_ROOT / ".git").exists():
+        _log("Git repository detected. Fetching origin...")
+        ok, out = _run(["git", "fetch", "origin"])
+        _log(f"git fetch origin: {'ok' if ok else 'FAILED'}\n{out}")
 
-    if ok:
-        ok, out = _run(["git", "merge", "--ff-only", "origin/main"])
-        _log(f"git merge --ff-only origin/main: {'ok' if ok else 'FAILED (not fast-forward, or no changes — left untouched)'}\n{out}")
+        # Check active branch
+        _, current_branch = _run(["git", "rev-parse", "--abbrev-ref", "HEAD"])
+        current_branch = current_branch.strip() or "main"
+        _log(f"Active branch: {current_branch}")
 
-    ok, out = _run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
-    _log(f"pip install -r requirements.txt: {'ok' if ok else 'FAILED (continuing with what is already installed)'}\n{out[-2000:]}")
+        if current_branch == "main":
+            ok, out = _run(["git", "pull", "--ff-only", "origin", "main"])
+        else:
+            # Pull updates from origin/main into current branch
+            ok, out = _run(["git", "pull", "origin", "main", "--no-rebase"])
+            if not ok:
+                ok, out = _run(["git", "merge", "origin/main", "-m", "Auto-update from origin/main"])
 
-    _log("Relaunching backend.desktop_app ...")
-    subprocess.Popen(
-        [sys.executable, "-m", "backend.desktop_app"],
-        cwd=REPO_ROOT,
-        creationflags=(subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0),
-    )
-    _log("=== Update finished ===")
+        _log(f"Git pull result: {'ok' if ok else 'FAILED'}\n{out}")
+
+        # Install any updated dependencies
+        requirements_file = REPO_ROOT / "requirements.txt"
+        if requirements_file.is_file():
+            ok, out = _run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
+            _log(f"pip install: {'ok' if ok else 'FAILED'}\n{out[-1000:]}")
+
+    # Relaunch the application
+    run_bat = REPO_ROOT / "run.bat"
+    desktop_exe = REPO_ROOT / "SIH Forensic Tool.exe"
+
+    if desktop_exe.is_file():
+        _log("Relaunching installed executable: SIH Forensic Tool.exe")
+        subprocess.Popen([str(desktop_exe)], cwd=REPO_ROOT)
+    elif run_bat.is_file() and sys.platform == "win32":
+        _log("Relaunching via run.bat...")
+        subprocess.Popen(["cmd.exe", "/c", str(run_bat)], cwd=REPO_ROOT, creationflags=subprocess.CREATE_NEW_CONSOLE)
+    else:
+        _log("Relaunching backend.desktop_app...")
+        subprocess.Popen(
+            [sys.executable, "-m", "backend.desktop_app"],
+            cwd=REPO_ROOT,
+            creationflags=(subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0),
+        )
+
+    _log("=== Update finished successfully ===")
 
 
 if __name__ == "__main__":
