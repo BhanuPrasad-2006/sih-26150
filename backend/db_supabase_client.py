@@ -61,6 +61,20 @@ class SupabaseDatabase:
 
     def create_case(self, case) -> object:
         from backend.database import DuplicateCaseNumberError
+        # Ensure created_by exists in users table so foreign key fk_cases_created_by is satisfied
+        creator = getattr(case, 'created_by', None) or getattr(case, 'examiner', None)
+        if creator:
+            try:
+                self._table('users').upsert({
+                    'username': creator,
+                    'full_name': creator,
+                    'role': 'EXAMINER',
+                    'password_hash': 'local-managed',
+                    'is_active': True,
+                }, on_conflict='username').execute()
+            except Exception as u_exc:
+                log.warning('Could not auto-upsert creator %s in Supabase users: %s', creator, u_exc)
+
         data = {
             "case_id": case.case_id,
             "case_number": case.case_number,

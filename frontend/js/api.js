@@ -244,6 +244,18 @@ const API = {
     return res.json();
   },
 
+  async quickAccess() {
+    const res = await fetch('/api/auth/quick-access', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Quick access failed');
+    }
+    return res.json();
+  },
+
   async getSecurityPrefs() {
     const res = await fetch('/api/auth/security-prefs');
     if (!res.ok) return { require_password_every_time: false };
@@ -368,7 +380,7 @@ const API = {
 
   // ── Case endpoints ─────────────────────────────────────────────────────────
 
-  async listCases(allCases = false) {
+  async listCases(allCases = true) {
     const url = allCases ? '/api/cases?all_cases=true' : '/api/cases';
     const res = await fetch(url);
     await this._checkOk(res, url);

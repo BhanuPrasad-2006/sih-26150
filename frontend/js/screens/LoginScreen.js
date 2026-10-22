@@ -331,7 +331,7 @@ async function renderLoginScreen() {
       <button type="submit" id="btn-login" class="btn btn-primary btn-lg w-full mt-sm">Sign in ${icon('arrow-right')}</button>
       <div style="margin-top: 14px; text-align: center;">
         <button type="button" id="btn-quick-examiner" class="btn btn-secondary w-full" style="border-color: rgba(168, 85, 247, 0.45); color: #c084fc; font-weight: 700;">
-          ⚡ Instant Access as RAJU (Forensic Examiner)
+          ⚡ Instant Access as ${escapeHtml(rememberedUser || 'RAJU')} (Forensic Examiner)
         </button>
       </div>
     </form>`);
@@ -349,16 +349,31 @@ async function renderLoginScreen() {
 
   if (btnQuick) {
     btnQuick.onclick = async () => {
+      btnQuick.disabled = true;
+      btnQuick.innerHTML = '<span class="btn-spinner"></span> Authenticating…';
+      try {
+        const res = await API.quickAccess();
+        if (res && res.authenticated) {
+          _restoreChromeAfterAuth();
+          navigateTo('dashboard');
+          initUpdateBanner();
+          return;
+        }
+      } catch (ex) {
+        console.warn('Quick access failed, trying auto-login:', ex);
+      }
       try {
         const res = await API.autoLogin();
         if (res && res.authenticated) {
           _restoreChromeAfterAuth();
           navigateTo('dashboard');
+          initUpdateBanner();
           return;
         }
       } catch (_) {}
-      _restoreChromeAfterAuth();
-      navigateTo('dashboard');
+      btnQuick.disabled = false;
+      btnQuick.innerHTML = '⚡ Instant Access as ' + escapeHtml(rememberedUser || 'RAJU') + ' (Forensic Examiner)';
+      err.show('Instant access could not authenticate automatically. Please enter your password or reset it.');
     };
   }
 

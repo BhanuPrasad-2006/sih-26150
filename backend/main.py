@@ -142,6 +142,7 @@ _AUTH_EXEMPT_PATHS = {
     "/api/auth/status",
     "/api/auth/status-with-session",
     "/api/auth/auto-login",
+    "/api/auth/quick-access",
     "/api/auth/login",
     "/api/auth/setup",
     "/api/auth/recover",               # forgotten password: username + recovery key, rate-limited like login
@@ -163,6 +164,13 @@ def _create_database():
     if os.environ.get("USE_LOCAL_DB") != "1":
         supabase_url = os.environ.get("SUPABASE_URL", "").strip()
         anon_key = os.environ.get("SUPABASE_ANON_KEY", "").strip()
+        if not (supabase_url and anon_key):
+            try:
+                from backend._bundled_config import SUPABASE_URL as B_URL, SUPABASE_ANON_KEY as B_KEY
+                supabase_url = supabase_url or (B_URL or "").strip()
+                anon_key = anon_key or (B_KEY or "").strip()
+            except Exception:
+                pass
         if supabase_url and anon_key:
             try:
                 from backend.db_supabase_client import SupabaseDatabase
@@ -741,9 +749,11 @@ async def auth_status_with_session(request: Request):
 
 
 @app.get("/api/auth/auto-login")
+@app.post("/api/auth/auto-login")
 async def auto_login(request: Request, response: Response):
     """
-    Attempt seamless auto-login on application startup using the 7-day remembered token.
+    Attempt seamless auto-login on application startup using the 7-day remembered token
+    or local workstation profile when password is not required every time.
     Exempt from auth middleware.
     """
     if local_config.get_require_password_every_time():
@@ -758,17 +768,25 @@ async def auto_login(request: Request, response: Response):
         }
 
     saved = remember_token.load_remember_token()
-    if not saved:
+    username = saved.get("username") if saved else None
+    if not username:
+        username = local_config.get_remembered_username()
+    if not username:
+        all_u = auth.list_usernames()
+        if len(all_u) == 1:
+            username = all_u[0]
+
+    if not username:
         return {"authenticated": False}
 
-    username = saved.get("username")
-    display_name = auth.get_username_display(username)
-    if not display_name:
+    display_name = auth.get_username_display(username) or username
+    if not auth.get_username_display(username) and username not in auth.list_usernames():
         remember_token.clear_remember_token()
         return {"authenticated": False}
 
     new_token = auth.create_session(display_name)
     auth.record_success(display_name)
+    remember_token.save_remember_token(display_name, new_token)
     _global_audit_event("auto_login_success", f"username={display_name}")
 
     response.set_cookie(
@@ -780,6 +798,50 @@ async def auto_login(request: Request, response: Response):
         secure=(request.url.scheme == "https"),
     )
     return {"authenticated": True, "username": display_name}
+
+
+@app.post("/api/auth/quick-access")
+async def quick_access(request: Request, response: Response):
+    """
+    Instant examiner access button for offline workstation.
+    Creates an active authenticated session for the configured local examiner.
+    """
+    username = local_config.get_remembered_username()
+    if not username:
+        all_u = auth.list_usernames()
+        if all_u:
+            username = all_u[0]
+        else:
+            return JSONResponse({"ok": False, "detail": "No examiner account exists yet."}, status_code=400)
+
+    display_name = auth.get_username_display(username) or username
+    new_token = auth.create_session(display_name)
+    auth.record_success(display_name)
+    remember_token.save_remember_token(display_name, new_token)
+    _global_audit_event("quick_access_login", f"username={display_name}")
+
+    # Also ensure user exists in Supabase users table if connected
+    try:
+        if hasattr(db, "_table"):
+            db._table("users").upsert({
+                "username": display_name,
+                "full_name": f"{display_name} (Forensic Examiner)",
+                "role": "EXAMINER",
+                "password_hash": "local-managed",
+                "is_active": True,
+            }, on_conflict="username").execute()
+    except Exception as exc:
+        log.warning("Could not auto-upsert quick access user to Supabase: %s", exc)
+
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=new_token,
+        httponly=True,
+        samesite="strict",
+        max_age=7 * 24 * 3600,
+        secure=(request.url.scheme == "https"),
+    )
+    return {"ok": True, "authenticated": True, "username": display_name}
 
 
 @app.post("/api/auth/setup")
@@ -964,6 +1026,19 @@ async def login(req: LoginRequest, response: Response, request: Request):
     display_name = auth.get_username_display(username) or username
     token = auth.create_session(username)
     auth.record_success(username)
+
+    # Ensure user is synced to Supabase users table so case foreign keys succeed
+    try:
+        if hasattr(db, "_table"):
+            db._table("users").upsert({
+                "username": display_name,
+                "full_name": f"{display_name} (Forensic Examiner)",
+                "role": "EXAMINER",
+                "password_hash": "local-managed",
+                "is_active": True,
+            }, on_conflict="username").execute()
+    except Exception as exc:
+        log.warning("Could not sync user to Supabase: %s", exc)
 
     # Remember local username & optionally persist 7-day token
     local_config.set_remembered_username(display_name)
@@ -1226,7 +1301,7 @@ async def create_case(req: CreateCaseRequest, request: Request):
 
 
 @app.get("/api/cases")
-async def list_cases(request: Request, all_cases: bool = False):
+async def list_cases(request: Request, all_cases: bool = True):
     current_user = _current_username(request)
     filter_user = None if all_cases else current_user
     return await asyncio.to_thread(db.list_cases, filter_user)
